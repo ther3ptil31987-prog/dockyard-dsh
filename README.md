@@ -85,7 +85,7 @@ dsh --version
 pnpm --version
 ```
 
-上游安装和兼容性变化以 [DeepSeek Harness 官方仓库](https://github.com/deepseek-ai/deepseek-harness) 为准。当前 bundle 已按 `@deepseek-ai/dsh@0.1.1-rc.2` 验证。DSH 仍处于 developer preview，升级已有 DSH_HOME 前请先备份数据，并先用独立的 `DSH_HOME` 验证。
+上游安装和兼容性变化以 [DeepSeek Harness 官方仓库](https://github.com/deepseek-ai/deepseek-harness) 为准。当前 bundle 已按 `@deepseek-ai/dsh@0.1.5-rc.2` 验证。DSH 仍处于 developer preview，升级已有 DSH_HOME 前请先备份数据，并先用独立的 `DSH_HOME` 验证。
 
 #### 最简便的方式：直接安装到 DSH Web profile
 
@@ -283,7 +283,7 @@ dsh --version
 pnpm --version
 ```
 
-Follow the [official DeepSeek Harness repository](https://github.com/deepseek-ai/deepseek-harness) for upstream installation and compatibility changes. The current bundle is verified against `@deepseek-ai/dsh@0.1.1-rc.2`. DSH remains in developer preview; back up an existing DSH_HOME and verify with an isolated DSH_HOME before upgrading it.
+Follow the [official DeepSeek Harness repository](https://github.com/deepseek-ai/deepseek-harness) for upstream installation and compatibility changes. The current bundle is verified against `@deepseek-ai/dsh@0.1.5-rc.2`. DSH remains in developer preview; back up an existing DSH_HOME and verify with an isolated DSH_HOME before upgrading it.
 
 #### Shortest path: install directly into the DSH Web profile
 

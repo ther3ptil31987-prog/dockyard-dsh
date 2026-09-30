@@ -37,11 +37,873 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 var dockyard_client_exports = {};
 __export(dockyard_client_exports, {
   apply: () => apply,
-  inject: () => inject
+  inject: () => inject,
+  modelGroupFoldState: () => modelGroupFoldState,
+  syncModelMenuGroups: () => syncModelMenuGroups
 });
 module.exports = __toCommonJS(dockyard_client_exports);
 var React = __toESM(require("react"), 1);
-var import_client2 = require("@deepseek-ai/dsh-client-runtime/client");
+
+// packages/dsh-plugin/node_modules/.pnpm/zustand@4.4.7_immer@10.2.0_react@18.3.1/node_modules/zustand/esm/vanilla.mjs
+var import_meta = {};
+var createStoreImpl = (createState) => {
+  let state;
+  const listeners = /* @__PURE__ */ new Set();
+  const setState = (partial2, replace) => {
+    const nextState = typeof partial2 === "function" ? partial2(state) : partial2;
+    if (!Object.is(nextState, state)) {
+      const previousState = state;
+      state = (replace != null ? replace : typeof nextState !== "object" || nextState === null) ? nextState : Object.assign({}, state, nextState);
+      listeners.forEach((listener) => listener(state, previousState));
+    }
+  };
+  const getState = () => state;
+  const subscribe = (listener) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
+  const destroy = () => {
+    if ((import_meta.env ? import_meta.env.MODE : void 0) !== "production") {
+      console.warn(
+        "[DEPRECATED] The `destroy` method will be unsupported in a future version. Instead use unsubscribe function returned by subscribe. Everything will be garbage-collected if store is garbage-collected."
+      );
+    }
+    listeners.clear();
+  };
+  const api = { setState, getState, subscribe, destroy };
+  state = createState(setState, getState, api);
+  return api;
+};
+var createStore = (createState) => createState ? createStoreImpl(createState) : createStoreImpl;
+
+// packages/dsh-plugin/node_modules/.pnpm/zustand@4.4.7_immer@10.2.0_react@18.3.1/node_modules/zustand/esm/middleware.mjs
+var subscribeWithSelectorImpl = (fn) => (set3, get, api) => {
+  const origSubscribe = api.subscribe;
+  api.subscribe = (selector, optListener, options) => {
+    let listener = selector;
+    if (optListener) {
+      const equalityFn = (options == null ? void 0 : options.equalityFn) || Object.is;
+      let currentSlice = selector(api.getState());
+      listener = (state) => {
+        const nextSlice = selector(state);
+        if (!equalityFn(currentSlice, nextSlice)) {
+          const previousSlice = currentSlice;
+          optListener(currentSlice = nextSlice, previousSlice);
+        }
+      };
+      if (options == null ? void 0 : options.fireImmediately) {
+        optListener(currentSlice, currentSlice);
+      }
+    }
+    return origSubscribe(listener);
+  };
+  const initialState = fn(set3, get, api);
+  return initialState;
+};
+var subscribeWithSelector = subscribeWithSelectorImpl;
+
+// packages/dsh-plugin/node_modules/.pnpm/immer@10.2.0/node_modules/immer/dist/immer.mjs
+var NOTHING = Symbol.for("immer-nothing");
+var DRAFTABLE = Symbol.for("immer-draftable");
+var DRAFT_STATE = Symbol.for("immer-state");
+var errors = true ? [
+  // All error codes, starting by 0:
+  function(plugin) {
+    return `The plugin for '${plugin}' has not been loaded into Immer. To enable the plugin, import and call \`enable${plugin}()\` when initializing your application.`;
+  },
+  function(thing) {
+    return `produce can only be called on things that are draftable: plain objects, arrays, Map, Set or classes that are marked with '[immerable]: true'. Got '${thing}'`;
+  },
+  "This object has been frozen and should not be mutated",
+  function(data) {
+    return "Cannot use a proxy that has been revoked. Did you pass an object from inside an immer function to an async process? " + data;
+  },
+  "An immer producer returned a new value *and* modified its draft. Either return a new value *or* modify the draft.",
+  "Immer forbids circular references",
+  "The first or second argument to `produce` must be a function",
+  "The third argument to `produce` must be a function or undefined",
+  "First argument to `createDraft` must be a plain object, an array, or an immerable object",
+  "First argument to `finishDraft` must be a draft returned by `createDraft`",
+  function(thing) {
+    return `'current' expects a draft, got: ${thing}`;
+  },
+  "Object.defineProperty() cannot be used on an Immer draft",
+  "Object.setPrototypeOf() cannot be used on an Immer draft",
+  "Immer only supports deleting array indices",
+  "Immer only supports setting array indices and the 'length' property",
+  function(thing) {
+    return `'original' expects a draft, got: ${thing}`;
+  }
+  // Note: if more errors are added, the errorOffset in Patches.ts should be increased
+  // See Patches.ts for additional errors
+] : [];
+function die(error51, ...args) {
+  if (true) {
+    const e = errors[error51];
+    const msg = typeof e === "function" ? e.apply(null, args) : e;
+    throw new Error(`[Immer] ${msg}`);
+  }
+  throw new Error(
+    `[Immer] minified error nr: ${error51}. Full error at: https://bit.ly/3cXEKWf`
+  );
+}
+var getPrototypeOf = Object.getPrototypeOf;
+function isDraft(value) {
+  return !!value && !!value[DRAFT_STATE];
+}
+function isDraftable(value) {
+  if (!value)
+    return false;
+  return isPlainObject(value) || Array.isArray(value) || !!value[DRAFTABLE] || !!value.constructor?.[DRAFTABLE] || isMap(value) || isSet(value);
+}
+var objectCtorString = Object.prototype.constructor.toString();
+var cachedCtorStrings = /* @__PURE__ */ new WeakMap();
+function isPlainObject(value) {
+  if (!value || typeof value !== "object")
+    return false;
+  const proto = Object.getPrototypeOf(value);
+  if (proto === null || proto === Object.prototype)
+    return true;
+  const Ctor = Object.hasOwnProperty.call(proto, "constructor") && proto.constructor;
+  if (Ctor === Object)
+    return true;
+  if (typeof Ctor !== "function")
+    return false;
+  let ctorString = cachedCtorStrings.get(Ctor);
+  if (ctorString === void 0) {
+    ctorString = Function.toString.call(Ctor);
+    cachedCtorStrings.set(Ctor, ctorString);
+  }
+  return ctorString === objectCtorString;
+}
+function each(obj, iter, strict = true) {
+  if (getArchtype(obj) === 0) {
+    const keys = strict ? Reflect.ownKeys(obj) : Object.keys(obj);
+    keys.forEach((key) => {
+      iter(key, obj[key], obj);
+    });
+  } else {
+    obj.forEach((entry, index) => iter(index, entry, obj));
+  }
+}
+function getArchtype(thing) {
+  const state = thing[DRAFT_STATE];
+  return state ? state.type_ : Array.isArray(thing) ? 1 : isMap(thing) ? 2 : isSet(thing) ? 3 : 0;
+}
+function has(thing, prop) {
+  return getArchtype(thing) === 2 ? thing.has(prop) : Object.prototype.hasOwnProperty.call(thing, prop);
+}
+function set(thing, propOrOldValue, value) {
+  const t = getArchtype(thing);
+  if (t === 2)
+    thing.set(propOrOldValue, value);
+  else if (t === 3) {
+    thing.add(value);
+  } else
+    thing[propOrOldValue] = value;
+}
+function is(x, y) {
+  if (x === y) {
+    return x !== 0 || 1 / x === 1 / y;
+  } else {
+    return x !== x && y !== y;
+  }
+}
+function isMap(target) {
+  return target instanceof Map;
+}
+function isSet(target) {
+  return target instanceof Set;
+}
+function latest(state) {
+  return state.copy_ || state.base_;
+}
+function shallowCopy(base, strict) {
+  if (isMap(base)) {
+    return new Map(base);
+  }
+  if (isSet(base)) {
+    return new Set(base);
+  }
+  if (Array.isArray(base))
+    return Array.prototype.slice.call(base);
+  const isPlain = isPlainObject(base);
+  if (strict === true || strict === "class_only" && !isPlain) {
+    const descriptors = Object.getOwnPropertyDescriptors(base);
+    delete descriptors[DRAFT_STATE];
+    let keys = Reflect.ownKeys(descriptors);
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const desc = descriptors[key];
+      if (desc.writable === false) {
+        desc.writable = true;
+        desc.configurable = true;
+      }
+      if (desc.get || desc.set)
+        descriptors[key] = {
+          configurable: true,
+          writable: true,
+          // could live with !!desc.set as well here...
+          enumerable: desc.enumerable,
+          value: base[key]
+        };
+    }
+    return Object.create(getPrototypeOf(base), descriptors);
+  } else {
+    const proto = getPrototypeOf(base);
+    if (proto !== null && isPlain) {
+      return { ...base };
+    }
+    const obj = Object.create(proto);
+    return Object.assign(obj, base);
+  }
+}
+function freeze(obj, deep = false) {
+  if (isFrozen(obj) || isDraft(obj) || !isDraftable(obj))
+    return obj;
+  if (getArchtype(obj) > 1) {
+    Object.defineProperties(obj, {
+      set: dontMutateMethodOverride,
+      add: dontMutateMethodOverride,
+      clear: dontMutateMethodOverride,
+      delete: dontMutateMethodOverride
+    });
+  }
+  Object.freeze(obj);
+  if (deep)
+    Object.values(obj).forEach((value) => freeze(value, true));
+  return obj;
+}
+function dontMutateFrozenCollections() {
+  die(2);
+}
+var dontMutateMethodOverride = {
+  value: dontMutateFrozenCollections
+};
+function isFrozen(obj) {
+  if (obj === null || typeof obj !== "object")
+    return true;
+  return Object.isFrozen(obj);
+}
+var plugins = {};
+function getPlugin(pluginKey) {
+  const plugin = plugins[pluginKey];
+  if (!plugin) {
+    die(0, pluginKey);
+  }
+  return plugin;
+}
+var currentScope;
+function getCurrentScope() {
+  return currentScope;
+}
+function createScope(parent_, immer_) {
+  return {
+    drafts_: [],
+    parent_,
+    immer_,
+    // Whenever the modified draft contains a draft from another scope, we
+    // need to prevent auto-freezing so the unowned draft can be finalized.
+    canAutoFreeze_: true,
+    unfinalizedDrafts_: 0
+  };
+}
+function usePatchesInScope(scope, patchListener) {
+  if (patchListener) {
+    getPlugin("Patches");
+    scope.patches_ = [];
+    scope.inversePatches_ = [];
+    scope.patchListener_ = patchListener;
+  }
+}
+function revokeScope(scope) {
+  leaveScope(scope);
+  scope.drafts_.forEach(revokeDraft);
+  scope.drafts_ = null;
+}
+function leaveScope(scope) {
+  if (scope === currentScope) {
+    currentScope = scope.parent_;
+  }
+}
+function enterScope(immer2) {
+  return currentScope = createScope(currentScope, immer2);
+}
+function revokeDraft(draft) {
+  const state = draft[DRAFT_STATE];
+  if (state.type_ === 0 || state.type_ === 1)
+    state.revoke_();
+  else
+    state.revoked_ = true;
+}
+function processResult(result, scope) {
+  scope.unfinalizedDrafts_ = scope.drafts_.length;
+  const baseDraft = scope.drafts_[0];
+  const isReplaced = result !== void 0 && result !== baseDraft;
+  if (isReplaced) {
+    if (baseDraft[DRAFT_STATE].modified_) {
+      revokeScope(scope);
+      die(4);
+    }
+    if (isDraftable(result)) {
+      result = finalize(scope, result);
+      if (!scope.parent_)
+        maybeFreeze(scope, result);
+    }
+    if (scope.patches_) {
+      getPlugin("Patches").generateReplacementPatches_(
+        baseDraft[DRAFT_STATE].base_,
+        result,
+        scope.patches_,
+        scope.inversePatches_
+      );
+    }
+  } else {
+    result = finalize(scope, baseDraft, []);
+  }
+  revokeScope(scope);
+  if (scope.patches_) {
+    scope.patchListener_(scope.patches_, scope.inversePatches_);
+  }
+  return result !== NOTHING ? result : void 0;
+}
+function finalize(rootScope, value, path) {
+  if (isFrozen(value))
+    return value;
+  const useStrictIteration = rootScope.immer_.shouldUseStrictIteration();
+  const state = value[DRAFT_STATE];
+  if (!state) {
+    each(
+      value,
+      (key, childValue) => finalizeProperty(rootScope, state, value, key, childValue, path),
+      useStrictIteration
+    );
+    return value;
+  }
+  if (state.scope_ !== rootScope)
+    return value;
+  if (!state.modified_) {
+    maybeFreeze(rootScope, state.base_, true);
+    return state.base_;
+  }
+  if (!state.finalized_) {
+    state.finalized_ = true;
+    state.scope_.unfinalizedDrafts_--;
+    const result = state.copy_;
+    let resultEach = result;
+    let isSet2 = false;
+    if (state.type_ === 3) {
+      resultEach = new Set(result);
+      result.clear();
+      isSet2 = true;
+    }
+    each(
+      resultEach,
+      (key, childValue) => finalizeProperty(
+        rootScope,
+        state,
+        result,
+        key,
+        childValue,
+        path,
+        isSet2
+      ),
+      useStrictIteration
+    );
+    maybeFreeze(rootScope, result, false);
+    if (path && rootScope.patches_) {
+      getPlugin("Patches").generatePatches_(
+        state,
+        path,
+        rootScope.patches_,
+        rootScope.inversePatches_
+      );
+    }
+  }
+  return state.copy_;
+}
+function finalizeProperty(rootScope, parentState, targetObject, prop, childValue, rootPath, targetIsSet) {
+  if (childValue == null) {
+    return;
+  }
+  if (typeof childValue !== "object" && !targetIsSet) {
+    return;
+  }
+  const childIsFrozen = isFrozen(childValue);
+  if (childIsFrozen && !targetIsSet) {
+    return;
+  }
+  if (childValue === targetObject)
+    die(5);
+  if (isDraft(childValue)) {
+    const path = rootPath && parentState && parentState.type_ !== 3 && // Set objects are atomic since they have no keys.
+    !has(parentState.assigned_, prop) ? rootPath.concat(prop) : void 0;
+    const res = finalize(rootScope, childValue, path);
+    set(targetObject, prop, res);
+    if (isDraft(res)) {
+      rootScope.canAutoFreeze_ = false;
+    } else
+      return;
+  } else if (targetIsSet) {
+    targetObject.add(childValue);
+  }
+  if (isDraftable(childValue) && !childIsFrozen) {
+    if (!rootScope.immer_.autoFreeze_ && rootScope.unfinalizedDrafts_ < 1) {
+      return;
+    }
+    if (parentState && parentState.base_ && parentState.base_[prop] === childValue && childIsFrozen) {
+      return;
+    }
+    finalize(rootScope, childValue);
+    if ((!parentState || !parentState.scope_.parent_) && typeof prop !== "symbol" && (isMap(targetObject) ? targetObject.has(prop) : Object.prototype.propertyIsEnumerable.call(targetObject, prop)))
+      maybeFreeze(rootScope, childValue);
+  }
+}
+function maybeFreeze(scope, value, deep = false) {
+  if (!scope.parent_ && scope.immer_.autoFreeze_ && scope.canAutoFreeze_) {
+    freeze(value, deep);
+  }
+}
+function createProxyProxy(base, parent) {
+  const isArray = Array.isArray(base);
+  const state = {
+    type_: isArray ? 1 : 0,
+    // Track which produce call this is associated with.
+    scope_: parent ? parent.scope_ : getCurrentScope(),
+    // True for both shallow and deep changes.
+    modified_: false,
+    // Used during finalization.
+    finalized_: false,
+    // Track which properties have been assigned (true) or deleted (false).
+    assigned_: {},
+    // The parent draft state.
+    parent_: parent,
+    // The base state.
+    base_: base,
+    // The base proxy.
+    draft_: null,
+    // set below
+    // The base copy with any updated values.
+    copy_: null,
+    // Called by the `produce` function.
+    revoke_: null,
+    isManual_: false
+  };
+  let target = state;
+  let traps = objectTraps;
+  if (isArray) {
+    target = [state];
+    traps = arrayTraps;
+  }
+  const { revoke, proxy } = Proxy.revocable(target, traps);
+  state.draft_ = proxy;
+  state.revoke_ = revoke;
+  return proxy;
+}
+var objectTraps = {
+  get(state, prop) {
+    if (prop === DRAFT_STATE)
+      return state;
+    const source = latest(state);
+    if (!has(source, prop)) {
+      return readPropFromProto(state, source, prop);
+    }
+    const value = source[prop];
+    if (state.finalized_ || !isDraftable(value)) {
+      return value;
+    }
+    if (value === peek(state.base_, prop)) {
+      prepareCopy(state);
+      return state.copy_[prop] = createProxy(value, state);
+    }
+    return value;
+  },
+  has(state, prop) {
+    return prop in latest(state);
+  },
+  ownKeys(state) {
+    return Reflect.ownKeys(latest(state));
+  },
+  set(state, prop, value) {
+    const desc = getDescriptorFromProto(latest(state), prop);
+    if (desc?.set) {
+      desc.set.call(state.draft_, value);
+      return true;
+    }
+    if (!state.modified_) {
+      const current2 = peek(latest(state), prop);
+      const currentState = current2?.[DRAFT_STATE];
+      if (currentState && currentState.base_ === value) {
+        state.copy_[prop] = value;
+        state.assigned_[prop] = false;
+        return true;
+      }
+      if (is(value, current2) && (value !== void 0 || has(state.base_, prop)))
+        return true;
+      prepareCopy(state);
+      markChanged(state);
+    }
+    if (state.copy_[prop] === value && // special case: handle new props with value 'undefined'
+    (value !== void 0 || prop in state.copy_) || // special case: NaN
+    Number.isNaN(value) && Number.isNaN(state.copy_[prop]))
+      return true;
+    state.copy_[prop] = value;
+    state.assigned_[prop] = true;
+    return true;
+  },
+  deleteProperty(state, prop) {
+    if (peek(state.base_, prop) !== void 0 || prop in state.base_) {
+      state.assigned_[prop] = false;
+      prepareCopy(state);
+      markChanged(state);
+    } else {
+      delete state.assigned_[prop];
+    }
+    if (state.copy_) {
+      delete state.copy_[prop];
+    }
+    return true;
+  },
+  // Note: We never coerce `desc.value` into an Immer draft, because we can't make
+  // the same guarantee in ES5 mode.
+  getOwnPropertyDescriptor(state, prop) {
+    const owner = latest(state);
+    const desc = Reflect.getOwnPropertyDescriptor(owner, prop);
+    if (!desc)
+      return desc;
+    return {
+      writable: true,
+      configurable: state.type_ !== 1 || prop !== "length",
+      enumerable: desc.enumerable,
+      value: owner[prop]
+    };
+  },
+  defineProperty() {
+    die(11);
+  },
+  getPrototypeOf(state) {
+    return getPrototypeOf(state.base_);
+  },
+  setPrototypeOf() {
+    die(12);
+  }
+};
+var arrayTraps = {};
+each(objectTraps, (key, fn) => {
+  arrayTraps[key] = function() {
+    arguments[0] = arguments[0][0];
+    return fn.apply(this, arguments);
+  };
+});
+arrayTraps.deleteProperty = function(state, prop) {
+  if (isNaN(parseInt(prop)))
+    die(13);
+  return arrayTraps.set.call(this, state, prop, void 0);
+};
+arrayTraps.set = function(state, prop, value) {
+  if (prop !== "length" && isNaN(parseInt(prop)))
+    die(14);
+  return objectTraps.set.call(this, state[0], prop, value, state[0]);
+};
+function peek(draft, prop) {
+  const state = draft[DRAFT_STATE];
+  const source = state ? latest(state) : draft;
+  return source[prop];
+}
+function readPropFromProto(state, source, prop) {
+  const desc = getDescriptorFromProto(source, prop);
+  return desc ? `value` in desc ? desc.value : (
+    // This is a very special case, if the prop is a getter defined by the
+    // prototype, we should invoke it with the draft as context!
+    desc.get?.call(state.draft_)
+  ) : void 0;
+}
+function getDescriptorFromProto(source, prop) {
+  if (!(prop in source))
+    return void 0;
+  let proto = getPrototypeOf(source);
+  while (proto) {
+    const desc = Object.getOwnPropertyDescriptor(proto, prop);
+    if (desc)
+      return desc;
+    proto = getPrototypeOf(proto);
+  }
+  return void 0;
+}
+function markChanged(state) {
+  if (!state.modified_) {
+    state.modified_ = true;
+    if (state.parent_) {
+      markChanged(state.parent_);
+    }
+  }
+}
+function prepareCopy(state) {
+  if (!state.copy_) {
+    state.copy_ = shallowCopy(
+      state.base_,
+      state.scope_.immer_.useStrictShallowCopy_
+    );
+  }
+}
+var Immer2 = class {
+  constructor(config2) {
+    this.autoFreeze_ = true;
+    this.useStrictShallowCopy_ = false;
+    this.useStrictIteration_ = true;
+    this.produce = (base, recipe, patchListener) => {
+      if (typeof base === "function" && typeof recipe !== "function") {
+        const defaultBase = recipe;
+        recipe = base;
+        const self = this;
+        return function curriedProduce(base2 = defaultBase, ...args) {
+          return self.produce(base2, (draft) => recipe.call(this, draft, ...args));
+        };
+      }
+      if (typeof recipe !== "function")
+        die(6);
+      if (patchListener !== void 0 && typeof patchListener !== "function")
+        die(7);
+      let result;
+      if (isDraftable(base)) {
+        const scope = enterScope(this);
+        const proxy = createProxy(base, void 0);
+        let hasError = true;
+        try {
+          result = recipe(proxy);
+          hasError = false;
+        } finally {
+          if (hasError)
+            revokeScope(scope);
+          else
+            leaveScope(scope);
+        }
+        usePatchesInScope(scope, patchListener);
+        return processResult(result, scope);
+      } else if (!base || typeof base !== "object") {
+        result = recipe(base);
+        if (result === void 0)
+          result = base;
+        if (result === NOTHING)
+          result = void 0;
+        if (this.autoFreeze_)
+          freeze(result, true);
+        if (patchListener) {
+          const p = [];
+          const ip = [];
+          getPlugin("Patches").generateReplacementPatches_(base, result, p, ip);
+          patchListener(p, ip);
+        }
+        return result;
+      } else
+        die(1, base);
+    };
+    this.produceWithPatches = (base, recipe) => {
+      if (typeof base === "function") {
+        return (state, ...args) => this.produceWithPatches(state, (draft) => base(draft, ...args));
+      }
+      let patches, inversePatches;
+      const result = this.produce(base, recipe, (p, ip) => {
+        patches = p;
+        inversePatches = ip;
+      });
+      return [result, patches, inversePatches];
+    };
+    if (typeof config2?.autoFreeze === "boolean")
+      this.setAutoFreeze(config2.autoFreeze);
+    if (typeof config2?.useStrictShallowCopy === "boolean")
+      this.setUseStrictShallowCopy(config2.useStrictShallowCopy);
+    if (typeof config2?.useStrictIteration === "boolean")
+      this.setUseStrictIteration(config2.useStrictIteration);
+  }
+  createDraft(base) {
+    if (!isDraftable(base))
+      die(8);
+    if (isDraft(base))
+      base = current(base);
+    const scope = enterScope(this);
+    const proxy = createProxy(base, void 0);
+    proxy[DRAFT_STATE].isManual_ = true;
+    leaveScope(scope);
+    return proxy;
+  }
+  finishDraft(draft, patchListener) {
+    const state = draft && draft[DRAFT_STATE];
+    if (!state || !state.isManual_)
+      die(9);
+    const { scope_: scope } = state;
+    usePatchesInScope(scope, patchListener);
+    return processResult(void 0, scope);
+  }
+  /**
+   * Pass true to automatically freeze all copies created by Immer.
+   *
+   * By default, auto-freezing is enabled.
+   */
+  setAutoFreeze(value) {
+    this.autoFreeze_ = value;
+  }
+  /**
+   * Pass true to enable strict shallow copy.
+   *
+   * By default, immer does not copy the object descriptors such as getter, setter and non-enumrable properties.
+   */
+  setUseStrictShallowCopy(value) {
+    this.useStrictShallowCopy_ = value;
+  }
+  /**
+   * Pass false to use faster iteration that skips non-enumerable properties
+   * but still handles symbols for compatibility.
+   *
+   * By default, strict iteration is enabled (includes all own properties).
+   */
+  setUseStrictIteration(value) {
+    this.useStrictIteration_ = value;
+  }
+  shouldUseStrictIteration() {
+    return this.useStrictIteration_;
+  }
+  applyPatches(base, patches) {
+    let i;
+    for (i = patches.length - 1; i >= 0; i--) {
+      const patch = patches[i];
+      if (patch.path.length === 0 && patch.op === "replace") {
+        base = patch.value;
+        break;
+      }
+    }
+    if (i > -1) {
+      patches = patches.slice(i + 1);
+    }
+    const applyPatchesImpl = getPlugin("Patches").applyPatches_;
+    if (isDraft(base)) {
+      return applyPatchesImpl(base, patches);
+    }
+    return this.produce(
+      base,
+      (draft) => applyPatchesImpl(draft, patches)
+    );
+  }
+};
+function createProxy(value, parent) {
+  const draft = isMap(value) ? getPlugin("MapSet").proxyMap_(value, parent) : isSet(value) ? getPlugin("MapSet").proxySet_(value, parent) : createProxyProxy(value, parent);
+  const scope = parent ? parent.scope_ : getCurrentScope();
+  scope.drafts_.push(draft);
+  return draft;
+}
+function current(value) {
+  if (!isDraft(value))
+    die(10, value);
+  return currentImpl(value);
+}
+function currentImpl(value) {
+  if (!isDraftable(value) || isFrozen(value))
+    return value;
+  const state = value[DRAFT_STATE];
+  let copy;
+  let strict = true;
+  if (state) {
+    if (!state.modified_)
+      return state.base_;
+    state.finalized_ = true;
+    copy = shallowCopy(value, state.scope_.immer_.useStrictShallowCopy_);
+    strict = state.scope_.immer_.shouldUseStrictIteration();
+  } else {
+    copy = shallowCopy(value, true);
+  }
+  each(
+    copy,
+    (key, childValue) => {
+      set(copy, key, currentImpl(childValue));
+    },
+    strict
+  );
+  if (state) {
+    state.finalized_ = false;
+  }
+  return copy;
+}
+var immer = new Immer2();
+var produce = immer.produce;
+
+// packages/dsh-plugin/node_modules/.pnpm/@deepseek-ai+dsh-client-store@0.1.7-alpha.2_@deepseek-ai+cordis@4.0.4/node_modules/@deepseek-ai/dsh-client-store/lib/index.js
+function notifySubscribers(listeners, label, ...args) {
+  for (const listener of [...listeners]) try {
+    listener(...args);
+  } catch (error51) {
+    console.error(`${label} subscriber failed:`, error51);
+  }
+}
+function rafBatch(notify) {
+  const schedule = typeof requestAnimationFrame === "function" ? (fn) => {
+    requestAnimationFrame(() => {
+      fn();
+    });
+  } : (fn) => {
+    queueMicrotask(fn);
+  };
+  let scheduled = false;
+  return () => {
+    if (scheduled) return;
+    scheduled = true;
+    schedule(() => {
+      scheduled = false;
+      notify();
+    });
+  };
+}
+function createSnapshotStore(init, opts) {
+  const withSelector = subscribeWithSelector(() => init);
+  const api = createStore()(withSelector);
+  if (opts?.persist) attachPersistence(api, opts.persist.name);
+  let subscribe = (fn) => api.subscribe(() => {
+    notifySubscribers([fn], "[client-store]");
+  });
+  if (opts?.flush === "raf") {
+    const listeners = /* @__PURE__ */ new Set();
+    const flush = rafBatch(() => {
+      notifySubscribers(listeners, "[client-store]");
+    });
+    api.subscribe(flush);
+    subscribe = (fn) => {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
+    };
+  }
+  return {
+    getSnapshot: () => api.getState(),
+    subscribe: (fn) => subscribe(fn),
+    update: (mutator) => {
+      api.setState(produce(api.getState(), (draft) => {
+        mutator(draft);
+      }), true);
+    },
+    set: (next) => {
+      api.setState(devFreeze(next), true);
+    }
+  };
+}
+function attachPersistence(api, name) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const raw = localStorage.getItem(name);
+    if (raw !== null) api.setState(devFreeze(JSON.parse(raw)), true);
+  } catch (error51) {
+    console.error(`snapshot store '${name}' rehydration failed:`, error51);
+  }
+  api.subscribe((state) => {
+    try {
+      localStorage.setItem(name, JSON.stringify(state));
+    } catch (error51) {
+      console.error(`snapshot store '${name}' persistence failed:`, error51);
+    }
+  });
+}
+function devFreeze(value) {
+  return freeze(value, true);
+}
 
 // packages/dsh-plugin/node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -248,7 +1110,7 @@ __export(external_exports, {
   safeEncodeAsync: () => safeEncodeAsync2,
   safeParse: () => safeParse2,
   safeParseAsync: () => safeParseAsync2,
-  set: () => set,
+  set: () => set2,
   setErrorMap: () => setErrorMap,
   size: () => _size,
   slugify: () => _slugify,
@@ -535,7 +1397,7 @@ __export(core_exports2, {
   encode: () => encode,
   encodeAsync: () => encodeAsync,
   extractDefs: () => extractDefs,
-  finalize: () => finalize,
+  finalize: () => finalize2,
   flattenError: () => flattenError,
   formatError: () => formatError,
   globalConfig: () => globalConfig,
@@ -549,7 +1411,7 @@ __export(core_exports2, {
   parse: () => parse,
   parseAsync: () => parseAsync,
   prettifyError: () => prettifyError,
-  process: () => process,
+  process: () => process2,
   regexes: () => regexes_exports,
   registry: () => registry,
   safeDecode: () => safeDecode,
@@ -679,7 +1541,7 @@ __export(util_exports, {
   getSizableOrigin: () => getSizableOrigin,
   hexToUint8Array: () => hexToUint8Array,
   isObject: () => isObject,
-  isPlainObject: () => isPlainObject,
+  isPlainObject: () => isPlainObject2,
   issue: () => issue,
   joinValues: () => joinValues,
   jsonStringifyReplacer: () => jsonStringifyReplacer,
@@ -736,10 +1598,10 @@ function jsonStringifyReplacer(_, value) {
   return value;
 }
 function cached(getter) {
-  const set2 = false;
+  const set3 = false;
   return {
     get value() {
-      if (!set2) {
+      if (!set3) {
         const value = getter();
         Object.defineProperty(this, "value", { value });
         return value;
@@ -859,7 +1721,7 @@ var allowsEval = /* @__PURE__ */ cached(() => {
     return false;
   }
 });
-function isPlainObject(o) {
+function isPlainObject2(o) {
   if (isObject(o) === false)
     return false;
   const ctor = o.constructor;
@@ -876,7 +1738,7 @@ function isPlainObject(o) {
   return true;
 }
 function shallowClone(o) {
-  if (isPlainObject(o))
+  if (isPlainObject2(o))
     return { ...o };
   if (Array.isArray(o))
     return [...o];
@@ -1080,7 +1942,7 @@ function omit(schema, mask) {
   return clone(schema, def);
 }
 function extend(schema, shape) {
-  if (!isPlainObject(shape)) {
+  if (!isPlainObject2(shape)) {
     throw new Error("Invalid input to extend: expected a plain object");
   }
   const checks = schema._zod.def.checks;
@@ -1103,7 +1965,7 @@ function extend(schema, shape) {
   return clone(schema, def);
 }
 function safeExtend(schema, shape) {
-  if (!isPlainObject(shape)) {
+  if (!isPlainObject2(shape)) {
     throw new Error("Invalid input to safeExtend: expected a plain object");
   }
   const def = mergeDefs(schema._zod.def, {
@@ -3450,7 +4312,7 @@ function mergeValues(a, b) {
   if (a instanceof Date && b instanceof Date && +a === +b) {
     return { valid: true, data: a };
   }
-  if (isPlainObject(a) && isPlainObject(b)) {
+  if (isPlainObject2(a) && isPlainObject2(b)) {
     const bKeys = Object.keys(b);
     const sharedKeys = Object.keys(a).filter((key) => bKeys.indexOf(key) !== -1);
     const newObj = { ...a, ...b };
@@ -3636,7 +4498,7 @@ var $ZodRecord = /* @__PURE__ */ $constructor("$ZodRecord", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, ctx) => {
     const input = payload.value;
-    if (!isPlainObject(input)) {
+    if (!isPlainObject2(input)) {
       payload.issues.push({
         expected: "record",
         code: "invalid_type",
@@ -11474,7 +12336,7 @@ function initializeContext(params) {
     external: params?.external ?? void 0
   };
 }
-function process(schema, ctx, _params = { path: [], schemaPath: [] }) {
+function process2(schema, ctx, _params = { path: [], schemaPath: [] }) {
   var _a3;
   const def = schema._zod.def;
   const seen = ctx.seen.get(schema);
@@ -11511,7 +12373,7 @@ function process(schema, ctx, _params = { path: [], schemaPath: [] }) {
     if (parent) {
       if (!result.ref)
         result.ref = parent;
-      process(parent, ctx, params);
+      process2(parent, ctx, params);
       ctx.seen.get(parent).isParent = true;
     }
   }
@@ -11618,7 +12480,7 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
     }
   }
 }
-function finalize(ctx, schema) {
+function finalize2(ctx, schema) {
   const root = ctx.seen.get(schema);
   if (!root)
     throw new Error("Unprocessed schema. This is a bug in Zod.");
@@ -11799,16 +12661,16 @@ function isTransforming(_schema, _ctx) {
 }
 var createToJSONSchemaMethod = (schema, processors = {}) => (params) => {
   const ctx = initializeContext({ ...params, processors });
-  process(schema, ctx);
+  process2(schema, ctx);
   extractDefs(ctx, schema);
-  return finalize(ctx, schema);
+  return finalize2(ctx, schema);
 };
 var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) => {
   const { libraryOptions, target } = params ?? {};
   const ctx = initializeContext({ ...libraryOptions ?? {}, target, io, processors });
-  process(schema, ctx);
+  process2(schema, ctx);
   extractDefs(ctx, schema);
-  return finalize(ctx, schema);
+  return finalize2(ctx, schema);
 };
 
 // packages/dsh-plugin/node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/core/json-schema-processors.js
@@ -12052,7 +12914,7 @@ var arrayProcessor = (schema, ctx, _json, params) => {
   if (typeof maximum === "number")
     json2.maxItems = maximum;
   json2.type = "array";
-  json2.items = process(def.element, ctx, {
+  json2.items = process2(def.element, ctx, {
     ...params,
     path: [...params.path, "items"]
   });
@@ -12064,7 +12926,7 @@ var objectProcessor = (schema, ctx, _json, params) => {
   json2.properties = {};
   const shape = def.shape;
   for (const key in shape) {
-    json2.properties[key] = process(shape[key], ctx, {
+    json2.properties[key] = process2(shape[key], ctx, {
       ...params,
       path: [...params.path, "properties", key]
     });
@@ -12087,7 +12949,7 @@ var objectProcessor = (schema, ctx, _json, params) => {
     if (ctx.io === "output")
       json2.additionalProperties = false;
   } else if (def.catchall) {
-    json2.additionalProperties = process(def.catchall, ctx, {
+    json2.additionalProperties = process2(def.catchall, ctx, {
       ...params,
       path: [...params.path, "additionalProperties"]
     });
@@ -12096,7 +12958,7 @@ var objectProcessor = (schema, ctx, _json, params) => {
 var unionProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
   const isExclusive = def.inclusive === false;
-  const options = def.options.map((x, i) => process(x, ctx, {
+  const options = def.options.map((x, i) => process2(x, ctx, {
     ...params,
     path: [...params.path, isExclusive ? "oneOf" : "anyOf", i]
   }));
@@ -12108,11 +12970,11 @@ var unionProcessor = (schema, ctx, json2, params) => {
 };
 var intersectionProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
-  const a = process(def.left, ctx, {
+  const a = process2(def.left, ctx, {
     ...params,
     path: [...params.path, "allOf", 0]
   });
-  const b = process(def.right, ctx, {
+  const b = process2(def.right, ctx, {
     ...params,
     path: [...params.path, "allOf", 1]
   });
@@ -12129,11 +12991,11 @@ var tupleProcessor = (schema, ctx, _json, params) => {
   json2.type = "array";
   const prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
   const restPath = ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
-  const prefixItems = def.items.map((x, i) => process(x, ctx, {
+  const prefixItems = def.items.map((x, i) => process2(x, ctx, {
     ...params,
     path: [...params.path, prefixPath, i]
   }));
-  const rest = def.rest ? process(def.rest, ctx, {
+  const rest = def.rest ? process2(def.rest, ctx, {
     ...params,
     path: [...params.path, restPath, ...ctx.target === "openapi-3.0" ? [def.items.length] : []]
   }) : null;
@@ -12173,7 +13035,7 @@ var recordProcessor = (schema, ctx, _json, params) => {
   const keyBag = keyType._zod.bag;
   const patterns = keyBag?.patterns;
   if (def.mode === "loose" && patterns && patterns.size > 0) {
-    const valueSchema = process(def.valueType, ctx, {
+    const valueSchema = process2(def.valueType, ctx, {
       ...params,
       path: [...params.path, "patternProperties", "*"]
     });
@@ -12183,12 +13045,12 @@ var recordProcessor = (schema, ctx, _json, params) => {
     }
   } else {
     if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
-      json2.propertyNames = process(def.keyType, ctx, {
+      json2.propertyNames = process2(def.keyType, ctx, {
         ...params,
         path: [...params.path, "propertyNames"]
       });
     }
-    json2.additionalProperties = process(def.valueType, ctx, {
+    json2.additionalProperties = process2(def.valueType, ctx, {
       ...params,
       path: [...params.path, "additionalProperties"]
     });
@@ -12203,7 +13065,7 @@ var recordProcessor = (schema, ctx, _json, params) => {
 };
 var nullableProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
-  const inner = process(def.innerType, ctx, params);
+  const inner = process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   if (ctx.target === "openapi-3.0") {
     seen.ref = def.innerType;
@@ -12214,20 +13076,20 @@ var nullableProcessor = (schema, ctx, json2, params) => {
 };
 var nonoptionalProcessor = (schema, ctx, _json, params) => {
   const def = schema._zod.def;
-  process(def.innerType, ctx, params);
+  process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = def.innerType;
 };
 var defaultProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
-  process(def.innerType, ctx, params);
+  process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = def.innerType;
   json2.default = JSON.parse(JSON.stringify(def.defaultValue));
 };
 var prefaultProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
-  process(def.innerType, ctx, params);
+  process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = def.innerType;
   if (ctx.io === "input")
@@ -12235,7 +13097,7 @@ var prefaultProcessor = (schema, ctx, json2, params) => {
 };
 var catchProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
-  process(def.innerType, ctx, params);
+  process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = def.innerType;
   let catchValue;
@@ -12250,32 +13112,32 @@ var pipeProcessor = (schema, ctx, _json, params) => {
   const def = schema._zod.def;
   const inIsTransform = def.in._zod.traits.has("$ZodTransform");
   const innerType = ctx.io === "input" ? inIsTransform ? def.out : def.in : def.out;
-  process(innerType, ctx, params);
+  process2(innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = innerType;
 };
 var readonlyProcessor = (schema, ctx, json2, params) => {
   const def = schema._zod.def;
-  process(def.innerType, ctx, params);
+  process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = def.innerType;
   json2.readOnly = true;
 };
 var promiseProcessor = (schema, ctx, _json, params) => {
   const def = schema._zod.def;
-  process(def.innerType, ctx, params);
+  process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = def.innerType;
 };
 var optionalProcessor = (schema, ctx, _json, params) => {
   const def = schema._zod.def;
-  process(def.innerType, ctx, params);
+  process2(def.innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = def.innerType;
 };
 var lazyProcessor = (schema, ctx, _json, params) => {
   const innerType = schema._zod.innerType;
-  process(innerType, ctx, params);
+  process2(innerType, ctx, params);
   const seen = ctx.seen.get(schema);
   seen.ref = innerType;
 };
@@ -12327,7 +13189,7 @@ function toJSONSchema(input, params) {
     const defs = {};
     for (const entry of registry2._idmap.entries()) {
       const [_, schema] = entry;
-      process(schema, ctx2);
+      process2(schema, ctx2);
     }
     const schemas = {};
     const external = {
@@ -12339,7 +13201,7 @@ function toJSONSchema(input, params) {
     for (const entry of registry2._idmap.entries()) {
       const [key, schema] = entry;
       extractDefs(ctx2, schema);
-      schemas[key] = finalize(ctx2, schema);
+      schemas[key] = finalize2(ctx2, schema);
     }
     if (Object.keys(defs).length > 0) {
       const defsSegment = ctx2.target === "draft-2020-12" ? "$defs" : "definitions";
@@ -12350,9 +13212,9 @@ function toJSONSchema(input, params) {
     return { schemas };
   }
   const ctx = initializeContext({ ...params, processors: allProcessors });
-  process(input, ctx);
+  process2(input, ctx);
   extractDefs(ctx, input);
-  return finalize(ctx, input);
+  return finalize2(ctx, input);
 }
 
 // packages/dsh-plugin/node_modules/.pnpm/zod@4.4.3/node_modules/zod/v4/core/json-schema-generator.js
@@ -12408,7 +13270,7 @@ var JSONSchemaGenerator = class {
    * This must be called before emit().
    */
   process(schema, _params = { path: [], schemaPath: [] }) {
-    return process(schema, this.ctx, _params);
+    return process2(schema, this.ctx, _params);
   }
   /**
    * Emit the final JSON Schema after processing.
@@ -12424,7 +13286,7 @@ var JSONSchemaGenerator = class {
         this.ctx.external = _params.external;
     }
     extractDefs(this.ctx, schema);
-    const result = finalize(this.ctx, schema);
+    const result = finalize2(this.ctx, schema);
     const { "~standard": _, ...plainResult } = result;
     return plainResult;
   }
@@ -12577,7 +13439,7 @@ __export(schemas_exports2, {
   readonly: () => readonly,
   record: () => record,
   refine: () => refine,
-  set: () => set,
+  set: () => set2,
   strictObject: () => strictObject,
   string: () => string2,
   stringFormat: () => stringFormat,
@@ -13607,7 +14469,7 @@ var ZodSet = /* @__PURE__ */ $constructor("ZodSet", (inst, def) => {
   inst.max = (...args) => inst.check(_maxSize(...args));
   inst.size = (...args) => inst.check(_size(...args));
 });
-function set(valueType, params) {
+function set2(valueType, params) {
   return new ZodSet({
     type: "set",
     valueType,
@@ -14563,7 +15425,8 @@ var typeSymbol = (name) => `${PACKAGE}/client#${name}`;
 var codec2 = (schema, name) => ({
   mode: "strict",
   typeSymbol: typeSymbol(name),
-  schema
+  schema,
+  create: () => schema
 });
 var providerRequest = external_exports.object({
   providerId: external_exports.string().min(1).optional()
@@ -15088,7 +15951,6 @@ function translate(t, key, params) {
 }
 
 // packages/dsh-plugin/src/native-key-pool.mjs
-var import_client = require("@deepseek-ai/dsh-client-runtime/client");
 var STORAGE_PREFIX = "dockyard-dsh.native-key-pool";
 var NATIVE_KEY_POLICY_LABELS = Object.freeze({
   manual: "\u624B\u52A8\u9009\u62E9 Key",
@@ -15107,12 +15969,12 @@ function resultValue(response, operation) {
   return response?.value ?? response;
 }
 function getPath(source, path = []) {
-  let current = source;
+  let current2 = source;
   for (const segment of path) {
-    if (!current || typeof current !== "object") return void 0;
-    current = current[segment];
+    if (!current2 || typeof current2 !== "object") return void 0;
+    current2 = current2[segment];
   }
-  return current;
+  return current2;
 }
 function stringAt(source, key) {
   const value = source?.[key];
@@ -15196,7 +16058,7 @@ function keyRows(metadata, credentials, activeRef, t) {
 var NativeKeyPoolController = class {
   constructor(api, remote = null, t = null) {
     __publicField(this, "api");
-    __publicField(this, "store", (0, import_client.createSnapshotStore)({
+    __publicField(this, "store", createSnapshotStore({
       status: "idle",
       action: null,
       providerId: null,
@@ -15359,15 +16221,15 @@ var NativeKeyPoolController = class {
   async mutateProfile(providerId, ref, { clear = false } = {}) {
     const state = this.store.getSnapshot();
     if (state.providerId !== providerId || !state.namespace) await this.load(providerId);
-    const current = this.store.getSnapshot();
-    if (!current.namespace) throw new Error(this.t?.("native.error.noWritableConfig") ?? "DSH did not return writable configuration for this provider");
-    const profile = getPath(current.namespace.value, current.settingsPath);
-    const path = [...current.settingsPath, "apiKeyEnv"];
-    const ops = clear ? [{ op: "unset", path }] : profile === void 0 && current.settingsPath.length > 0 ? [{ op: "set", path: current.settingsPath, value: { apiKeyEnv: ref } }] : [{ op: "set", path, value: ref }];
+    const current2 = this.store.getSnapshot();
+    if (!current2.namespace) throw new Error(this.t?.("native.error.noWritableConfig") ?? "DSH did not return writable configuration for this provider");
+    const profile = getPath(current2.namespace.value, current2.settingsPath);
+    const path = [...current2.settingsPath, "apiKeyEnv"];
+    const ops = clear ? [{ op: "unset", path }] : profile === void 0 && current2.settingsPath.length > 0 ? [{ op: "set", path: current2.settingsPath, value: { apiKeyEnv: ref } }] : [{ op: "set", path, value: ref }];
     const response = await this.api.settings.mutate({
-      ns: current.namespace.ns,
+      ns: current2.namespace.ns,
       ops,
-      expectedRevision: current.namespace.revision
+      expectedRevision: current2.namespace.revision
     });
     resultValue(response, this.operation("native.operation.updateProviderKey", "Update provider Key configuration"));
   }
@@ -15378,8 +16240,8 @@ var NativeKeyPoolController = class {
     let ref = null;
     try {
       await this.ensure(providerId);
-      const current = this.store.getSnapshot();
-      if (!current.native) throw new Error(this.t?.("native.error.notNativeProvider") ?? "The current model is not a native DSH API Key provider");
+      const current2 = this.store.getSnapshot();
+      if (!current2.native) throw new Error(this.t?.("native.error.notNativeProvider") ?? "The current model is not a native DSH API Key provider");
       ref = makeKeyRef(providerId);
       resultValue(await this.api.credentials.set({ ref, value: key }), this.operation("native.operation.saveApiKey", "Save API Key"));
       await this.mutateProfile(providerId, ref);
@@ -15408,8 +16270,8 @@ var NativeKeyPoolController = class {
     this.setState({ action: "select", status: "loading", providerId, error: null, message: null });
     try {
       await this.ensure(providerId);
-      const current = this.store.getSnapshot();
-      const key = current.keys.find((entry) => entry.ref === ref);
+      const current2 = this.store.getSnapshot();
+      const key = current2.keys.find((entry) => entry.ref === ref);
       if (!key) throw new Error(this.t?.("native.error.keyNotIndexed") ?? "This Key is missing from the local index");
       if (!key.configured) throw new Error(this.t?.("native.error.keyNotConfigured") ?? "This Key is not configured in DSH Credentials");
       await this.mutateProfile(providerId, ref);
@@ -15431,11 +16293,11 @@ var NativeKeyPoolController = class {
     this.setState({ action: "remove", status: "loading", providerId, error: null, message: null });
     try {
       await this.ensure(providerId);
-      const current = this.store.getSnapshot();
-      const key = current.keys.find((entry) => entry.ref === ref);
+      const current2 = this.store.getSnapshot();
+      const key = current2.keys.find((entry) => entry.ref === ref);
       if (!key) throw new Error(this.t?.("native.error.keyNotIndexed") ?? "This Key is missing from the local index");
-      const remaining = current.keys.filter((entry) => entry.ref !== ref && entry.configured);
-      if (current.apiKeyRef === ref) {
+      const remaining = current2.keys.filter((entry) => entry.ref !== ref && entry.configured);
+      if (current2.apiKeyRef === ref) {
         if (remaining[0]) await this.mutateProfile(providerId, remaining[0].ref);
         else await this.mutateProfile(providerId, null, { clear: true });
       }
@@ -15768,7 +16630,8 @@ function syncModelMenuGroups(menu) {
     if (options.length === 0) continue;
     const key = `${title.textContent?.trim() ?? "provider"}`;
     const stored = modelGroupFoldState.get(key);
-    const collapsed = stored === void 0 ? options.length > 8 : stored;
+    const hasCheckedModel = options.some((child) => child.getAttribute("aria-checked") === "true");
+    const collapsed = hasCheckedModel ? false : stored === true;
     modelGroupFoldState.set(key, collapsed);
     section.dataset.dockyardModelGroupCollapsed = String(collapsed);
     title.classList.add("dockyard-dsh-model-group-toggle");
@@ -15968,7 +16831,7 @@ function healthLabel(status, t) {
 var DockyardClientController = class {
   constructor(remote, t) {
     __publicField(this, "remote");
-    __publicField(this, "store", (0, import_client2.createSnapshotStore)({
+    __publicField(this, "store", createSnapshotStore({
       snapshot: null,
       status: "idle",
       action: null,
@@ -16043,8 +16906,8 @@ var DockyardClientController = class {
     return unwrapRemote(await fn(...args), this.t);
   }
   async ensureSnapshot() {
-    const current = this.store.getSnapshot().snapshot;
-    if (current?.providers) return current;
+    const current2 = this.store.getSnapshot().snapshot;
+    if (current2?.providers) return current2;
     if (this.snapshotPromise) return this.snapshotPromise;
     this.setState({ status: "loading", error: null });
     this.snapshotPromise = this.call("snapshot").then((value) => {
@@ -16060,8 +16923,8 @@ var DockyardClientController = class {
     return this.snapshotPromise;
   }
   async ensure(providerId) {
-    const current = await this.ensureSnapshot();
-    return providerId ? providerFromSnapshot(current, providerId) ?? current : current;
+    const current2 = await this.ensureSnapshot();
+    return providerId ? providerFromSnapshot(current2, providerId) ?? current2 : current2;
   }
   async refresh(providerId) {
     const existing = this.refreshPromises.get(providerId);
@@ -16143,11 +17006,11 @@ var DockyardClientController = class {
     }
   }
   async login(providerId) {
-    const current = this.store.getSnapshot();
-    if (current.auth?.providerId === providerId && ["pending", "processing"].includes(current.auth.status) && current.auth.sessionId) {
-      this.scheduleAuth(providerId, current.auth.sessionId);
+    const current2 = this.store.getSnapshot();
+    if (current2.auth?.providerId === providerId && ["pending", "processing"].includes(current2.auth.status) && current2.auth.sessionId) {
+      this.scheduleAuth(providerId, current2.auth.sessionId);
       this.setState({ action: null, status: "ready", error: null, message: text(this.t, "status.oauthInProgress") });
-      return current.auth;
+      return current2.auth;
     }
     this.setState({ action: "login", status: "loading", providerId, error: null, message: null });
     const authWindow = providerId === "antigravity" ? null : typeof window !== "undefined" && typeof window.open === "function" ? window.open("about:blank", "dockyard-dsh-oauth", "popup") : null;
@@ -16284,11 +17147,11 @@ function modelDetails(directoryState, providerId = null) {
   const selected = directoryState?.current ?? null;
   const targetProviderId = providerId ?? selected?.provider ?? null;
   const group = targetProviderId ? directoryState?.groups?.find((entry) => entry.id === targetProviderId) ?? null : null;
-  const current = selected && (!providerId || selected.provider === providerId) ? selected : null;
-  if (!current) return { current: null, group, model: null, efforts: [] };
-  const model = group?.models?.find((entry) => entry.id === current.model) ?? null;
+  const current2 = selected && (!providerId || selected.provider === providerId) ? selected : null;
+  if (!current2) return { current: null, group, model: null, efforts: [] };
+  const model = group?.models?.find((entry) => entry.id === current2.model) ?? null;
   const efforts = model?.reasoning?.efforts ?? [];
-  return { current, group, model, efforts };
+  return { current: current2, group, model, efforts };
 }
 function modelContextWindow(model) {
   const values = [model?.context?.contextWindow, model?.contextWindow, model?.metadata?.contextWindow];
@@ -16304,8 +17167,8 @@ function normalizeDraftContextWindow(value) {
   const numeric = Number(String(value).replaceAll(",", "").trim());
   return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
 }
-function ContextWindowSection({ providerId, current, model, accountId = null, keyRef = null, remote, t }) {
-  const modelId = current?.model ?? null;
+function ContextWindowSection({ providerId, current: current2, model, accountId = null, keyRef = null, remote, t }) {
+  const modelId = current2?.model ?? null;
   const detected = modelContextWindow(model);
   const scope = {
     providerId,
@@ -16485,11 +17348,11 @@ function quotaView(account, t) {
     );
   }));
 }
-function AccountCard({ account, current, providerId, controller, busy, t }) {
+function AccountCard({ account, current: current2, providerId, controller, busy, t }) {
   const health = account?.health?.status;
   return h(
     "div",
-    { className: "dockyard-dsh-account", "data-current": current },
+    { className: "dockyard-dsh-account", "data-current": current2 },
     h(
       "div",
       { className: "dockyard-dsh-account-head" },
@@ -16505,9 +17368,9 @@ function AccountCard({ account, current, providerId, controller, busy, t }) {
         h("button", {
           type: "button",
           className: "dockyard-dsh-account-use",
-          disabled: busy || current,
+          disabled: busy || current2,
           onClick: () => controller.selectAccount(providerId, account.accountId)
-        }, current ? text(t, "account.current") : text(t, "account.manualUse")),
+        }, current2 ? text(t, "account.current") : text(t, "account.manualUse")),
         h("button", {
           type: "button",
           className: "dockyard-dsh-account-remove",
@@ -16634,12 +17497,12 @@ function nativeQuotaView(native, t) {
 }
 function NativeKeyCard({ entry, providerId, controller, busy, t }) {
   const configured = entry?.configured === true;
-  const current = entry?.active === true;
+  const current2 = entry?.active === true;
   const writable = entry?.credential?.writable !== false;
   const label = entry?.label ?? entry?.ref ?? text(t, "title.key");
   return h(
     "div",
-    { className: "dockyard-dsh-account", "data-current": current },
+    { className: "dockyard-dsh-account", "data-current": current2 },
     h(
       "div",
       { className: "dockyard-dsh-account-head" },
@@ -16655,9 +17518,9 @@ function NativeKeyCard({ entry, providerId, controller, busy, t }) {
         h("button", {
           type: "button",
           className: "dockyard-dsh-account-use",
-          disabled: busy || current || !configured,
+          disabled: busy || current2 || !configured,
           onClick: () => controller.selectKey(providerId, entry.ref)
-        }, current ? text(t, "native.currentKey") : text(t, "native.manualUse")),
+        }, current2 ? text(t, "native.currentKey") : text(t, "native.manualUse")),
         h("button", {
           type: "button",
           className: "dockyard-dsh-account-remove",
@@ -16685,19 +17548,19 @@ function NativeKeyPopup({ providerId, native, directory, directoryState, nativeC
   const [tierBusy, setTierBusy] = useState(false);
   const [keyDraft, setKeyDraft] = useState("");
   const [labelDraft, setLabelDraft] = useState("");
-  const { current, group, model, efforts } = modelDetails(directoryState, providerId);
-  const modelLabel = model?.name ?? current?.model ?? text(t, "title.noModel");
-  const compactModelId = displayModelId(providerId, current?.model);
-  const tier = current?.reasoningEffort ?? model?.reasoning?.defaultEffort ?? null;
+  const { current: current2, group, model, efforts } = modelDetails(directoryState, providerId);
+  const modelLabel = model?.name ?? current2?.model ?? text(t, "title.noModel");
+  const compactModelId = displayModelId(providerId, current2?.model);
+  const tier = current2?.reasoningEffort ?? model?.reasoning?.defaultEffort ?? null;
   const busy = native.action !== null;
   const keys = native.keys ?? [];
   const configuredCount = keys.filter((entry) => entry.configured).length;
   const activeKeyRef = native.apiKeyRef ?? keys.find((entry) => entry.active)?.ref ?? null;
   const chooseTier = async (value) => {
-    if (!current || !directory || tierBusy) return;
+    if (!current2 || !directory || tierBusy) return;
     setTierBusy(true);
     try {
-      await directory.select({ ...current, reasoningEffort: value });
+      await directory.select({ ...current2, reasoningEffort: value });
     } finally {
       setTierBusy(false);
     }
@@ -16727,7 +17590,7 @@ function NativeKeyPopup({ providerId, native, directory, directoryState, nativeC
         { className: "dockyard-dsh-head-copy" },
         h("div", { className: "dockyard-dsh-eyebrow" }, text(t, "eyebrow.keyProvider")),
         h("div", { className: "dockyard-dsh-title" }, title),
-        h("div", { className: "dockyard-dsh-model", title: current?.model }, `${modelLabel}${compactModelId && modelLabel !== current.model && modelLabel !== compactModelId ? ` \xB7 ${compactModelId}` : ""}`),
+        h("div", { className: "dockyard-dsh-model", title: current2?.model }, `${modelLabel}${compactModelId && modelLabel !== current2.model && modelLabel !== compactModelId ? ` \xB7 ${compactModelId}` : ""}`),
         model?.description ? h("div", { className: "dockyard-dsh-model-context" }, model.description) : null
       ),
       h("button", { type: "button", className: "dockyard-dsh-close", onClick: onClose, "aria-label": text(t, "ui.close") }, "\xD7")
@@ -16807,7 +17670,7 @@ function NativeKeyPopup({ providerId, native, directory, directoryState, nativeC
       ) : null,
       h(ContextWindowSection, {
         providerId,
-        current,
+        current: current2,
         model,
         keyRef: activeKeyRef,
         remote,
@@ -16965,10 +17828,10 @@ function SubscriptionSettingsSection({ close, controller, remote, t }) {
 }
 function DockyardPopup({ providerId, provider, directory, directoryState, controlState, controller, remote, onOpenOverview, onClose, t }) {
   const [tierBusy, setTierBusy] = useState(false);
-  const { current, group, model, efforts } = modelDetails(directoryState, providerId);
-  const modelLabel = model?.name ?? current?.model ?? text(t, "title.noModel");
-  const compactModelId = displayModelId(providerId, current?.model);
-  const tier = current?.reasoningEffort ?? model?.reasoning?.defaultEffort ?? null;
+  const { current: current2, group, model, efforts } = modelDetails(directoryState, providerId);
+  const modelLabel = model?.name ?? current2?.model ?? text(t, "title.noModel");
+  const compactModelId = displayModelId(providerId, current2?.model);
+  const tier = current2?.reasoningEffort ?? model?.reasoning?.defaultEffort ?? null;
   const accounts = provider?.accounts ?? [];
   const activeId = provider?.defaultAccountId ?? null;
   const contextAccountId = provider?.defaultAccountId ?? (accounts.length === 1 ? accounts[0]?.accountId ?? null : null);
@@ -16977,10 +17840,10 @@ function DockyardPopup({ providerId, provider, directory, directoryState, contro
   const needsReauthorization = accounts.some((account) => account?.health?.status === "expired");
   const supportsOAuthLogin = provider?.manifest?.capabilities?.includes("oauth_authorization");
   const chooseTier = async (value) => {
-    if (!current || !directory || tierBusy) return;
+    if (!current2 || !directory || tierBusy) return;
     setTierBusy(true);
     try {
-      await directory.select({ ...current, reasoningEffort: value });
+      await directory.select({ ...current2, reasoningEffort: value });
     } finally {
       setTierBusy(false);
     }
@@ -17001,7 +17864,7 @@ function DockyardPopup({ providerId, provider, directory, directoryState, contro
         { className: "dockyard-dsh-head-copy" },
         h("div", { className: "dockyard-dsh-eyebrow" }, text(t, "eyebrow.subscription")),
         h("div", { className: "dockyard-dsh-title" }, providerDisplayName(providerId, provider?.manifest, t) || group?.name),
-        h("div", { className: "dockyard-dsh-model", title: current?.model }, `${modelLabel}${compactModelId && modelLabel !== current.model && modelLabel !== compactModelId ? ` \xB7 ${compactModelId}` : ""}`),
+        h("div", { className: "dockyard-dsh-model", title: current2?.model }, `${modelLabel}${compactModelId && modelLabel !== current2.model && modelLabel !== compactModelId ? ` \xB7 ${compactModelId}` : ""}`),
         model?.description ? h("div", { className: "dockyard-dsh-model-context" }, model.description) : null
       ),
       h("button", { type: "button", className: "dockyard-dsh-close", onClick: onClose, "aria-label": text(t, "ui.close") }, "\xD7")
@@ -17062,7 +17925,7 @@ function DockyardPopup({ providerId, provider, directory, directoryState, contro
       ) : null,
       h(ContextWindowSection, {
         providerId,
-        current,
+        current: current2,
         model,
         accountId: contextAccountId,
         remote,
@@ -17102,11 +17965,11 @@ function DockyardAccountControl({ directory, modelDirectory, controller, nativeC
   const compactIndicatorCacheRef = useRef({ providerId: null, indicator: null });
   const accountSignatureRef = useRef(void 0);
   const modelSelectionSignatureRef = useRef(void 0);
-  const { current, group, model } = modelDetails(directoryState);
-  const currentProviderId = current?.provider ?? null;
+  const { current: current2, group, model } = modelDetails(directoryState);
+  const currentProviderId = current2?.provider ?? null;
   const modelSelectionSignature = JSON.stringify([
-    current?.provider ?? null,
-    current?.model ?? null
+    current2?.provider ?? null,
+    current2?.model ?? null
   ]);
   const providers = controlState.snapshot?.providers ?? [];
   const currentProvider = providerFromSnapshot(controlState.snapshot, currentProviderId);
@@ -17256,7 +18119,7 @@ function DockyardAccountControl({ directory, modelDirectory, controller, nativeC
   const health = currentSelectedAccount?.health?.status;
   const quotaLevel = loading ? "loading" : ["expired", "exhausted", "degraded"].includes(health) ? "critical" : compactIndicator?.type === "balance" ? compactIndicator.remaining <= 0 ? "critical" : "balance" : quotaValue === null ? "unknown" : quotaValue <= 10 ? "critical" : quotaValue <= 25 ? "warning" : "healthy";
   const providerLabel = currentProviderId ? providerDisplayName(currentProviderId, currentProvider?.manifest ?? currentNative?.entry, t) : text(t, "trigger.subscriptionManagement");
-  const modelLabel = model?.name ?? current?.model ?? "";
+  const modelLabel = model?.name ?? current2?.model ?? "";
   const toggleOpen = () => {
     if (open) {
       setOpen(false);
