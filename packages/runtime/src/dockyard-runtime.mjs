@@ -554,6 +554,7 @@ export class DockyardRuntime {
   }
 
   async refreshAccount(providerId, accountId, { force = false, tolerateFailure = false } = {}) {
+    await this.init();
     // Deduplicate only calls with identical semantics: a lenient background
     // refresh must never answer a strict foreground call (and vice versa),
     // and forced refreshes must not be satisfied by cached in-flight ones.

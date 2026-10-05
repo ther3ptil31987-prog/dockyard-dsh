@@ -7,6 +7,7 @@ const codec = (schema, name) => ({
   mode: "strict",
   typeSymbol: typeSymbol(name),
   schema,
+  create: () => schema,
 });
 
 const providerRequest = z.object({

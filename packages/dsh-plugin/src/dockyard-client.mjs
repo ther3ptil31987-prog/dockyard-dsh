@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { createSnapshotStore } from "@deepseek-ai/dsh-client-runtime/client";
+import { createSnapshotStore } from "@deepseek-ai/dsh-client-store";
 
 import { TYPERT_REMOTE } from "./dockyard-typert.remote.mjs";
 import {
@@ -202,7 +202,7 @@ function installStyles() {
   document.head.appendChild(tag);
 }
 
-const modelGroupFoldState = new Map();
+export const modelGroupFoldState = new Map();
 
 function modelMenuSections(menu) {
   return [...menu.querySelectorAll('section[role="group"]')].filter((section) => section.closest('[role="menu"]') === menu);
@@ -228,7 +228,7 @@ function syncModelGroupChevron(title, open) {
   icon.dataset.open = String(open);
 }
 
-function syncModelMenuGroups(menu) {
+export function syncModelMenuGroups(menu) {
   const english = menu.getAttribute("aria-label") === "Model and reasoning effort";
   for (const section of modelMenuSections(menu)) {
     const labelledBy = section.getAttribute("aria-labelledby");
@@ -239,9 +239,11 @@ function syncModelMenuGroups(menu) {
     if (options.length === 0) continue;
     const key = `${title.textContent?.trim() ?? "provider"}`;
     const stored = modelGroupFoldState.get(key);
-    // Large live catalogs stay collapsed even when the current selection is
-    // in that provider; the composer already shows the selected model.
-    const collapsed = stored === undefined ? options.length > 8 : stored;
+    const hasCheckedModel = options.some((child) => child.getAttribute("aria-checked") === "true");
+    // Groups stay expanded by default so models remain visible and DSH's
+    // autofocus on the active radio item does not fail and trigger an instant onBlur close.
+    // The group containing the active selection must never be collapsed.
+    const collapsed = hasCheckedModel ? false : (stored === true);
     modelGroupFoldState.set(key, collapsed);
     section.dataset.dockyardModelGroupCollapsed = String(collapsed);
     title.classList.add("dockyard-dsh-model-group-toggle");

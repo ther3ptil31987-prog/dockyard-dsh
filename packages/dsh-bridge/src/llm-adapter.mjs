@@ -279,13 +279,19 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
   }
 
   function fastResolveModel(provider, model) {
+    const isGemini = typeof model === "string" && model.toLowerCase().includes("gemini");
+    const fallback = {
+      provider,
+      id: model,
+      name: model,
+      ...(isGemini ? { context: { contextWindow: 1048576 }, defaultMaxTokens: 65536 } : {}),
+    };
     const catalog = cachedProviderCatalog(provider);
     if (!catalog) {
       warmProviderCatalog(provider);
-      return { provider, id: model, name: model };
+      return fallback;
     }
-    return providerCatalogModels(provider, catalog).find((entry) => entry.id === model)
-      ?? { provider, id: model, name: model };
+    return providerCatalogModels(provider, catalog).find((entry) => entry.id === model) ?? fallback;
   }
 
   return {
@@ -307,10 +313,16 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
 
     async resolveModel(provider, model, signal) {
       await ensureRuntimeReady();
-      if (!providerHasConnectedAccount(runtime, provider)) return { provider, id: model, name: model };
+      const isGemini = typeof model === "string" && model.toLowerCase().includes("gemini");
+      const fallback = {
+        provider,
+        id: model,
+        name: model,
+        ...(isGemini ? { context: { contextWindow: 1048576 }, defaultMaxTokens: 65536 } : {}),
+      };
+      if (!providerHasConnectedAccount(runtime, provider)) return fallback;
       const catalog = await providerCatalog(provider, signal);
-      return providerCatalogModels(provider, catalog).find((entry) => entry.id === model)
-        ?? { provider, id: model, name: model };
+      return providerCatalogModels(provider, catalog).find((entry) => entry.id === model) ?? fallback;
     },
 
     async prepareCall(provider, model, signal) {

@@ -72,10 +72,25 @@ const ANTIGRAVITY_BROWSER_SCOPES = process.env.DOCKYARD_ANTIGRAVITY_OAUTH_SCOPE
 // mirror Google's published model card and act purely as a capacity overlay:
 // mergedAntigravityRegistry attaches them only when the live directory itself
 // references the id, so the fallback can never invent a callable model.
-// Source: https://deepmind.google/models/model-cards/gemini-3-7-flash/
+// Source: https://deepmind.google/models/model-cards/
 const OFFICIAL_ANTIGRAVITY_MODEL_METADATA = Object.freeze([
   Object.freeze({
+    id: "gemini-3.8-flash",
+    contextWindow: 1_048_576,
+    maxTokens: 65_536,
+  }),
+  Object.freeze({
+    id: "gemini-3.8-pro",
+    contextWindow: 1_048_576,
+    maxTokens: 65_536,
+  }),
+  Object.freeze({
     id: "gemini-3.7-flash",
+    contextWindow: 1_048_576,
+    maxTokens: 65_536,
+  }),
+  Object.freeze({
+    id: "gemini-3.7-pro",
     contextWindow: 1_048_576,
     maxTokens: 65_536,
   }),
