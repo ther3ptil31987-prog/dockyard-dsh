@@ -1,7 +1,8 @@
 import { spawn } from "node:child_process";
 
-import { ACCOUNT_SELECTION_POLICY } from "../../core/src/contracts.mjs";
+import { ACCOUNT_SELECTION_POLICY, PROVIDER_BEHAVIOR_CAPABILITIES } from "../../core/src/contracts.mjs";
 import { redactError } from "../../providers/src/provider-utils.mjs";
+import { reconcileModelSelection } from "../../runtime/src/model-selection-store.mjs";
 
 const DEFAULT_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const AUTH_POLL_INTERVAL_MS = 750;
@@ -107,9 +108,25 @@ function commandError(text) {
 }
 
 function openDefaultBrowser(url) {
-  if (process.platform !== "darwin" || !url) return;
+  if (!url) return;
   try {
-    const child = spawn("open", [url], { detached: true, stdio: "ignore" });
+    let child;
+    if (process.platform === "darwin") {
+      child = spawn("open", [url], { detached: true, stdio: "ignore" });
+    } else if (process.platform === "win32") {
+      // `start` is a cmd.exe builtin, so it needs ComSpec rather than a binary
+      // on PATH. The empty quoted first argument is the window title, which
+      // `start` would otherwise take from the URL.
+      const comspec = process.env.ComSpec || process.env.COMSPEC || "cmd.exe";
+      child = spawn(comspec, ["/d", "/s", "/c", `start "" "${String(url).replace(/"/g, "")}"`], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        windowsVerbatimArguments: true,
+      });
+    } else {
+      child = spawn("xdg-open", [url], { detached: true, stdio: "ignore" });
+    }
     child.unref();
   } catch {
     // The authorization URL is still returned in the command result.
@@ -131,6 +148,7 @@ export class DockyardDshService {
     autoRefresh = true,
     openBrowser = openDefaultBrowser,
     logger = console,
+    notifyAdaptersUpdated = null,
   } = {}) {
     if (!runtime) throw new Error("Dockyard DSH service requires a runtime");
     this.runtime = runtime;
@@ -138,6 +156,7 @@ export class DockyardDshService {
     this.autoRefresh = autoRefresh;
     this.openBrowser = openBrowser;
     this.logger = logger;
+    this.notifyAdaptersUpdated = notifyAdaptersUpdated;
     this.ready = runtime.init();
   }
 
@@ -188,7 +207,35 @@ export class DockyardDshService {
     };
   }
 
-  async add(providerInput = null, candidateId = null) {
+  async addApiKey(providerInput, apiKey, label = "") {
+    await this.ready;
+    const providerId = providerIdFor(this.runtime, providerInput);
+    if (!providerId) throw new Error(`未知 provider：${providerInput}`);
+    const trimmedKey = String(apiKey ?? "").trim();
+    if (!trimmedKey) throw new Error("请输入有效的 API Key");
+    const imported = await this.runtime.importSource(providerId, {
+      apiKey: trimmedKey,
+      label: String(label ?? "").trim(),
+    });
+    const accounts = Array.isArray(imported?.accounts) ? imported.accounts : [];
+    if (accounts.length > 0) {
+      const firstId = accounts[0].accountId;
+      await this.runtime.setDefaultAccount(providerId, firstId).catch(() => {});
+      await this.runtime.getCatalog(providerId, { force: true }).catch(() => null);
+    }
+    try {
+      this.notifyAdaptersUpdated?.();
+    } catch {}
+    return {
+      accounts,
+      diagnostics: imported?.diagnostics ?? [],
+    };
+  }
+
+  async add(providerInput = null, candidateId = null, options = {}) {
+    if (options?.apiKey) {
+      return this.addApiKey(providerInput, options.apiKey, options.label);
+    }
     const scan = await this.scan(providerInput);
     const imports = [];
     const diagnostics = [];
@@ -218,17 +265,40 @@ export class DockyardDshService {
     if (candidateId && imports.length === 0 && diagnostics.length === 0) {
       throw new Error(`没有找到未添加的 OAuth 候选：${candidateId}`);
     }
+    if (imports.length > 0) {
+      try {
+        this.notifyAdaptersUpdated?.();
+      } catch {}
+    }
     return { accounts: imports, diagnostics, scan };
   }
 
-  async refresh(providerInput = null) {
+  async refresh(providerInput = null, { forceCatalog = false } = {}) {
     await this.ready;
     const providerId = providerInput ? providerIdFor(this.runtime, providerInput) : null;
     if (providerInput && !providerId) throw new Error(`未知 provider：${providerInput}`);
     const refreshKey = providerId ?? "*";
     const existing = this.#refreshPromises.get(refreshKey);
     if (existing) return existing;
-    const promise = this.runtime.refreshAll(providerId).finally(() => {
+    const promise = (async () => {
+      const results = await this.runtime.refreshAll(providerId);
+      // Reloading every catalog on each poll made DSH re-list models forever
+      // ("正在刷新模型列表…"). Model discovery refreshes on its own schedule and
+      // announces itself only when the set actually changes, so a poll that
+      // found nothing new stays silent.
+      if (forceCatalog) {
+        if (providerId) {
+          await this.runtime.getCatalog(providerId, { force: true }).catch(() => null);
+        } else {
+          const manifests = this.runtime.listProviderManifests?.() ?? [];
+          await Promise.all(manifests.map((m) => this.runtime.getCatalog(m.id, { force: true }).catch(() => null)));
+        }
+        try {
+          this.notifyAdaptersUpdated?.();
+        } catch {}
+      }
+      return results;
+    })().finally(() => {
       if (this.#refreshPromises.get(refreshKey) === promise) this.#refreshPromises.delete(refreshKey);
     });
     this.#refreshPromises.set(refreshKey, promise);
@@ -255,7 +325,13 @@ export class DockyardDshService {
     await this.ready;
     const providerId = providerIdFor(this.runtime, providerInput);
     if (!providerId) throw new Error(`未知 provider：${providerInput}`);
-    return this.runtime.setDefaultAccount(providerId, accountId);
+    const result = await this.runtime.setDefaultAccount(providerId, accountId);
+    // The model list is per account, so the newly selected account's catalog is
+    // fetched right away instead of leaving the previous account's list on
+    // screen. Failures are harmless: the picker falls back to the cached list.
+    void this.runtime.getCatalog(providerId, { force: true, accountId })
+      .catch(() => {});
+    return result;
   }
 
   async removeAccount(providerInput, accountId) {
@@ -276,15 +352,142 @@ export class DockyardDshService {
     return this.runtime.setContextWindowOverride(input, value);
   }
 
+  #hasCapability(providerId, capability) {
+    return Boolean(this.runtime.hasProviderCapability?.(providerId, capability));
+  }
+
+  async #autoProvisionIfNeeded(providerId) {
+    if (!this.#hasCapability(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT)) return;
+    const snap = this.runtime.snapshot?.();
+    const provider = snap?.providers?.find((p) => p.providerId === providerId);
+    if (provider && (!Array.isArray(provider.accounts) || provider.accounts.length === 0)) {
+      await this.add(providerId).catch(() => {});
+    }
+  }
+
+  async getModelSelection(providerId, accountId = null) {
+    await this.ready;
+    await this.#autoProvisionIfNeeded(providerId);
+    const forceLiveCatalog = this.#hasCapability(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.FORCE_LIVE_CATALOG);
+    // Providers serve a different model list per account, so the panel asks for
+    // the list of the account that is currently selected, not of the provider.
+    const catalog = await this.runtime.getCatalog(providerId, {
+      force: forceLiveCatalog,
+      ...(accountId ? { accountId } : {}),
+    }).catch(() => ({ models: [] }));
+    if (forceLiveCatalog) {
+      try {
+        this.notifyAdaptersUpdated?.();
+      } catch {}
+    }
+    const models = catalog?.models ?? [];
+    // The saved selection may predate this catalog: reconcile it so a further
+    // filter cannot hide every model the account actually serves.
+    const usable = models.filter((model) => model?.unavailable !== true);
+    const enabledModelIds = reconcileModelSelection(
+      this.runtime.getModelSelection(providerId, accountId),
+      usable.length > 0 ? usable : models,
+    );
+    return {
+      providerId,
+      models,
+      enabledModelIds,
+    };
+  }
+
+  async setModelSelection(providerId, enabledModelIds, accountId = null) {
+    await this.ready;
+    const saved = await this.runtime.setModelSelection(providerId, enabledModelIds, accountId);
+    try {
+      this.notifyAdaptersUpdated?.();
+    } catch {}
+    return {
+      providerId,
+      enabledModelIds: saved,
+      saved: true,
+    };
+  }
+
+  async testModelConnection(providerInput, modelId, { timeoutMs = 15_000 } = {}) {
+    await this.ready;
+    const providerId = providerIdFor(this.runtime, providerInput);
+    if (!providerId) throw new Error(`未知 provider：${providerInput}`);
+    if (!modelId || typeof modelId !== "string") throw new Error("缺少有效的 modelId");
+
+    await this.#autoProvisionIfNeeded(providerId);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error("连接测试超时 (15s)")), timeoutMs);
+    const startTime = Date.now();
+    let receivedChunk = false;
+    let latencyMs = 0;
+
+    try {
+      const stream = await this.runtime.stream(
+        providerId,
+        {
+          model: modelId,
+          messages: [{ role: "user", content: "hi" }],
+          maxTokens: 512,
+          probe: true,
+          noFallback: true,
+        },
+        { signal: controller.signal },
+      );
+
+      for await (const chunk of stream) {
+        receivedChunk = true;
+        latencyMs = Date.now() - startTime;
+        break;
+      }
+
+      if (!receivedChunk) {
+        latencyMs = Date.now() - startTime;
+      }
+
+      return {
+        ok: true,
+        providerId,
+        modelId,
+        latencyMs,
+      };
+    } catch (error) {
+      latencyMs = Date.now() - startTime;
+      const message = redactError(error);
+      const status = error?.status ?? error?.statusCode ?? null;
+      return {
+        ok: false,
+        providerId,
+        modelId,
+        latencyMs,
+        status,
+        error: message || "连接失败",
+      };
+    } finally {
+      clearTimeout(timeout);
+      controller.abort();
+    }
+  }
+
   async startAuthorization(providerInput, { openBrowser = true } = {}) {
     await this.ready;
     const manifest = manifestFor(this.runtime, providerInput);
     if (!manifest) throw new Error(`未知 provider：${providerInput}`);
     if (!manifest.capabilities?.includes("oauth_authorization")) {
+      // Ask the provider first: a key-only provider points at the key field, a
+      // desktop-session provider names the client to sign in to. Both are
+      // provider facts, so the host keeps only the fallback sentence.
+      const provided = typeof this.runtime.authorizationInstructions === "function"
+        ? await this.runtime.authorizationInstructions(manifest.id)
+        : null;
+      const keyOnly = manifest.capabilities?.includes("api_key_auth");
+      const fallback = keyOnly
+        ? `${providerName(manifest)} 使用 API Key 认证；请在面板的「添加新的 API Key」中填入，或扫描本机已有的登录态。`
+        : `${providerName(manifest)} 没有独立的官方授权入口；请先在官方客户端或官方环境登录/切换账号，然后扫描本机登录态，再添加候选。`;
       return {
         status: "unsupported",
         providerId: manifest.id,
-        instructions: `${providerName(manifest)} 没有独立的官方授权入口；请先在官方客户端或官方环境登录/切换账号，然后扫描本机登录态，再添加候选。`,
+        instructions: provided ?? fallback,
       };
     }
 

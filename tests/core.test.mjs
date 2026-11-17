@@ -6,6 +6,7 @@ import {
   EventBus,
   ModuleRuntime,
   createProviderRoute,
+  createQuotaSnapshot,
 } from "../packages/core/src/index.mjs";
 import { AccountPool } from "../packages/account-pool/src/index.mjs";
 import { createCodexModule } from "../modules/provider-codex/src/index.mjs";
@@ -202,6 +203,21 @@ test("event listeners are isolated from each other", async () => {
   assert.equal(result.errors.length, 1);
 });
 
+test("a quota window keeps its balance kind through the snapshot contract", () => {
+  // The client renders and ranks balance windows differently from percentage
+  // windows; the contract whitelist must not silently drop that marker.
+  const snapshot = createQuotaSnapshot({
+    windows: [{ id: "monthly", name: "月度额度", kind: "balance", remaining: 0.056, limit: null, unit: "credits" }],
+  });
+  assert.equal(snapshot.windows[0].kind, "balance");
+  // Windows that declare no kind keep their previous shape exactly.
+  const plain = createQuotaSnapshot({ windows: [{ id: "5h", remaining: 1, limit: 3 }] });
+  assert.equal("kind" in plain.windows[0], false);
+  // A declared primary window must survive too: the compact indicator uses it.
+  const primary = createQuotaSnapshot({ windows: [{ id: "monthly", remaining: 1, limit: 10, primary: true }] });
+  assert.equal(primary.windows[0].primary, true);
+});
+
 test("provider health reporting cannot mask a response after account removal", async () => {
   const pool = new AccountPool({ providerId: "in-flight", policy: ACCOUNT_SELECTION_POLICY.MANUAL, clock: fixedNow });
   addAccount(pool, "account-a", { remaining: 1, limit: 2, unit: "requests" });
@@ -329,6 +345,164 @@ test("provider route fails over a rate-limited account before exposing a partial
   ]);
   assert.equal(pool.get("account-a").health.status, "degraded");
   assert.equal(pool.get("account-b").health.status, "healthy");
+});
+
+test("a spent account is not used for a paid model", async () => {
+  const pool = new AccountPool({
+    providerId: "test-provider",
+    policy: ACCOUNT_SELECTION_POLICY.MANUAL,
+    clock: fixedNow,
+  });
+  addAccount(pool, "account-spent", { remaining: 0, limit: 10, unit: "credits" });
+  pool.report("account-spent", { status: "quota_exhausted", message: "额度用完" });
+  const invocations = [];
+  const providerModule = {
+    manifest: { id: "test-provider" },
+    async getCatalog() {
+      return { models: [{ id: "paid-model" }, { id: "free-model", free: true }] };
+    },
+    async invoke() {
+      invocations.push("invoke");
+      return { ok: true };
+    },
+  };
+  const route = createProviderRoute({ providerModule, accountPool: pool });
+  await assert.rejects(route.invoke({ model: "paid-model" }, {}), /No eligible accounts/);
+  assert.deepEqual(invocations, []);
+});
+
+test("a spent account still serves a model the provider gives away", async () => {
+  const pool = new AccountPool({
+    providerId: "test-provider",
+    policy: ACCOUNT_SELECTION_POLICY.MANUAL,
+    clock: fixedNow,
+  });
+  addAccount(pool, "account-spent", { remaining: 0, limit: 10, unit: "credits" });
+  pool.report("account-spent", { status: "quota_exhausted", message: "额度用完" });
+  const used = [];
+  const providerModule = {
+    manifest: { id: "test-provider" },
+    async getCatalog() {
+      return { models: [{ id: "paid-model" }, { id: "free-model", free: true }] };
+    },
+    async *stream() {
+      used.push("free");
+      yield { type: "block-start", index: 0, blockType: "text" };
+      yield { type: "text-delta", index: 0, text: "ok" };
+      yield { type: "finish", reason: { kind: "stop" } };
+    },
+  };
+  const route = createProviderRoute({ providerModule, accountPool: pool });
+  const chunks = [];
+  for await (const chunk of route.stream({ model: "free-model" }, {})) chunks.push(chunk);
+  assert.deepEqual(used, ["free"]);
+  assert.deepEqual(chunks.at(-1), { type: "finish", reason: { kind: "stop" } });
+});
+
+test("a spent account waiting for its quota reset still serves a free model", async () => {
+  const pool = new AccountPool({
+    providerId: "test-provider",
+    policy: ACCOUNT_SELECTION_POLICY.MANUAL,
+    clock: fixedNow,
+  });
+  addAccount(pool, "account-spent", { remaining: 0, limit: 10, unit: "credits" });
+  // This is the shape a failed request leaves behind: exhausted with a cooldown
+  // until the next quota reset. The cooldown is about the paid quota, so it must
+  // not gate a model that does not spend it.
+  pool.report("account-spent", {
+    status: "quota_exhausted",
+    cooldownUntil: "2026-08-20T00:00:00.000Z",
+    message: "quota exhausted",
+  });
+  const used = [];
+  const providerModule = {
+    manifest: { id: "test-provider" },
+    async getCatalog() {
+      return { models: [{ id: "paid-model" }, { id: "free-model", free: true }] };
+    },
+    async *stream() {
+      used.push("free");
+      yield { type: "block-start", index: 0, blockType: "text" };
+      yield { type: "text-delta", index: 0, text: "ok" };
+      yield { type: "finish", reason: { kind: "stop" } };
+    },
+  };
+  const route = createProviderRoute({ providerModule, accountPool: pool });
+  const chunks = [];
+  for await (const chunk of route.stream({ model: "free-model" }, {})) chunks.push(chunk);
+  assert.deepEqual(used, ["free"]);
+  assert.deepEqual(chunks.at(-1), { type: "finish", reason: { kind: "stop" } });
+});
+
+test("failing a paid model first does not block the free model afterwards", async () => {
+  const pool = new AccountPool({
+    providerId: "test-provider",
+    policy: ACCOUNT_SELECTION_POLICY.MANUAL,
+    clock: fixedNow,
+  });
+  addAccount(pool, "account-one", { remaining: 0, limit: 10, unit: "requests" });
+  const attempts = [];
+  const providerModule = {
+    manifest: { id: "test-provider" },
+    async getCatalog() {
+      return { models: [{ id: "paid-model" }, { id: "free-model", free: true }] };
+    },
+    async *stream(request) {
+      attempts.push(request.model);
+      if (request.model === "paid-model") {
+        const error = new Error("rate limited");
+        error.rateLimited = true;
+        error.cooldownUntil = "2026-08-20T00:00:00.000Z";
+        throw error;
+      }
+      yield { type: "block-start", index: 0, blockType: "text" };
+      yield { type: "text-delta", index: 0, text: "ok" };
+      yield { type: "finish", reason: { kind: "stop" } };
+    },
+  };
+  const route = createProviderRoute({ providerModule, accountPool: pool });
+
+  // The paid model fails and records a cooldown on the account.
+  await assert.rejects((async () => {
+    for await (const _chunk of route.stream({ model: "paid-model" }, {})) {}
+  })());
+  assert.equal(pool.get("account-one").health.status, "cooldown");
+
+  // A paid model stays blocked by that cooldown...
+  await assert.rejects((async () => {
+    for await (const _chunk of route.stream({ model: "paid-model" }, {})) {}
+  })());
+  // ...but the free model is still reachable, whatever order the user clicks in.
+  const chunks = [];
+  for await (const chunk of route.stream({ model: "free-model" }, {})) chunks.push(chunk);
+  assert.deepEqual(attempts, ["paid-model", "free-model"]);
+  assert.deepEqual(chunks.at(-1), { type: "finish", reason: { kind: "stop" } });
+});
+
+test("an expired account is never used, not even for a free model", async () => {
+  const pool = new AccountPool({
+    providerId: "test-provider",
+    policy: ACCOUNT_SELECTION_POLICY.MANUAL,
+    clock: fixedNow,
+  });
+  addAccount(pool, "account-expired", { remaining: 5, limit: 10, unit: "requests" });
+  pool.report("account-expired", { status: "auth_expired", message: "token expired" });
+  const providerModule = {
+    manifest: { id: "test-provider" },
+    async getCatalog() {
+      return { models: [{ id: "free-model", free: true }] };
+    },
+    async *stream() {
+      yield { type: "finish", reason: { kind: "stop" } };
+    },
+  };
+  const route = createProviderRoute({ providerModule, accountPool: pool });
+  await assert.rejects(
+    (async () => {
+      for await (const _chunk of route.stream({ model: "free-model" }, {})) {}
+    })(),
+    /No eligible accounts/,
+  );
 });
 
 test("provider route rejects an empty successful stream instead of yielding a blank finish", async () => {
@@ -536,6 +710,160 @@ test("DSH LLM adapter makes Codex WebSocket 1006 retryable", async () => {
   }]);
 });
 
+test("DSH LLM adapter turns an unclassified dropped connection into retryable TRANSPORT", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["commandcode"],
+      listProviderManifests: () => [{ id: "commandcode", displayName: "Command Code" }],
+      async getCatalog() {
+        return { models: [{ id: "live-model", name: "Live model" }] };
+      },
+      async stream() {
+        return (async function* chunks() {
+          yield {
+            type: "finish",
+            reason: {
+              kind: "error",
+              failure: { code: "UNKNOWN", message: "terminated" },
+            },
+          };
+        })();
+      },
+    },
+  });
+
+  const chunks = [];
+  for await (const chunk of adapter.stream({ provider: "commandcode", model: "live-model" })) {
+    chunks.push(chunk);
+  }
+  assert.equal(chunks.length, 1);
+  assert.equal(chunks[0].reason.failure.code, "TRANSPORT");
+  assert.match(chunks[0].reason.failure.message, /terminated/);
+});
+
+test("DSH LLM adapter makes a thrown undici terminated error retryable", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["commandcode"],
+      listProviderManifests: () => [{ id: "commandcode", displayName: "Command Code" }],
+      async getCatalog() {
+        return { models: [{ id: "live-model", name: "Live model" }] };
+      },
+      async stream() {
+        return (async function* chunks() {
+          const error = new TypeError("terminated");
+          error.cause = Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" });
+          throw error;
+        })();
+      },
+    },
+  });
+
+  const chunks = [];
+  for await (const chunk of adapter.stream({ provider: "commandcode", model: "live-model" })) {
+    chunks.push(chunk);
+  }
+  assert.deepEqual(chunks, [{
+    type: "finish",
+    reason: {
+      kind: "error",
+      failure: {
+        code: "TRANSPORT",
+        message: "Provider connection dropped mid-stream (terminated)",
+      },
+    },
+  }]);
+});
+
+test("DSH LLM adapter retries a dropped connection that died during reasoning only", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["commandcode"],
+      listProviderManifests: () => [{ id: "commandcode", displayName: "Command Code" }],
+      async getCatalog() {
+        return { models: [{ id: "live-model", name: "Live model" }] };
+      },
+      async stream() {
+        return (async function* chunks() {
+          yield { type: "block-start", index: 1, blockType: "reasoning" };
+          yield { type: "reasoning-delta", index: 1, text: "thinking" };
+          const error = new TypeError("terminated");
+          error.cause = Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" });
+          throw error;
+        })();
+      },
+    },
+  });
+
+  const chunks = [];
+  for await (const chunk of adapter.stream({ provider: "commandcode", model: "live-model" })) {
+    chunks.push(chunk);
+  }
+  const finish = chunks.at(-1);
+  assert.equal(finish.type, "finish");
+  assert.equal(finish.reason.failure.code, "TRANSPORT");
+});
+
+test("DSH LLM adapter does not replay a dropped connection after visible text", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["commandcode"],
+      listProviderManifests: () => [{ id: "commandcode", displayName: "Command Code" }],
+      async getCatalog() {
+        return { models: [{ id: "live-model", name: "Live model" }] };
+      },
+      async stream() {
+        return (async function* chunks() {
+          yield { type: "text-delta", index: 0, text: "partial answer" };
+          throw new TypeError("terminated");
+        })();
+      },
+    },
+  });
+
+  await assert.rejects(
+    (async () => {
+      for await (const _chunk of adapter.stream({ provider: "commandcode", model: "live-model" })) {}
+    })(),
+    (error) => {
+      assert.match(String(error.message), /terminated/);
+      return true;
+    },
+  );
+});
+
+test("DSH LLM adapter reports a quota failure as a health-carrying finish", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["commandcode"],
+      listProviderManifests: () => [{ id: "commandcode", displayName: "Command Code" }],
+      async getCatalog() {
+        return { models: [{ id: "live-model", name: "Live model" }] };
+      },
+      async stream() {
+        return (async function* chunks() {
+          const error = new Error("commandcode native request failed: 额度或上游资源已耗尽");
+          error.code = "BAD_REQUEST";
+          error.status = 400;
+          error.quotaExhausted = true;
+          throw error;
+        })();
+      },
+    },
+  });
+
+  const chunks = [];
+  for await (const chunk of adapter.stream({ provider: "commandcode", model: "live-model" })) {
+    chunks.push(chunk);
+  }
+  const failure = chunks.at(-1)?.reason?.failure;
+  // The pool only learns the account is spent if the flag survives into the
+  // finish chunk; DSH's own error conversion keeps just code and message.
+  assert.equal(failure?.quotaExhausted, true);
+  assert.equal(failure?.code, "QUOTA");
+  assert.equal(failure?.status, 400);
+});
+
 test("DSH LLM adapter turns a thrown empty provider stream into retryable EMPTY_RESPONSE", async () => {
   const adapter = createDockyardLlmAdapter({
     runtime: {
@@ -632,6 +960,139 @@ test("DSH LLM adapter does not replay an empty-output failure after forwarding o
       return true;
     },
   );
+});
+
+test("DSH LLM adapter implements imageRequestPricing and imageRequestTarget for DSH token meter and compaction", () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["opencode"],
+      listProviderManifests: () => [],
+    },
+  });
+
+  assert.equal(typeof adapter.imageRequestPricing, "function");
+  assert.equal(adapter.imageRequestPricing("opencode", "deepseek-v4.1-flash-free"), undefined);
+
+  assert.equal(typeof adapter.imageRequestTarget, "function");
+  const target = adapter.imageRequestTarget("opencode", "deepseek-v4.1-flash-free", {
+    width: 800,
+    height: 600,
+    bytes: 12345,
+  });
+  assert.deepEqual(target, { width: 800, height: 600, maxBytes: 12345 });
+});
+
+test("DSH LLM adapter clamps defaultMaxTokens to preserve conversation compaction budget", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["opencode"],
+      listProviderManifests: () => [{ id: "opencode", displayName: "OpenCode" }],
+      async getCatalog() {
+        return {
+          models: [
+            {
+              id: "deepseek-v4.1-flash-free",
+              name: "DeepSeek v4.1 Flash",
+              contextWindow: 200000,
+              maxTokens: 128000,
+            },
+            {
+              id: "small-model",
+              name: "Small Model",
+              contextWindow: 32000,
+              maxTokens: 16000,
+            },
+          ],
+        };
+      },
+    },
+  });
+
+  const models = await adapter.listModels("opencode");
+  assert.equal(models.length, 2);
+
+  const deepseek = models.find((m) => m.id === "deepseek-v4.1-flash-free");
+  assert.equal(deepseek.context.contextWindow, 200000);
+  assert.equal(deepseek.defaultMaxTokens, 16384);
+
+  const small = models.find((m) => m.id === "small-model");
+  assert.equal(small.context.contextWindow, 32000);
+  assert.equal(small.defaultMaxTokens, 6400);
+});
+
+test("DSH LLM adapter normalizes context overflow error and stream finish to CONTEXT_WINDOW_EXCEEDED", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["opencode"],
+      listProviderManifests: () => [{ id: "opencode", displayName: "OpenCode" }],
+      async getCatalog() {
+        return { models: [{ id: "deepseek-v4.1-flash-free", name: "DeepSeek" }] };
+      },
+      async stream(_provider, request) {
+        if (request.testCase === "thrown") {
+          return (async function* chunks() {
+            const err = new Error("This model's maximum context length is 200000 tokens. However, your request resulted in 263100 tokens.");
+            err.code = "CONTEXT_LENGTH_EXCEEDED";
+            throw err;
+          })();
+        }
+        return (async function* chunks() {
+          yield {
+            type: "finish",
+            reason: {
+              kind: "error",
+              failure: {
+                code: "BAD_REQUEST",
+                message: "input is too large for the model's context window",
+              },
+            },
+          };
+        })();
+      },
+    },
+  });
+
+  const thrownStream = adapter.stream({ provider: "opencode", model: "deepseek-v4.1-flash-free", testCase: "thrown" });
+  const thrownChunks = [];
+  for await (const chunk of thrownStream) thrownChunks.push(chunk);
+  assert.equal(thrownChunks.length, 1);
+  assert.equal(thrownChunks[0].type, "finish");
+  assert.equal(thrownChunks[0].reason.kind, "error");
+  assert.equal(thrownChunks[0].reason.failure.code, "CONTEXT_WINDOW_EXCEEDED");
+
+  const finishStream = adapter.stream({ provider: "opencode", model: "deepseek-v4.1-flash-free", testCase: "finish" });
+  const finishChunks = [];
+  for await (const chunk of finishStream) finishChunks.push(chunk);
+  assert.equal(finishChunks.length, 1);
+  assert.equal(finishChunks[0].type, "finish");
+  assert.equal(finishChunks[0].reason.kind, "error");
+  assert.equal(finishChunks[0].reason.failure.code, "CONTEXT_WINDOW_EXCEEDED");
+});
+
+test("DSH LLM adapter fallback resolution supplies valid context window and defaultMaxTokens for all providers", async () => {
+  const adapter = createDockyardLlmAdapter({
+    runtime: {
+      listProviderIds: () => ["opencode", "grok", "openai-codex", "claude"],
+      listProviderManifests: () => [],
+      async getCatalog() { return { models: [] }; },
+    },
+  });
+
+  const deepseek = await adapter.resolveModel("opencode", "deepseek-v4.1-flash-free");
+  assert.equal(deepseek.context.contextWindow, 200000);
+  assert.equal(deepseek.defaultMaxTokens, 8192);
+
+  const grok = await adapter.resolveModel("grok", "grok-4.7");
+  assert.equal(grok.context.contextWindow, 256000);
+  assert.equal(grok.defaultMaxTokens, 8192);
+
+  const codex = await adapter.resolveModel("openai-codex", "gpt-5.6-luna");
+  assert.equal(codex.context.contextWindow, 200000);
+  assert.equal(codex.defaultMaxTokens, 8192);
+
+  const claude = await adapter.resolveModel("claude", "claude-3-7-sonnet");
+  assert.equal(claude.context.contextWindow, 200000);
+  assert.equal(claude.defaultMaxTokens, 8192);
 });
 
 test("DSH LLM adapter does not expose duplicate provider model rows", async () => {

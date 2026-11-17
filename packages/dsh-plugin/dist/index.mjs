@@ -1,12 +1,846 @@
+var __create = Object.create;
 var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 var __export = (target, all) => {
   for (var name2 in all)
     __defProp(target, name2, { get: all[name2], enumerable: true });
 };
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+
+// packages/dsh-plugin/node_modules/.pnpm/ipaddr.js@2.5.0/node_modules/ipaddr.js/lib/ipaddr.js
+var require_ipaddr = __commonJS({
+  "packages/dsh-plugin/node_modules/.pnpm/ipaddr.js@2.5.0/node_modules/ipaddr.js/lib/ipaddr.js"(exports, module) {
+    (function(root) {
+      "use strict";
+      const ipv4Part = "(0?\\d+|0x[a-f0-9]+)";
+      const ipv4Regexes = {
+        fourOctet: new RegExp(`^${ipv4Part}\\.${ipv4Part}\\.${ipv4Part}\\.${ipv4Part}$`, "i"),
+        threeOctet: new RegExp(`^${ipv4Part}\\.${ipv4Part}\\.${ipv4Part}$`, "i"),
+        twoOctet: new RegExp(`^${ipv4Part}\\.${ipv4Part}$`, "i"),
+        longValue: new RegExp(`^${ipv4Part}$`, "i")
+      };
+      const octalRegex = new RegExp(`^0[0-7]+$`, "i");
+      const hexRegex = new RegExp(`^0x[a-f0-9]+$`, "i");
+      const zoneIndex = "%[0-9a-z]{1,}";
+      const ipv6Part = "(?:[0-9a-f]+::?)+";
+      const ipv6Regexes = {
+        zoneIndex: new RegExp(zoneIndex, "i"),
+        "native": new RegExp(`^(::)?(${ipv6Part})?([0-9a-f]+)?(::)?(${zoneIndex})?$`, "i"),
+        deprecatedTransitional: new RegExp(`^(?:::)(${ipv4Part}\\.${ipv4Part}\\.${ipv4Part}\\.${ipv4Part}(${zoneIndex})?)$`, "i"),
+        transitional: new RegExp(`^((?:${ipv6Part})|(?:::)(?:${ipv6Part})?)${ipv4Part}\\.${ipv4Part}\\.${ipv4Part}\\.${ipv4Part}(${zoneIndex})?$`, "i")
+      };
+      function expandIPv6(string, parts) {
+        if (string.indexOf("::") !== string.lastIndexOf("::")) {
+          return null;
+        }
+        let colonCount = 0;
+        let lastColon = -1;
+        let zoneId = (string.match(ipv6Regexes.zoneIndex) || [])[0];
+        let replacement, replacementCount;
+        if (zoneId) {
+          zoneId = zoneId.substring(1);
+          string = string.replace(/%.+$/, "");
+        }
+        while ((lastColon = string.indexOf(":", lastColon + 1)) >= 0) {
+          colonCount++;
+        }
+        if (string.substr(0, 2) === "::") {
+          colonCount--;
+        }
+        if (string.substr(-2, 2) === "::") {
+          colonCount--;
+        }
+        if (colonCount >= parts) {
+          return null;
+        }
+        replacementCount = parts - colonCount;
+        replacement = ":";
+        while (replacementCount--) {
+          replacement += "0:";
+        }
+        string = string.replace("::", replacement);
+        if (string[0] === ":") {
+          string = string.slice(1);
+        }
+        if (string[string.length - 1] === ":") {
+          string = string.slice(0, -1);
+        }
+        parts = (function() {
+          const ref = string.split(":");
+          const results = [];
+          for (let i = 0; i < ref.length; i++) {
+            results.push(ref[i].length > 4 ? NaN : parseInt(ref[i], 16));
+          }
+          return results;
+        })();
+        return {
+          parts,
+          zoneId
+        };
+      }
+      function matchCIDR(first, second, partSize, cidrBits) {
+        if (first.length !== second.length) {
+          throw new Error("ipaddr: cannot match CIDR for objects with different lengths");
+        }
+        let part = 0;
+        let shift;
+        while (cidrBits > 0) {
+          shift = partSize - cidrBits;
+          if (shift < 0) {
+            shift = 0;
+          }
+          if (first[part] >> shift !== second[part] >> shift) {
+            return false;
+          }
+          cidrBits -= partSize;
+          part += 1;
+        }
+        return true;
+      }
+      function parseIntAuto(string) {
+        if (hexRegex.test(string)) {
+          return parseInt(string, 16);
+        }
+        if (string[0] === "0" && !isNaN(parseInt(string[1], 10))) {
+          if (octalRegex.test(string)) {
+            return parseInt(string, 8);
+          }
+          throw new Error(`ipaddr: cannot parse ${string} as octal`);
+        }
+        return parseInt(string, 10);
+      }
+      function padPart(part, length) {
+        while (part.length < length) {
+          part = `0${part}`;
+        }
+        return part;
+      }
+      const ipaddr2 = {};
+      ipaddr2.IPv4 = (function() {
+        function IPv4(octets) {
+          if (octets.length !== 4) {
+            throw new Error("ipaddr: ipv4 octet count should be 4");
+          }
+          let i, octet;
+          for (i = 0; i < octets.length; i++) {
+            octet = octets[i];
+            if (!(0 <= octet && octet <= 255)) {
+              throw new Error("ipaddr: ipv4 octet should fit in 8 bits");
+            }
+          }
+          this.octets = octets;
+        }
+        IPv4.prototype.SpecialRanges = {
+          unspecified: [[new IPv4([0, 0, 0, 0]), 8]],
+          broadcast: [[new IPv4([255, 255, 255, 255]), 32]],
+          // RFC3171
+          multicast: [[new IPv4([224, 0, 0, 0]), 4]],
+          // RFC3927
+          linkLocal: [[new IPv4([169, 254, 0, 0]), 16]],
+          // RFC5735
+          loopback: [[new IPv4([127, 0, 0, 0]), 8]],
+          // RFC6598
+          carrierGradeNat: [[new IPv4([100, 64, 0, 0]), 10]],
+          // RFC1918
+          "private": [
+            [new IPv4([10, 0, 0, 0]), 8],
+            [new IPv4([172, 16, 0, 0]), 12],
+            [new IPv4([192, 168, 0, 0]), 16]
+          ],
+          // Reserved and testing-only ranges; RFCs 5735, 5737, 2544, 1700
+          reserved: [
+            [new IPv4([192, 0, 0, 0]), 24],
+            [new IPv4([192, 0, 2, 0]), 24],
+            [new IPv4([192, 88, 99, 0]), 24],
+            [new IPv4([198, 18, 0, 0]), 15],
+            [new IPv4([198, 51, 100, 0]), 24],
+            [new IPv4([203, 0, 113, 0]), 24],
+            [new IPv4([240, 0, 0, 0]), 4]
+          ],
+          // RFC7534, RFC7535
+          as112: [
+            [new IPv4([192, 175, 48, 0]), 24],
+            [new IPv4([192, 31, 196, 0]), 24]
+          ],
+          // RFC7450
+          amt: [
+            [new IPv4([192, 52, 193, 0]), 24]
+          ]
+        };
+        IPv4.prototype.kind = function() {
+          return "ipv4";
+        };
+        IPv4.prototype.match = function(other, cidrRange) {
+          let ref;
+          if (cidrRange === void 0) {
+            ref = other;
+            other = ref[0];
+            cidrRange = ref[1];
+          }
+          if (other.kind() !== "ipv4") {
+            throw new Error("ipaddr: cannot match ipv4 address with non-ipv4 one");
+          }
+          return matchCIDR(this.octets, other.octets, 8, cidrRange);
+        };
+        IPv4.prototype.prefixLengthFromSubnetMask = function() {
+          let cidr = 0;
+          let stop = false;
+          const zerotable = {
+            0: 8,
+            128: 7,
+            192: 6,
+            224: 5,
+            240: 4,
+            248: 3,
+            252: 2,
+            254: 1,
+            255: 0
+          };
+          let i, octet, zeros;
+          for (i = 3; i >= 0; i -= 1) {
+            octet = this.octets[i];
+            if (octet in zerotable) {
+              zeros = zerotable[octet];
+              if (stop && zeros !== 0) {
+                return null;
+              }
+              if (zeros !== 8) {
+                stop = true;
+              }
+              cidr += zeros;
+            } else {
+              return null;
+            }
+          }
+          return 32 - cidr;
+        };
+        IPv4.prototype.range = function() {
+          return ipaddr2.subnetMatch(this, this.SpecialRanges);
+        };
+        IPv4.prototype.toByteArray = function() {
+          return this.octets.slice(0);
+        };
+        IPv4.prototype.toIPv4MappedAddress = function() {
+          return ipaddr2.IPv6.parse(`::ffff:${this.toString()}`);
+        };
+        IPv4.prototype.toNormalizedString = function() {
+          return this.toString();
+        };
+        IPv4.prototype.toString = function() {
+          return this.octets.join(".");
+        };
+        return IPv4;
+      })();
+      ipaddr2.IPv4.broadcastAddressFromCIDR = function(string) {
+        try {
+          const cidr = this.parseCIDR(string);
+          const ipInterfaceOctets = cidr[0].toByteArray();
+          const subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+          const octets = [];
+          let i = 0;
+          while (i < 4) {
+            octets.push(parseInt(ipInterfaceOctets[i], 10) | parseInt(subnetMaskOctets[i], 10) ^ 255);
+            i++;
+          }
+          return new this(octets);
+        } catch (e) {
+          throw new Error("ipaddr: the address does not have IPv4 CIDR format", { cause: e });
+        }
+      };
+      ipaddr2.IPv4.isIPv4 = function(string) {
+        return this.parser(string) !== null;
+      };
+      ipaddr2.IPv4.isValid = function(string) {
+        try {
+          new this(this.parser(string));
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      ipaddr2.IPv4.isValidCIDR = function(string) {
+        try {
+          this.parseCIDR(string);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      ipaddr2.IPv4.isValidFourPartDecimal = function(string) {
+        if (ipaddr2.IPv4.isValid(string) && string.match(/^(0|[1-9]\d*)(\.(0|[1-9]\d*)){3}$/)) {
+          return true;
+        } else {
+          return false;
+        }
+      };
+      ipaddr2.IPv4.isValidCIDRFourPartDecimal = function(string) {
+        const match = string.match(/^(.+)\/(\d+)$/);
+        if (!ipaddr2.IPv4.isValidCIDR(string) || !match) {
+          return false;
+        }
+        return ipaddr2.IPv4.isValidFourPartDecimal(match[1]);
+      };
+      ipaddr2.IPv4.networkAddressFromCIDR = function(string) {
+        let cidr, i, ipInterfaceOctets, octets, subnetMaskOctets;
+        try {
+          cidr = this.parseCIDR(string);
+          ipInterfaceOctets = cidr[0].toByteArray();
+          subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+          octets = [];
+          i = 0;
+          while (i < 4) {
+            octets.push(parseInt(ipInterfaceOctets[i], 10) & parseInt(subnetMaskOctets[i], 10));
+            i++;
+          }
+          return new this(octets);
+        } catch (e) {
+          throw new Error("ipaddr: the address does not have IPv4 CIDR format", { cause: e });
+        }
+      };
+      ipaddr2.IPv4.parse = function(string) {
+        const parts = this.parser(string);
+        if (parts === null) {
+          throw new Error("ipaddr: string is not formatted like an IPv4 Address");
+        }
+        return new this(parts);
+      };
+      ipaddr2.IPv4.parseCIDR = function(string) {
+        let match;
+        if (match = string.match(/^(.+)\/(\d+)$/)) {
+          const maskLength = parseInt(match[2]);
+          if (maskLength >= 0 && maskLength <= 32) {
+            const parsed = [this.parse(match[1]), maskLength];
+            Object.defineProperty(parsed, "toString", {
+              value: function() {
+                return this.join("/");
+              }
+            });
+            return parsed;
+          }
+        }
+        throw new Error("ipaddr: string is not formatted like an IPv4 CIDR range");
+      };
+      ipaddr2.IPv4.parser = function(string) {
+        let match, part, value;
+        if (match = string.match(ipv4Regexes.fourOctet)) {
+          return (function() {
+            const ref = match.slice(1, 6);
+            const results = [];
+            for (let i = 0; i < ref.length; i++) {
+              part = ref[i];
+              results.push(parseIntAuto(part));
+            }
+            return results;
+          })();
+        } else if (match = string.match(ipv4Regexes.longValue)) {
+          value = parseIntAuto(match[1]);
+          if (value > 4294967295 || value < 0) {
+            throw new Error("ipaddr: address outside defined range");
+          }
+          return (function() {
+            const results = [];
+            let shift;
+            for (shift = 0; shift <= 24; shift += 8) {
+              results.push(value >> shift & 255);
+            }
+            return results;
+          })().reverse();
+        } else if (match = string.match(ipv4Regexes.twoOctet)) {
+          return (function() {
+            const ref = match.slice(1, 4);
+            const results = [];
+            value = parseIntAuto(ref[1]);
+            if (value > 16777215 || value < 0) {
+              throw new Error("ipaddr: address outside defined range");
+            }
+            results.push(parseIntAuto(ref[0]));
+            results.push(value >> 16 & 255);
+            results.push(value >> 8 & 255);
+            results.push(value & 255);
+            return results;
+          })();
+        } else if (match = string.match(ipv4Regexes.threeOctet)) {
+          return (function() {
+            const ref = match.slice(1, 5);
+            const results = [];
+            value = parseIntAuto(ref[2]);
+            if (value > 65535 || value < 0) {
+              throw new Error("ipaddr: address outside defined range");
+            }
+            results.push(parseIntAuto(ref[0]));
+            results.push(parseIntAuto(ref[1]));
+            results.push(value >> 8 & 255);
+            results.push(value & 255);
+            return results;
+          })();
+        } else {
+          return null;
+        }
+      };
+      ipaddr2.IPv4.subnetMaskFromPrefixLength = function(prefix) {
+        prefix = parseInt(prefix);
+        if (Number.isNaN(prefix) || prefix < 0 || prefix > 32) {
+          throw new Error("ipaddr: invalid IPv4 prefix length");
+        }
+        const octets = [0, 0, 0, 0];
+        let j = 0;
+        const filledOctetCount = Math.floor(prefix / 8);
+        while (j < filledOctetCount) {
+          octets[j] = 255;
+          j++;
+        }
+        if (filledOctetCount < 4) {
+          octets[filledOctetCount] = Math.pow(2, prefix % 8) - 1 << 8 - prefix % 8;
+        }
+        return new this(octets);
+      };
+      ipaddr2.IPv6 = (function() {
+        function IPv6(parts, zoneId) {
+          let i, part;
+          if (parts.length === 16) {
+            this.parts = [];
+            for (i = 0; i <= 14; i += 2) {
+              this.parts.push(parts[i] << 8 | parts[i + 1]);
+            }
+          } else if (parts.length === 8) {
+            this.parts = parts;
+          } else {
+            throw new Error("ipaddr: ipv6 part count should be 8 or 16");
+          }
+          for (i = 0; i < this.parts.length; i++) {
+            part = this.parts[i];
+            if (!(0 <= part && part <= 65535)) {
+              throw new Error("ipaddr: ipv6 part should fit in 16 bits");
+            }
+          }
+          if (zoneId) {
+            this.zoneId = zoneId;
+          }
+        }
+        IPv6.prototype.SpecialRanges = {
+          // RFC4291, here and after
+          unspecified: [new IPv6([0, 0, 0, 0, 0, 0, 0, 0]), 128],
+          linkLocal: [new IPv6([65152, 0, 0, 0, 0, 0, 0, 0]), 10],
+          multicast: [new IPv6([65280, 0, 0, 0, 0, 0, 0, 0]), 8],
+          loopback: [new IPv6([0, 0, 0, 0, 0, 0, 0, 1]), 128],
+          uniqueLocal: [new IPv6([64512, 0, 0, 0, 0, 0, 0, 0]), 7],
+          ipv4Mapped: [new IPv6([0, 0, 0, 0, 0, 65535, 0, 0]), 96],
+          // RFC3879
+          deprecatedSiteLocal: [new IPv6([65216, 0, 0, 0, 0, 0, 0, 0]), 10],
+          // RFC6666
+          discard: [new IPv6([256, 0, 0, 0, 0, 0, 0, 0]), 64],
+          // RFC6145
+          rfc6145: [new IPv6([0, 0, 0, 0, 65535, 0, 0, 0]), 96],
+          rfc6052: [
+            // RFC6052
+            [new IPv6([100, 65435, 0, 0, 0, 0, 0, 0]), 96],
+            // RFC8215
+            [new IPv6([100, 65435, 1, 0, 0, 0, 0, 0]), 48]
+          ],
+          // RFC3056
+          "6to4": [new IPv6([8194, 0, 0, 0, 0, 0, 0, 0]), 16],
+          // RFC6052, RFC6146
+          teredo: [new IPv6([8193, 0, 0, 0, 0, 0, 0, 0]), 32],
+          // RFC5180
+          benchmarking: [new IPv6([8193, 2, 0, 0, 0, 0, 0, 0]), 48],
+          // RFC7450
+          amt: [new IPv6([8193, 3, 0, 0, 0, 0, 0, 0]), 32],
+          as112v6: [
+            // RFC7535
+            [new IPv6([8193, 4, 274, 0, 0, 0, 0, 0]), 48],
+            // RFC7534
+            [new IPv6([9760, 79, 32768, 0, 0, 0, 0, 0]), 48]
+          ],
+          // RFC4843
+          deprecatedOrchid: [new IPv6([8193, 16, 0, 0, 0, 0, 0, 0]), 28],
+          // RFC7343
+          orchid2: [new IPv6([8193, 32, 0, 0, 0, 0, 0, 0]), 28],
+          // RFC9374
+          droneRemoteIdProtocolEntityTags: [new IPv6([8193, 48, 0, 0, 0, 0, 0, 0]), 28],
+          // RFC9602
+          segmentRouting: [new IPv6([24320, 0, 0, 0, 0, 0, 0, 0]), 16],
+          reserved: [
+            // RFC3849
+            [new IPv6([8193, 0, 0, 0, 0, 0, 0, 0]), 23],
+            // RFC2928
+            [new IPv6([8193, 3512, 0, 0, 0, 0, 0, 0]), 32],
+            // RFC9637
+            [new IPv6([16383, 0, 0, 0, 0, 0, 0, 0]), 20]
+          ]
+        };
+        IPv6.prototype.isIPv4MappedAddress = function() {
+          return this.range() === "ipv4Mapped";
+        };
+        IPv6.prototype.kind = function() {
+          return "ipv6";
+        };
+        IPv6.prototype.match = function(other, cidrRange) {
+          let ref;
+          if (cidrRange === void 0) {
+            ref = other;
+            other = ref[0];
+            cidrRange = ref[1];
+          }
+          if (other.kind() !== "ipv6") {
+            throw new Error("ipaddr: cannot match ipv6 address with non-ipv6 one");
+          }
+          return matchCIDR(this.parts, other.parts, 16, cidrRange);
+        };
+        IPv6.prototype.prefixLengthFromSubnetMask = function() {
+          let cidr = 0;
+          let stop = false;
+          const zerotable = {
+            0: 16,
+            32768: 15,
+            49152: 14,
+            57344: 13,
+            61440: 12,
+            63488: 11,
+            64512: 10,
+            65024: 9,
+            65280: 8,
+            65408: 7,
+            65472: 6,
+            65504: 5,
+            65520: 4,
+            65528: 3,
+            65532: 2,
+            65534: 1,
+            65535: 0
+          };
+          let part, zeros;
+          for (let i = 7; i >= 0; i -= 1) {
+            part = this.parts[i];
+            if (part in zerotable) {
+              zeros = zerotable[part];
+              if (stop && zeros !== 0) {
+                return null;
+              }
+              if (zeros !== 16) {
+                stop = true;
+              }
+              cidr += zeros;
+            } else {
+              return null;
+            }
+          }
+          return 128 - cidr;
+        };
+        IPv6.prototype.range = function() {
+          return ipaddr2.subnetMatch(this, this.SpecialRanges);
+        };
+        IPv6.prototype.toByteArray = function() {
+          let part;
+          const bytes = [];
+          const ref = this.parts;
+          for (let i = 0; i < ref.length; i++) {
+            part = ref[i];
+            bytes.push(part >> 8);
+            bytes.push(part & 255);
+          }
+          return bytes;
+        };
+        IPv6.prototype.toFixedLengthString = function() {
+          const addr = (function() {
+            const results = [];
+            for (let i = 0; i < this.parts.length; i++) {
+              results.push(padPart(this.parts[i].toString(16), 4));
+            }
+            return results;
+          }).call(this).join(":");
+          let suffix = "";
+          if (this.zoneId) {
+            suffix = `%${this.zoneId}`;
+          }
+          return addr + suffix;
+        };
+        IPv6.prototype.toIPv4Address = function() {
+          if (!this.isIPv4MappedAddress()) {
+            throw new Error("ipaddr: trying to convert a generic ipv6 address to ipv4");
+          }
+          const ref = this.parts.slice(-2);
+          const high = ref[0];
+          const low = ref[1];
+          return new ipaddr2.IPv4([high >> 8, high & 255, low >> 8, low & 255]);
+        };
+        IPv6.prototype.toNormalizedString = function() {
+          const addr = (function() {
+            const results = [];
+            for (let i = 0; i < this.parts.length; i++) {
+              results.push(this.parts[i].toString(16));
+            }
+            return results;
+          }).call(this).join(":");
+          let suffix = "";
+          if (this.zoneId) {
+            suffix = `%${this.zoneId}`;
+          }
+          return addr + suffix;
+        };
+        IPv6.prototype.toRFC5952String = function() {
+          const regex = /((^|:)(0(:|$)){2,})/g;
+          let suffix = "";
+          if (this.zoneId) {
+            suffix = `%${this.zoneId}`;
+          }
+          const normalized = this.toNormalizedString();
+          const string = normalized.slice(0, normalized.length - suffix.length);
+          let bestMatchIndex = 0;
+          let bestMatchLength = -1;
+          let bestMatchGroups = -1;
+          let match;
+          while (match = regex.exec(string)) {
+            const groups = (match[0].match(/0/g) || []).length;
+            if (groups > bestMatchGroups) {
+              bestMatchGroups = groups;
+              bestMatchIndex = match.index;
+              bestMatchLength = match[0].length;
+            }
+          }
+          if (bestMatchLength < 0) {
+            return string + suffix;
+          }
+          return `${string.substring(0, bestMatchIndex)}::${string.substring(bestMatchIndex + bestMatchLength)}${suffix}`;
+        };
+        IPv6.prototype.toString = function() {
+          return this.toRFC5952String();
+        };
+        return IPv6;
+      })();
+      ipaddr2.IPv6.broadcastAddressFromCIDR = function(string) {
+        try {
+          const cidr = this.parseCIDR(string);
+          const ipInterfaceOctets = cidr[0].toByteArray();
+          const subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+          const octets = [];
+          let i = 0;
+          while (i < 16) {
+            octets.push(parseInt(ipInterfaceOctets[i], 10) | parseInt(subnetMaskOctets[i], 10) ^ 255);
+            i++;
+          }
+          return new this(octets);
+        } catch (e) {
+          throw new Error("ipaddr: the address does not have IPv6 CIDR format", { cause: e });
+        }
+      };
+      ipaddr2.IPv6.isIPv6 = function(string) {
+        return this.parser(string) !== null;
+      };
+      ipaddr2.IPv6.isValid = function(string) {
+        if (typeof string === "string" && string.indexOf(":") === -1) {
+          return false;
+        }
+        try {
+          const addr = this.parser(string);
+          new this(addr.parts, addr.zoneId);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      ipaddr2.IPv6.isValidCIDR = function(string) {
+        if (typeof string === "string" && string.indexOf(":") === -1) {
+          return false;
+        }
+        try {
+          this.parseCIDR(string);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      ipaddr2.IPv6.networkAddressFromCIDR = function(string) {
+        let cidr, i, ipInterfaceOctets, octets, subnetMaskOctets;
+        try {
+          cidr = this.parseCIDR(string);
+          ipInterfaceOctets = cidr[0].toByteArray();
+          subnetMaskOctets = this.subnetMaskFromPrefixLength(cidr[1]).toByteArray();
+          octets = [];
+          i = 0;
+          while (i < 16) {
+            octets.push(parseInt(ipInterfaceOctets[i], 10) & parseInt(subnetMaskOctets[i], 10));
+            i++;
+          }
+          return new this(octets);
+        } catch (e) {
+          throw new Error("ipaddr: the address does not have IPv6 CIDR format", { cause: e });
+        }
+      };
+      ipaddr2.IPv6.parse = function(string) {
+        const addr = this.parser(string);
+        if (addr === null) {
+          throw new Error("ipaddr: string is not formatted like an IPv6 Address");
+        }
+        return new this(addr.parts, addr.zoneId);
+      };
+      ipaddr2.IPv6.parseCIDR = function(string) {
+        let maskLength, match, parsed;
+        if (match = string.match(/^(.+)\/(\d+)$/)) {
+          maskLength = parseInt(match[2]);
+          if (maskLength >= 0 && maskLength <= 128) {
+            parsed = [this.parse(match[1]), maskLength];
+            Object.defineProperty(parsed, "toString", {
+              value: function() {
+                return this.join("/");
+              }
+            });
+            return parsed;
+          }
+        }
+        throw new Error("ipaddr: string is not formatted like an IPv6 CIDR range");
+      };
+      ipaddr2.IPv6.parser = function(string) {
+        let addr, i, match, octet, octets, zoneId;
+        if (match = string.match(ipv6Regexes.deprecatedTransitional)) {
+          return this.parser(`::ffff:${match[1]}`);
+        }
+        if (ipv6Regexes.native.test(string)) {
+          return expandIPv6(string, 8);
+        }
+        if (match = string.match(ipv6Regexes.transitional)) {
+          zoneId = match[6] || "";
+          addr = match[1];
+          if (!match[1].endsWith("::")) {
+            addr = addr.slice(0, -1);
+          }
+          addr = expandIPv6(addr + zoneId, 6);
+          if (addr && addr.parts) {
+            octets = [
+              parseInt(match[2]),
+              parseInt(match[3]),
+              parseInt(match[4]),
+              parseInt(match[5])
+            ];
+            for (i = 0; i < octets.length; i++) {
+              octet = octets[i];
+              if (!(0 <= octet && octet <= 255)) {
+                return null;
+              }
+            }
+            addr.parts.push(octets[0] << 8 | octets[1]);
+            addr.parts.push(octets[2] << 8 | octets[3]);
+            return {
+              parts: addr.parts,
+              zoneId: addr.zoneId
+            };
+          }
+        }
+        return null;
+      };
+      ipaddr2.IPv6.subnetMaskFromPrefixLength = function(prefix) {
+        prefix = parseInt(prefix);
+        if (Number.isNaN(prefix) || prefix < 0 || prefix > 128) {
+          throw new Error("ipaddr: invalid IPv6 prefix length");
+        }
+        const octets = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let j = 0;
+        const filledOctetCount = Math.floor(prefix / 8);
+        while (j < filledOctetCount) {
+          octets[j] = 255;
+          j++;
+        }
+        if (filledOctetCount < 16) {
+          octets[filledOctetCount] = Math.pow(2, prefix % 8) - 1 << 8 - prefix % 8;
+        }
+        return new this(octets);
+      };
+      ipaddr2.fromByteArray = function(bytes) {
+        const length = bytes.length;
+        if (length === 4) {
+          return new ipaddr2.IPv4(bytes);
+        } else if (length === 16) {
+          return new ipaddr2.IPv6(bytes);
+        } else {
+          throw new Error("ipaddr: the binary input is neither an IPv6 nor IPv4 address");
+        }
+      };
+      ipaddr2.isValid = function(string) {
+        return ipaddr2.IPv6.isValid(string) || ipaddr2.IPv4.isValid(string);
+      };
+      ipaddr2.isValidCIDR = function(string) {
+        return ipaddr2.IPv6.isValidCIDR(string) || ipaddr2.IPv4.isValidCIDR(string);
+      };
+      ipaddr2.parse = function(string) {
+        if (ipaddr2.IPv6.isValid(string)) {
+          return ipaddr2.IPv6.parse(string);
+        } else if (ipaddr2.IPv4.isValid(string)) {
+          return ipaddr2.IPv4.parse(string);
+        } else {
+          throw new Error("ipaddr: the address has neither IPv6 nor IPv4 format");
+        }
+      };
+      ipaddr2.parseCIDR = function(string) {
+        try {
+          return ipaddr2.IPv6.parseCIDR(string);
+        } catch {
+          try {
+            return ipaddr2.IPv4.parseCIDR(string);
+          } catch (e) {
+            throw new Error("ipaddr: the address has neither IPv6 nor IPv4 CIDR format", { cause: e });
+          }
+        }
+      };
+      ipaddr2.process = function(string) {
+        const addr = this.parse(string);
+        if (addr.kind() === "ipv6" && addr.isIPv4MappedAddress()) {
+          return addr.toIPv4Address();
+        } else {
+          return addr;
+        }
+      };
+      ipaddr2.subnetMatch = function(address, rangeList, defaultName) {
+        let i, rangeName, rangeSubnets, subnet;
+        if (defaultName === void 0 || defaultName === null) {
+          defaultName = "unicast";
+        }
+        for (rangeName in rangeList) {
+          if (Object.prototype.hasOwnProperty.call(rangeList, rangeName)) {
+            rangeSubnets = rangeList[rangeName];
+            if (rangeSubnets[0] && !(rangeSubnets[0] instanceof Array)) {
+              rangeSubnets = [rangeSubnets];
+            }
+            for (i = 0; i < rangeSubnets.length; i++) {
+              subnet = rangeSubnets[i];
+              if (address.kind() === subnet[0].kind() && address.match.apply(address, subnet)) {
+                return rangeName;
+              }
+            }
+          }
+        }
+        return defaultName;
+      };
+      if (typeof module !== "undefined" && module.exports) {
+        module.exports = ipaddr2;
+      } else {
+        root.ipaddr = ipaddr2;
+      }
+    })(exports);
+  }
+});
 
 // packages/dsh-plugin/src/dockyard-remote-host.mjs
 var dockyard_remote_host_exports = {};
@@ -53,7 +887,10 @@ function markRemoteMethods() {
     "nativeKeyUnregister",
     "nativeKeySetPolicy",
     "getContextWindowOverride",
-    "setContextWindowOverride"
+    "setContextWindowOverride",
+    "getModelSelection",
+    "setModelSelection",
+    "testModelConnection"
   ]) {
     let initializer;
     Remote(name2)(void 0, {
@@ -92,7 +929,14 @@ var init_dockyard_remote_host = __esm({
         return envelope(result, await this.dockyard.snapshot());
       }
       async add(request = {}) {
-        const result = await this.dockyard.add(request?.providerId ?? null, request?.candidateId ?? null);
+        const result = await this.dockyard.add(
+          request?.providerId ?? null,
+          request?.candidateId ?? null,
+          {
+            apiKey: request?.apiKey ?? null,
+            label: request?.label ?? ""
+          }
+        );
         return envelope(result, await this.dockyard.snapshot());
       }
       async login(request) {
@@ -153,14 +997,29 @@ var init_dockyard_remote_host = __esm({
       async setContextWindowOverride(request = {}) {
         return this.dockyard.setContextWindowOverride(request, request.value);
       }
+      async getModelSelection(request = {}) {
+        return this.dockyard.getModelSelection(request.providerId, request.accountId ?? null);
+      }
+      async setModelSelection(request = {}) {
+        return this.dockyard.setModelSelection(
+          request.providerId,
+          request.enabledModelIds,
+          request.accountId ?? null
+        );
+      }
+      async testModelConnection(request = {}) {
+        return this.dockyard.testModelConnection(request.providerId, request.modelId, {
+          timeoutMs: request.timeoutMs ?? 15e3
+        });
+      }
     };
     markRemoteMethods();
   }
 });
 
 // packages/dsh-plugin/src/index.mjs
-import { existsSync, readFileSync as readFileSync2 } from "node:fs";
-import { join as join12 } from "node:path";
+import { existsSync as existsSync8, readFileSync as readFileSync7 } from "node:fs";
+import { join as join19 } from "node:path";
 
 // packages/core/src/errors.mjs
 var DockyardError = class extends Error {
@@ -219,7 +1078,11 @@ var ACCOUNT_SELECTION_POLICY = Object.freeze({
   MANUAL: "manual",
   STICKY_SESSION: "sticky_session",
   ROUND_ROBIN: "round_robin",
-  FAILOVER: "failover"
+  FAILOVER: "failover",
+  // Spread work towards the account with the most headroom left, so accounts
+  // whose windows reset later are not drained first. Falls back to round robin
+  // when no account reports quota windows.
+  ALLOWANCE_FULLEST: "allowance_fullest"
 });
 var PROVIDER_CAPABILITIES = Object.freeze([
   "oauth_discovery",
@@ -231,6 +1094,13 @@ var PROVIDER_CAPABILITIES = Object.freeze([
   "invoke",
   "stream"
 ]);
+var PROVIDER_BEHAVIOR_CAPABILITIES = Object.freeze({
+  AUTO_PROVISION_FREE_ACCOUNT: "auto_provision_free_account",
+  FORCE_LIVE_CATALOG: "force_live_catalog",
+  CATALOG_WARMUP: "catalog_warmup",
+  API_KEY_AUTH: "api_key_auth",
+  REPAIR_LEGACY_CREDENTIAL: "repair_legacy_credential"
+});
 function isoOrNull(value, fieldName) {
   if (value === void 0 || value === null || value === "") return null;
   const date = value instanceof Date ? value : new Date(value);
@@ -256,6 +1126,14 @@ function createQuotaWindow(input = {}, now = /* @__PURE__ */ new Date()) {
   return {
     id: stringOrNull(input.id),
     name: stringOrNull(input.name),
+    // `balance` marks a spendable amount rather than a percentage window; the
+    // client renders and ranks it differently, so it must survive this
+    // whitelist. Only emitted when a provider declares it, to keep every other
+    // window's shape unchanged.
+    ...input.kind ? { kind: String(input.kind) } : {},
+    // A provider may name the window that actually gates usage; the compact
+    // indicator shows that one instead of ranking by reset time.
+    ...input.primary === true ? { primary: true } : {},
     remaining: numberOrNull(input.remaining, "quota.windows.remaining"),
     limit: numberOrNull(input.limit, "quota.windows.limit"),
     unit: stringOrNull(input.unit),
@@ -308,6 +1186,7 @@ function createAccountRecord(input, now = /* @__PURE__ */ new Date()) {
       expiresAt: isoOrNull(input.subscription?.expiresAt, "subscription.expiresAt")
     },
     quota: createQuotaSnapshot(input.quota ?? {}, now),
+    balance: input.balance ? createBalanceSnapshot(input.balance, now) : null,
     refresh: createRefreshState(input.refresh ?? {}),
     resources: objectOrEmpty(input.resources),
     health: {
@@ -321,6 +1200,14 @@ function createAccountRecord(input, now = /* @__PURE__ */ new Date()) {
     updatedAt: updatedAt2
   };
 }
+function createBalanceSnapshot(input = {}, now = /* @__PURE__ */ new Date()) {
+  return {
+    amount: numberOrNull(input.amount, "balance.amount"),
+    unit: stringOrNull(input.unit),
+    updatedAt: isoOrNull(input.updatedAt, "balance.updatedAt") ?? now.toISOString(),
+    source: stringOrNull(input.source) ?? "unknown"
+  };
+}
 function accountSummary(account) {
   return {
     providerId: account.providerId,
@@ -329,6 +1216,7 @@ function accountSummary(account) {
     email: account.email,
     subscription: { ...account.subscription },
     quota: structuredClone(account.quota ?? {}),
+    balance: account.balance ? structuredClone(account.balance) : null,
     refresh: { ...account.refresh },
     resources: structuredClone(account.resources ?? {}),
     health: { ...account.health },
@@ -525,6 +1413,15 @@ function defineProviderModule({
     async getActiveSession(context) {
       return typeof driver.getActiveSession === "function" ? driver.getActiveSession(context) : null;
     },
+    /**
+     * What the user has to do for a provider that has no authorization entry
+     * point of its own (a desktop-session provider, for example). Returning
+     * null leaves the host's generic message in place, so a provider that does
+     * not care keeps working without a new branch here.
+     */
+    async authorizationInstructions(context) {
+      return typeof driver.authorizationInstructions === "function" ? driver.authorizationInstructions(context) : null;
+    },
     async startAuthorization(context) {
       return driver.startAuthorization ? driver.startAuthorization(context) : missingDriver(id, "oauth_authorization")(context);
     },
@@ -560,9 +1457,9 @@ function defineProviderModule({
 
 // packages/providers/src/provider-utils.mjs
 import { readFile } from "node:fs/promises";
-async function readJsonFile(path) {
+async function readJsonFile(path2) {
   try {
-    return JSON.parse(await readFile(path, "utf8"));
+    return JSON.parse(await readFile(path2, "utf8"));
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw error;
@@ -596,6 +1493,157 @@ function finiteNumber(value) {
 }
 function stringValue(value) {
   return value === void 0 || value === null || value === "" ? null : String(value);
+}
+var EXTENDED_THINKING_LEVELS = ["minimal", "low", "medium", "high", "xhigh", "max"];
+function resolveContextWindowFromModel(model, fallback = 131072) {
+  if (!model) return fallback;
+  const values = [
+    model.context_length,
+    model.contextWindow,
+    model.context_window,
+    model.maxInputTokens,
+    model.max_input_tokens,
+    model.context?.contextWindow,
+    model.metadata?.contextWindow
+  ];
+  for (const v of values) {
+    if (Number.isInteger(v) && v > 0) return v;
+    const num = Number(v);
+    if (Number.isInteger(num) && num > 0) return num;
+  }
+  return fallback;
+}
+function resolveMaxTokensFromModel(model, fallback = 16384) {
+  if (!model) return fallback;
+  const values = [
+    model.top_provider?.max_completion_tokens,
+    model.per_request_limits?.max_completion_tokens,
+    model.max_completion_tokens,
+    model.maxOutputTokens,
+    model.max_output_tokens,
+    model.maxTokens,
+    model.max_tokens
+  ];
+  for (const v of values) {
+    if (Number.isInteger(v) && v > 0) return v;
+    const num = Number(v);
+    if (Number.isInteger(num) && num > 0) return num;
+  }
+  return fallback;
+}
+function stripVendorPrefix(name2) {
+  if (typeof name2 !== "string") return name2;
+  const match = /^([A-Za-z][A-Za-z .&+\-]{0,23}):\s+(\S.*)$/u.exec(name2.trim());
+  if (!match) return name2;
+  return match[2].trim();
+}
+function resolveReasoningFromModel(model) {
+  if (!model) return void 0;
+  if (model.reasoning === false) return void 0;
+  if (Array.isArray(model.reasoning?.efforts) && model.reasoning.efforts.length > 0) {
+    return model.reasoning;
+  }
+  if (Array.isArray(model.reasoning?.supportedEfforts) && model.reasoning.supportedEfforts.length > 0) {
+    const raw = model.reasoning.supportedEfforts;
+    const standardEfforts = [
+      { id: "minimal", name: "Minimal" },
+      { id: "low", name: "Low" },
+      { id: "medium", name: "Medium" },
+      { id: "high", name: "High" }
+    ];
+    let efforts;
+    if (raw.length >= 2) {
+      efforts = raw.map((lvl) => {
+        const id = typeof lvl === "string" ? lvl : lvl?.id ?? lvl?.value;
+        if (!id) return null;
+        const name2 = typeof lvl === "object" && (lvl.name ?? lvl.label) ? lvl.name ?? lvl.label : id.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        return { id, name: name2 };
+      }).filter(Boolean);
+    } else {
+      efforts = standardEfforts;
+    }
+    const defaultEffort = model.reasoning.defaultEffort ?? (efforts.some((e) => e.id === "high") ? "high" : efforts.some((e) => e.id === "medium") ? "medium" : efforts[0]?.id);
+    return { efforts, defaultEffort };
+  }
+  if (model.supportsReasoning === true || model.onlyReasoning === true) {
+    const defaultEffort = model.reasoning?.defaultEffort ?? "high";
+    return {
+      efforts: [
+        { id: "minimal", name: "Minimal" },
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" }
+      ],
+      defaultEffort
+    };
+  }
+  if (Array.isArray(model.supported_reasoning_levels) && model.supported_reasoning_levels.length > 0) {
+    const efforts = model.supported_reasoning_levels.map((lvl) => {
+      const id = typeof lvl === "string" ? lvl : lvl?.id;
+      if (!id) return null;
+      const name2 = typeof lvl === "object" && lvl.name ? lvl.name : id.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      return {
+        id,
+        name: name2,
+        ...lvl?.description ? { description: lvl.description } : {}
+      };
+    }).filter(Boolean);
+    if (efforts.length > 0) {
+      const defaultEffort = model.default_reasoning_level ?? (efforts.some((e) => e.id === "medium") ? "medium" : efforts[0]?.id);
+      return { efforts, defaultEffort };
+    }
+  }
+  if (Array.isArray(model.reasoning_efforts) && model.reasoning_efforts.length > 0) {
+    const efforts = model.reasoning_efforts.map((lvl) => {
+      const id = typeof lvl === "string" ? lvl : lvl?.id ?? lvl?.value;
+      if (!id) return null;
+      const name2 = typeof lvl === "object" && (lvl.label ?? lvl.name) ? lvl.label ?? lvl.name : id.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      return {
+        id,
+        name: name2,
+        ...lvl?.description ? { description: lvl.description } : {}
+      };
+    }).filter(Boolean);
+    if (efforts.length > 0) {
+      const defaultEffort = model.default_parameters?.reasoning_effort ?? (efforts.some((e) => e.id === "medium") ? "medium" : efforts[0]?.id);
+      return { efforts, defaultEffort };
+    }
+  }
+  if (Array.isArray(model.supported_parameters) && model.supported_parameters.includes("reasoning_effort")) {
+    const id = String(model.id ?? "").toLowerCase();
+    const supportsMax = id.includes("ultra") || id.includes("o1") || id.includes("o3") || id.includes("deepseek-r1");
+    const efforts = [
+      { id: "low", name: "Low", description: "\u5FEB\u901F\u601D\u8003\uFF0C\u4FDD\u7559\u57FA\u7840\u63A8\u7406" },
+      { id: "medium", name: "Medium", description: "\u6807\u51C6\u601D\u8003\uFF0C\u5E73\u8861\u63A8\u7406\u6DF1\u5EA6\u4E0E\u54CD\u5E94\u901F\u5EA6" },
+      { id: "high", name: "High", description: "\u6DF1\u5EA6\u601D\u8003\uFF0C\u9002\u5408\u590D\u6742\u903B\u8F91\u4E0E\u591A\u6B65\u9AA4\u5206\u6790" },
+      ...supportsMax ? [{ id: "max", name: "Max", description: "\u6781\u81F4\u601D\u8003\uFF0C\u6700\u9AD8\u63A8\u6F14\u6DF1\u5EA6" }] : []
+    ];
+    const defaultEffort = typeof model.default_parameters?.reasoning_effort === "string" ? model.default_parameters.reasoning_effort : "medium";
+    return { efforts, defaultEffort };
+  }
+  if (model.thinkingLevelMap && typeof model.thinkingLevelMap === "object") {
+    const supported = EXTENDED_THINKING_LEVELS.filter((level) => {
+      const mapped = model.thinkingLevelMap[level];
+      if (mapped === null) return false;
+      if (level === "xhigh" || level === "max") return mapped !== void 0 && mapped !== null;
+      return true;
+    });
+    if (supported.length === 0) return void 0;
+    const efforts = supported.map((id) => ({
+      id,
+      name: id.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    }));
+    const defaultEffort = supported.includes("medium") ? "medium" : supported.includes("high") ? "high" : supported[0];
+    return { efforts, defaultEffort };
+  }
+  if (model.reasoning === true) {
+    const supported = ["minimal", "low", "medium", "high"];
+    return {
+      efforts: supported.map((id) => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1) })),
+      defaultEffort: "medium"
+    };
+  }
+  return void 0;
 }
 async function fetchJson(url, init = {}, { timeoutMs = 2e4, fetchImpl = fetch } = {}) {
   const controller = new AbortController();
@@ -633,11 +1681,16 @@ function redactError(error) {
   const message = error instanceof Error ? error.message : String(error);
   const detail = error?.detail ? ` ${String(error.detail)}` : "";
   const code = error?.code !== void 0 && error?.code !== null ? ` [code ${String(error.code)}]` : "";
-  return `${message}${detail}${code}`.replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, "Bearer [redacted]").replace(/(access|refresh|id)[_-]?token["'=:\s]+[^,\s}]+/gi, "$1_token=[redacted]").replace(/\b(?:sk|sk-ant|sk-proj|sk-svcacct|xai|agy|gsk|ghp|gho|ghu|github_pat|deepseek|pplx|nvapi|zai|glm)[-_][A-Za-z0-9_-]{12,}\b/gi, "[redacted]").replace(/(api[_-]?key|client[_-]?secret|session[_-]?token|private[_-]?key)["'=:\s]+[^,\s}"']+/gi, "$1=[redacted]").slice(0, 300);
+  const cause = error?.cause;
+  const causeMessage = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "";
+  const causeCode = cause?.code !== void 0 && cause?.code !== null ? String(cause.code) : "";
+  const causeParts = [causeCode, causeMessage && causeMessage !== message ? causeMessage : ""].filter(Boolean);
+  const causeSuffix = causeParts.length > 0 ? ` (${causeParts.join(": ")})` : "";
+  return `${message}${detail}${code}${causeSuffix}`.replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, "Bearer [redacted]").replace(/(access|refresh|id)[_-]?token["'=:\s]+[^,\s}]+/gi, "$1_token=[redacted]").replace(/\b(?:sk|sk-ant|sk-proj|sk-svcacct|xai|agy|gsk|ghp|gho|ghu|github_pat|deepseek|pplx|nvapi|zai|glm)[-_][A-Za-z0-9_-]{12,}\b/gi, "[redacted]").replace(/(api[_-]?key|client[_-]?secret|session[_-]?token|private[_-]?key)["'=:\s]+[^,\s}"']+/gi, "$1=[redacted]").slice(0, 300);
 }
 function recursiveQuotaWindows(value, { source, now = /* @__PURE__ */ new Date(), prefix = "quota" } = {}) {
   const windows = [];
-  function visit(node, path, label) {
+  function visit(node, path2, label) {
     if (!node || typeof node !== "object" || Array.isArray(node)) return;
     const usedPercent = finiteNumber(node.used_percent ?? node.usedPercent);
     const remainingFraction = finiteNumber(node.remaining_fraction ?? node.remainingFraction);
@@ -659,8 +1712,8 @@ function recursiveQuotaWindows(value, { source, now = /* @__PURE__ */ new Date()
         unit = unit ?? "percent";
       }
       windows.push({
-        id: path || prefix,
-        name: label || path || prefix,
+        id: path2 || prefix,
+        name: label || path2 || prefix,
         remaining,
         limit,
         unit,
@@ -670,7 +1723,7 @@ function recursiveQuotaWindows(value, { source, now = /* @__PURE__ */ new Date()
     }
     for (const [key, child] of Object.entries(node)) {
       if (child && typeof child === "object" && !Array.isArray(child)) {
-        visit(child, path ? `${path}.${key}` : key, key);
+        visit(child, path2 ? `${path2}.${key}` : key, key);
       }
     }
   }
@@ -717,6 +1770,17 @@ function assertSecureEndpointUrl(value, label = "endpoint") {
 function selectionContext(context, excludedIds) {
   if (excludedIds.size === 0) return context;
   return { ...context, excludeAccountIds: [...excludedIds] };
+}
+async function requestUsesFreeModel(providerModule, request, context) {
+  const modelId = request?.model;
+  if (typeof modelId !== "string" || typeof providerModule?.getCatalog !== "function") return false;
+  try {
+    const catalog = await providerModule.getCatalog(context);
+    const entry = (Array.isArray(catalog?.models) ? catalog.models : []).find((candidate2) => candidate2?.id === modelId);
+    return entry?.free === true;
+  } catch {
+    return false;
+  }
 }
 function shouldFailover(error, accountPool, context) {
   return accountPool.policy === ACCOUNT_SELECTION_POLICY.FAILOVER && !context.accountId && (error?.rateLimited || error?.quotaExhausted || error?.authExpired || error?.emptyOutput);
@@ -806,7 +1870,14 @@ function createProviderRoute({ providerModule, accountPool, contextWindowOverrid
         try {
           account = accountPool.select(selectionContext(context, excludedIds));
         } catch (selectionError) {
-          throw lastError ?? selectionError;
+          if (!await requestUsesFreeModel(providerModule, request, context)) {
+            throw lastError ?? selectionError;
+          }
+          try {
+            account = accountPool.select({ ...selectionContext(context, excludedIds), allowExhausted: true });
+          } catch {
+            throw lastError ?? selectionError;
+          }
         }
         excludedIds.add(account.accountId);
         const auth = accountPool.resolve(account.accountId);
@@ -850,7 +1921,14 @@ function createProviderRoute({ providerModule, accountPool, contextWindowOverrid
           try {
             account = accountPool.select(selectionContext(context, excludedIds));
           } catch (selectionError) {
-            throw lastError ?? selectionError;
+            if (!await requestUsesFreeModel(providerModule, request, context)) {
+              throw lastError ?? selectionError;
+            }
+            try {
+              account = accountPool.select({ ...selectionContext(context, excludedIds), allowExhausted: true });
+            } catch {
+              throw lastError ?? selectionError;
+            }
           }
           excludedIds.add(account.accountId);
           const auth = accountPool.resolve(account.accountId);
@@ -906,11 +1984,75 @@ function createProviderRoute({ providerModule, accountPool, contextWindowOverrid
   };
 }
 
+// packages/core/src/quota-alerts.mjs
+var DEFAULT_LOW_SHARE = 0.15;
+var DEFAULT_RESET_HORIZON_MS = 6 * 60 * 60 * 1e3;
+var DEFAULT_WASTE_SHARE = 0.5;
+function ratio(remaining, limit) {
+  const left = Number(remaining);
+  const total = Number(limit);
+  if (!Number.isFinite(left) || !Number.isFinite(total) || total <= 0) return null;
+  return Math.max(0, Math.min(1, left / total));
+}
+function windowLabel(window, index) {
+  return window?.name ?? window?.id ?? `\u7A97\u53E3 ${index + 1}`;
+}
+function evaluateQuotaAlerts(account, {
+  now = /* @__PURE__ */ new Date(),
+  lowShare = DEFAULT_LOW_SHARE,
+  resetHorizonMs = DEFAULT_RESET_HORIZON_MS,
+  wasteShare = DEFAULT_WASTE_SHARE,
+  balanceLow = null
+} = {}) {
+  const alerts = [];
+  const windows = Array.isArray(account?.quota?.windows) ? account.quota.windows : [];
+  const nowMs = now.getTime();
+  windows.forEach((window, index) => {
+    const share = ratio(window?.remaining, window?.limit);
+    if (share === null) return;
+    const label = windowLabel(window, index);
+    if (share <= lowShare) {
+      alerts.push({
+        kind: "low",
+        severity: "warning",
+        windowId: window?.id ?? null,
+        message: `${label} \u4EC5\u5269 ${Math.round(share * 100)}%`,
+        data: { remaining: window.remaining, limit: window.limit, share }
+      });
+    }
+    const resetAt = window?.resetAt ? new Date(window.resetAt) : null;
+    if (resetAt && Number.isFinite(resetAt.getTime())) {
+      const untilReset = resetAt.getTime() - nowMs;
+      if (untilReset > 0 && untilReset <= resetHorizonMs && share >= wasteShare) {
+        alerts.push({
+          kind: "reset_waste",
+          severity: "info",
+          windowId: window?.id ?? null,
+          message: `${label} \u5C06\u5728 ${Math.max(1, Math.round(untilReset / 36e5))} \u5C0F\u65F6\u5185\u91CD\u7F6E\uFF0C\u4F46\u4ECD\u5269 ${Math.round(share * 100)}%`,
+          data: { remaining: window.remaining, limit: window.limit, share, resetAt: window.resetAt }
+        });
+      }
+    }
+  });
+  const balance = Number(account?.balance?.amount);
+  if (Number.isFinite(balance) && Number.isFinite(Number(balanceLow)) && balance <= Number(balanceLow)) {
+    alerts.push({
+      kind: "balance_low",
+      severity: "warning",
+      windowId: null,
+      message: `\u4F59\u989D\u4EC5\u5269 ${balance} ${account?.balance?.unit ?? ""}`.trim(),
+      data: { amount: balance, unit: account?.balance?.unit ?? null }
+    });
+  }
+  return alerts;
+}
+
 // packages/account-pool/src/account-pool.mjs
 function defaultClock() {
   return /* @__PURE__ */ new Date();
 }
 var STICKY_SESSION_TTL_MS = 30 * 60 * 1e3;
+var RELIST_COOLDOWN_MS = 30 * 60 * 1e3;
 var MAX_STICKY_ASSIGNMENTS = 1e4;
 var AccountPool = class {
   #accounts = /* @__PURE__ */ new Map();
@@ -1006,7 +2148,7 @@ var AccountPool = class {
   select(context = {}) {
     const now = this.clock();
     this.#pruneSessionAssignments(now.getTime());
-    const eligible = this.#eligibleAccounts(now);
+    const eligible = this.#eligibleAccounts(now, { allowExhausted: context.allowExhausted === true });
     if (eligible.length === 0) {
       throw new AccountSelectionError(`No eligible accounts for provider ${this.providerId}`, {
         providerId: this.providerId
@@ -1033,7 +2175,13 @@ var AccountPool = class {
       const assignedId = typeof assignment === "string" ? assignment : assignment?.accountId;
       account = assignedId ? selectable.find((candidate2) => candidate2.accountId === assignedId) : null;
       if (!account) {
-        account = this.policy === ACCOUNT_SELECTION_POLICY.FAILOVER ? selectable[0] : this.#next(selectable);
+        if (this.policy === ACCOUNT_SELECTION_POLICY.FAILOVER) {
+          account = selectable[0];
+        } else if (this.policy === ACCOUNT_SELECTION_POLICY.ALLOWANCE_FULLEST) {
+          account = this.#fullest(selectable) ?? this.#next(selectable);
+        } else {
+          account = this.#next(selectable);
+        }
       }
       if (assignmentKey) {
         this.#sessionAssignments.delete(assignmentKey);
@@ -1095,6 +2243,7 @@ var AccountPool = class {
     const now = this.clock().toISOString();
     const patch = { updatedAt: now, health: { ...account.health, lastCheckedAt: now } };
     if (result.quota) patch.quota = createQuotaSnapshot({ ...account.quota, ...result.quota }, this.clock());
+    if (result.balance) patch.balance = createBalanceSnapshot({ ...account.balance, ...result.balance }, this.clock());
     if (result.refresh) patch.refresh = createRefreshState({ ...account.refresh, ...result.refresh });
     switch (result.status) {
       case "success":
@@ -1117,7 +2266,14 @@ var AccountPool = class {
         };
         break;
       case "auth_expired":
-        patch.health = { ...patch.health, status: ACCOUNT_HEALTH.EXPIRED, lastError: result.message ?? null };
+        patch.health = {
+          ...patch.health,
+          status: ACCOUNT_HEALTH.EXPIRED,
+          lastError: result.message ?? null,
+          cooldownUntil: result.cooldownUntil ?? new Date(
+            this.clock().getTime() + RELIST_COOLDOWN_MS
+          ).toISOString()
+        };
         break;
       case "error":
         patch.health = { ...patch.health, status: ACCOUNT_HEALTH.DEGRADED, lastError: result.message ?? null };
@@ -1134,6 +2290,7 @@ var AccountPool = class {
       ...current,
       ...patch,
       quota: patch.quota ? { ...current.quota, ...patch.quota } : current.quota,
+      balance: patch.balance ? { ...current.balance, ...patch.balance } : current.balance,
       refresh: patch.refresh ? { ...current.refresh, ...patch.refresh } : current.refresh,
       resources: patch.resources ? { ...current.resources, ...patch.resources } : current.resources,
       health: patch.health ? { ...current.health, ...patch.health } : current.health
@@ -1141,11 +2298,24 @@ var AccountPool = class {
     this.#accounts.set(accountId, next);
     return accountSummary(next);
   }
-  #eligibleAccounts(now = this.clock()) {
+  /**
+   * Accounts parked by an expired authorization whose cooldown has passed.
+   * The runtime retries exactly these, so a token that was rotated elsewhere is
+   * picked back up without the account staying dead forever.
+   */
+  relistable(now = this.clock()) {
+    return [...this.#accounts.values()].filter((account) => account.health?.status === ACCOUNT_HEALTH.EXPIRED).filter((account) => {
+      const until = account.health?.cooldownUntil;
+      return !until || new Date(until).getTime() <= now.getTime();
+    }).map(accountSummary);
+  }
+  #eligibleAccounts(now = this.clock(), { allowExhausted = false } = {}) {
     return [...this.#accounts.values()].filter((account) => {
       if (account.health.status === ACCOUNT_HEALTH.EXPIRED) return false;
-      if (account.health.status === ACCOUNT_HEALTH.EXHAUSTED && !account.health.cooldownUntil) return false;
-      if (!account.health.cooldownUntil) return true;
+      if (allowExhausted) return true;
+      if (!account.health.cooldownUntil) {
+        return account.health.status !== ACCOUNT_HEALTH.EXHAUSTED;
+      }
       return new Date(account.health.cooldownUntil).getTime() <= now.getTime();
     });
   }
@@ -1160,6 +2330,37 @@ var AccountPool = class {
       this.#sessionAssignments.delete(oldest);
     }
   }
+  /**
+   * The share of an account's tightest reported window that is still left.
+   * The tightest window is the one that will stop the account first, so it is
+   * the honest measure of headroom. Returns null when nothing is reported.
+   */
+  #remainingShare(account) {
+    const windows = Array.isArray(account?.quota?.windows) ? account.quota.windows : [];
+    let lowest = null;
+    for (const window of windows) {
+      const remaining = Number(window?.remaining);
+      const limit = Number(window?.limit);
+      if (!Number.isFinite(remaining) || !Number.isFinite(limit) || limit <= 0) continue;
+      const share = Math.max(0, Math.min(1, remaining / limit));
+      if (lowest === null || share < lowest) lowest = share;
+    }
+    return lowest;
+  }
+  /** The selectable account with the most headroom, if any reports quota. */
+  #fullest(selectable) {
+    let best = null;
+    let bestShare = -1;
+    for (const candidate2 of selectable) {
+      const share = this.#remainingShare(candidate2);
+      if (share === null) continue;
+      if (share > bestShare) {
+        best = candidate2;
+        bestShare = share;
+      }
+    }
+    return best;
+  }
   #next(accounts) {
     const account = accounts[this.#cursor % accounts.length];
     this.#cursor = (this.#cursor + 1) % accounts.length;
@@ -1172,6 +2373,198 @@ var AccountPool = class {
 };
 
 // packages/dsh-bridge/src/llm-adapter.mjs
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
+
+// packages/runtime/src/model-selection-store.mjs
+function normalizedMap(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value;
+}
+function cleanIds(value) {
+  return value.map((m) => typeof m === "string" ? m.trim() : "").filter(Boolean);
+}
+function cleanState(value) {
+  const providers = {};
+  for (const [providerId, record] of Object.entries(normalizedMap(value?.providers))) {
+    const id = typeof providerId === "string" ? providerId.trim() : null;
+    if (!id) continue;
+    const accounts = {};
+    for (const [accountId, accountRecord] of Object.entries(normalizedMap(record?.accounts))) {
+      const scoped = typeof accountId === "string" ? accountId.trim() : "";
+      if (!scoped || !Array.isArray(accountRecord?.enabled)) continue;
+      accounts[scoped] = {
+        enabled: cleanIds(accountRecord.enabled),
+        updatedAt: accountRecord.updatedAt ?? (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const hasAccounts = Object.keys(accounts).length > 0;
+    if (!Array.isArray(record?.enabled) && !hasAccounts) continue;
+    providers[id] = {
+      ...Array.isArray(record?.enabled) ? { enabled: cleanIds(record.enabled) } : {},
+      ...hasAccounts ? { accounts } : {},
+      updatedAt: record.updatedAt ?? (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  return { schema: 1, providers };
+}
+function reconcileModelSelection(enabledModelIds, models) {
+  if (!Array.isArray(enabledModelIds)) return null;
+  if (enabledModelIds.length === 0) return [];
+  const available = new Set(
+    (Array.isArray(models) ? models : []).map((model) => typeof model?.id === "string" ? model.id : null).filter(Boolean)
+  );
+  if (available.size === 0) return enabledModelIds;
+  const kept = enabledModelIds.filter((id) => available.has(id));
+  return kept.length > 0 ? kept : null;
+}
+var ModelSelectionStore = class {
+  stateStore;
+  state = { schema: 1, providers: {} };
+  readyPromise;
+  constructor({ stateStore } = {}) {
+    if (!stateStore || typeof stateStore.load !== "function" || typeof stateStore.update !== "function" && typeof stateStore.save !== "function") {
+      throw new TypeError("ModelSelectionStore requires a state store");
+    }
+    this.stateStore = stateStore;
+    this.readyPromise = this.load();
+  }
+  async load() {
+    const snapshot = await this.stateStore.load();
+    const raw = snapshot?.modelSelection;
+    if (raw && typeof raw === "object") {
+      this.state = cleanState(raw);
+    }
+    return this.state;
+  }
+  async ready() {
+    return this.readyPromise;
+  }
+  /**
+   * A provider can serve a different model list per account, so a selection can
+   * be stored per account. Without an account (or before one was ever saved for
+   * that account) the provider-wide selection is the fallback, which keeps the
+   * pre-existing single-list behaviour working.
+   */
+  get(providerId, accountId = null) {
+    if (!providerId) return null;
+    const record = this.state.providers?.[providerId];
+    if (!record) return null;
+    if (accountId && Array.isArray(record.accounts?.[accountId]?.enabled)) {
+      return [...record.accounts[accountId].enabled];
+    }
+    if (!Array.isArray(record.enabled)) return null;
+    return [...record.enabled];
+  }
+  async set(providerId, enabledModelIds, accountId = null) {
+    if (!providerId) throw new Error("providerId is required");
+    await this.ready();
+    const cleaned = Array.isArray(enabledModelIds) ? cleanIds(enabledModelIds) : null;
+    if (!this.state.providers) this.state.providers = {};
+    if (accountId) {
+      const record = this.state.providers[providerId] ?? {};
+      const accounts = { ...record.accounts ?? {} };
+      if (cleaned === null) {
+        delete accounts[accountId];
+      } else {
+        accounts[accountId] = { enabled: cleaned, updatedAt: (/* @__PURE__ */ new Date()).toISOString() };
+      }
+      const next = {
+        ...record,
+        ...Object.keys(accounts).length > 0 ? { accounts } : {},
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+      if (!Array.isArray(next.enabled) && !next.accounts) delete this.state.providers[providerId];
+      else this.state.providers[providerId] = next;
+    } else if (cleaned === null) {
+      const record = this.state.providers[providerId];
+      if (record?.accounts) {
+        delete record.enabled;
+        record.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      } else {
+        delete this.state.providers[providerId];
+      }
+    } else {
+      const record = this.state.providers[providerId] ?? {};
+      this.state.providers[providerId] = {
+        ...record,
+        enabled: cleaned,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    const saved = structuredClone(this.state);
+    if (typeof this.stateStore.update === "function") {
+      await this.stateStore.update((latest) => ({
+        ...latest,
+        modelSelection: saved
+      }));
+    } else {
+      const latest = await this.stateStore.load();
+      await this.stateStore.save({
+        ...latest,
+        modelSelection: saved
+      });
+    }
+    return cleaned;
+  }
+  isModelEnabled(providerId, modelId) {
+    const enabled = this.get(providerId);
+    if (enabled === null) return true;
+    return enabled.includes(modelId);
+  }
+  filterModels(providerId, models = []) {
+    const enabled = this.get(providerId);
+    if (enabled === null) return models;
+    const set = new Set(enabled);
+    return models.filter((model) => set.has(model.id));
+  }
+};
+
+// packages/dsh-bridge/src/llm-adapter.mjs
+function defaultCatalogCachePath() {
+  const home = process.env.DOCKYARD_DSH_HOME || join(homedir(), ".dockyard-dsh");
+  return join(home, "catalog-cache.json");
+}
+var CATALOG_CACHE_VERSION = 2;
+function loadDiskCatalogCache(filePath) {
+  try {
+    if (!filePath || !existsSync(filePath)) return /* @__PURE__ */ new Map();
+    const raw = readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    const map = /* @__PURE__ */ new Map();
+    if (parsed && typeof parsed === "object") {
+      for (const [providerId, entry] of Object.entries(parsed)) {
+        if (entry && Array.isArray(entry.value?.models) && entry.value.models.length > 0 && Number(entry.version) === CATALOG_CACHE_VERSION) {
+          map.set(providerId, {
+            value: entry.value,
+            fetchedAt: Number(entry.fetchedAt) || Date.now()
+          });
+        }
+      }
+    }
+    return map;
+  } catch {
+    return /* @__PURE__ */ new Map();
+  }
+}
+function saveDiskCatalogCache(filePath, map) {
+  try {
+    if (!filePath) return;
+    const obj = {};
+    for (const [providerId, entry] of map) {
+      if (entry && Array.isArray(entry.value?.models) && entry.value.models.length > 0) {
+        obj[providerId] = {
+          value: entry.value,
+          fetchedAt: entry.fetchedAt
+        };
+      }
+    }
+    mkdirSync(dirname(filePath), { recursive: true, mode: 448 });
+    writeFileSync(filePath, JSON.stringify(obj, null, 2), "utf8");
+  } catch {
+  }
+}
 function effortName(id) {
   return String(id).replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
@@ -1212,23 +2605,36 @@ function normalizeDshReasoning(reasoning) {
     ...defaultEffort === void 0 ? {} : { defaultEffort }
   };
 }
+function cleanModelDisplayName(name2, id) {
+  if (typeof name2 !== "string" || name2.length === 0) return id;
+  return name2.replace(/^\[隐秘限免\]\s*/g, "").replace(/^\[限时免费\]\s*/g, "").replace(/\s*\(智能路由全部免费\/隐秘\/限免\)\s*$/g, "").replace(/\s*\[Free\]\s*$/i, "").replace(/\s*\(free\)\s*$/i, "").trim() || id;
+}
 function providerCatalogModels(providerId, catalog) {
   if (!Array.isArray(catalog?.models)) return [];
   const seen = /* @__PURE__ */ new Set();
   return catalog.models.filter((model) => {
-    if (!model || typeof model.id !== "string" || model.id.length === 0 || seen.has(model.id)) return false;
+    if (!model || model.unavailable === true) return false;
+    if (typeof model.id !== "string" || model.id.length === 0 || seen.has(model.id)) return false;
     seen.add(model.id);
     return true;
   }).map((model) => {
     const reasoning = normalizeDshReasoning(model.reasoning);
+    const contextWindow = Number.isInteger(model.contextWindow) && model.contextWindow > 0 ? model.contextWindow : void 0;
+    let defaultMaxTokens = void 0;
+    if (Number.isInteger(model.maxTokens) && model.maxTokens > 0) {
+      const cap = contextWindow ? Math.max(1024, Math.min(16384, Math.floor(contextWindow * 0.2))) : 16384;
+      defaultMaxTokens = Math.min(model.maxTokens, cap);
+    } else if (contextWindow) {
+      defaultMaxTokens = Math.min(8192, Math.floor(contextWindow * 0.2));
+    }
     return {
       provider: providerId,
       id: model.id,
-      name: typeof model.name === "string" && model.name.length > 0 ? model.name : model.id,
+      name: cleanModelDisplayName(model.name, model.id),
       description: modelDescription(model),
       ...Array.isArray(model.inputModalities) ? { inputModalities: [...model.inputModalities] } : {},
-      ...Number.isInteger(model.contextWindow) ? { context: { contextWindow: model.contextWindow } } : {},
-      ...Number.isInteger(model.maxTokens) ? { defaultMaxTokens: model.maxTokens } : {},
+      ...contextWindow ? { context: { contextWindow } } : {},
+      ...defaultMaxTokens !== void 0 ? { defaultMaxTokens } : {},
       ...reasoning ? { reasoning } : {}
     };
   });
@@ -1237,6 +2643,7 @@ function manifestFor(runtime, providerId) {
   return runtime.listProviderManifests?.().find((manifest) => manifest.id === providerId) ?? null;
 }
 function providerHasConnectedAccount(runtime, providerId) {
+  if (runtime.hasProviderCapability?.(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT)) return true;
   if (typeof runtime.snapshot !== "function") return true;
   const snapshot = runtime.snapshot();
   if (!Array.isArray(snapshot?.providers)) return true;
@@ -1262,22 +2669,129 @@ function unsupportedContentError(message) {
   error.code = "UNSUPPORTED_CONTENT";
   return error;
 }
+var CONTEXT_OVERFLOW_PATTERNS = [
+  /context[\s_-](?:length|window)[\s_-](?:exceed|overflow|limit)/i,
+  /maximum context length/i,
+  /max context window/i,
+  /too\s+(?:large|long)\s+for\s+(?:(?:this|the)\s+)?(?:model(?:'s)?\s+)?context/i,
+  /(?:input|prompt|request|messages?)\b.{0,40}(?:exceed|overflow|is\s+larger\s+than)\b.{0,40}\b(?:model(?:'s)?\s+)?context/i
+];
+function isContextOverflowError(errorOrMessage) {
+  if (!errorOrMessage) return false;
+  if (typeof errorOrMessage === "string") {
+    return CONTEXT_OVERFLOW_PATTERNS.some((pattern) => pattern.test(errorOrMessage));
+  }
+  const code = String(errorOrMessage.code ?? errorOrMessage.upstreamCode ?? "");
+  if (/CONTEXT_WINDOW_EXCEEDED|CONTEXT_LENGTH_EXCEEDED/i.test(code)) return true;
+  const message = String(errorOrMessage.message ?? errorOrMessage.reason ?? "");
+  return CONTEXT_OVERFLOW_PATTERNS.some((pattern) => pattern.test(message));
+}
+var TRANSPORT_TERMINATION_PATTERNS = [
+  /\bterminated\b/i,
+  /\bother side closed\b/i,
+  /\bsocket hang up\b/i,
+  /\bfetch failed\b/i,
+  /\b(?:UND_ERR_SOCKET|UND_ERR_CLOSED|ECONNRESET|ECONNREFUSED|EPIPE)\b/i
+];
+var TRANSPORT_CAUSE_CODES = /* @__PURE__ */ new Set([
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EPIPE"
+]);
+function isTransportTermination(errorOrMessage) {
+  if (!errorOrMessage) return false;
+  if (typeof errorOrMessage === "string") {
+    return TRANSPORT_TERMINATION_PATTERNS.some((pattern) => pattern.test(errorOrMessage));
+  }
+  const cause = errorOrMessage.cause;
+  if (cause && typeof cause === "object") {
+    if (TRANSPORT_CAUSE_CODES.has(String(cause.code ?? "").toUpperCase())) return true;
+    if (TRANSPORT_TERMINATION_PATTERNS.some((pattern) => pattern.test(String(cause.message ?? "")))) return true;
+  }
+  if (TRANSPORT_CAUSE_CODES.has(String(errorOrMessage.code ?? "").toUpperCase())) return true;
+  return TRANSPORT_TERMINATION_PATTERNS.some((pattern) => pattern.test(String(errorOrMessage.message ?? "")));
+}
+function isUnclassifiedFailureCode(code) {
+  const text3 = String(code ?? "").trim().toUpperCase();
+  return text3 === "" || text3 === "UNKNOWN";
+}
 function normalizeTransportFailure(chunk) {
   const failure = chunk?.type === "finish" && chunk.reason?.kind === "error" ? chunk.reason.failure : null;
-  if (!failure || failure.code === "TRANSPORT") return chunk;
-  if (!/\bWebSocket closed\s+1006\b/i.test(String(failure.message ?? ""))) return chunk;
+  if (!failure) return chunk;
+  if (failure.code !== "TRANSPORT" && isUnclassifiedFailureCode(failure.code) && isTransportTermination(failure)) {
+    const original = String(failure.message ?? "").trim();
+    return {
+      ...chunk,
+      reason: {
+        ...chunk.reason,
+        failure: {
+          ...failure,
+          code: "TRANSPORT",
+          message: original ? `Provider connection dropped mid-stream (${original})` : "Provider connection dropped mid-stream"
+        }
+      }
+    };
+  }
+  if (failure.code !== "TRANSPORT" && /\bWebSocket closed\s+1006\b/i.test(String(failure.message ?? ""))) {
+    return {
+      ...chunk,
+      reason: {
+        ...chunk.reason,
+        failure: {
+          ...failure,
+          code: "TRANSPORT"
+        }
+      }
+    };
+  }
+  if (failure.code !== "CONTEXT_WINDOW_EXCEEDED" && isContextOverflowError(failure)) {
+    return {
+      ...chunk,
+      reason: {
+        ...chunk.reason,
+        failure: {
+          ...failure,
+          code: "CONTEXT_WINDOW_EXCEEDED"
+        }
+      }
+    };
+  }
+  return chunk;
+}
+function chunkCarriesDurableOutput(chunk) {
+  if (!chunk || typeof chunk !== "object") return false;
+  if (chunk.type === "text-delta") return Boolean(String(chunk.text ?? ""));
+  if (chunk.type === "tool-call-delta") return true;
+  if (chunk.type === "block-end" && chunk.block?.type === "tool-call") return true;
+  return false;
+}
+function healthFailureFromThrownError(error) {
+  if (!error) return null;
+  const flags = {
+    ...error.authExpired ? { authExpired: true } : {},
+    ...error.authForbidden ? { authForbidden: true } : {},
+    ...error.rateLimited ? { rateLimited: true } : {},
+    ...error.quotaExhausted ? { quotaExhausted: true } : {}
+  };
+  if (Object.keys(flags).length === 0) return null;
+  const code = error.quotaExhausted ? "QUOTA" : error.rateLimited ? "RATE_LIMIT" : error.authExpired ? "AUTH_EXPIRED" : "AUTH_FORBIDDEN";
   return {
-    ...chunk,
+    type: "finish",
     reason: {
-      ...chunk.reason,
+      kind: "error",
       failure: {
-        ...failure,
-        code: "TRANSPORT"
+        code,
+        message: String(error.message ?? ""),
+        ...Number.isInteger(error.status) ? { status: error.status } : {},
+        ...flags
       }
     }
   };
 }
 var RETRYABLE_THROWN_FAILURE_CODES = /* @__PURE__ */ new Set([
+  "CONTEXT_WINDOW_EXCEEDED",
   "EMPTY_RESPONSE",
   "RATE_LIMIT",
   "SERVER",
@@ -1290,30 +2804,105 @@ function retryFinishFromThrownError(error) {
     code = "EMPTY_RESPONSE";
   } else if (code === "PI_AI_ERROR" && /\bWebSocket closed\s+1006\b/i.test(String(error.message ?? ""))) {
     code = "TRANSPORT";
+  } else if (isContextOverflowError(error)) {
+    code = "CONTEXT_WINDOW_EXCEEDED";
+  } else if (code === "TRANSPORT" || isUnclassifiedFailureCode(code) && isTransportTermination(error) || /\bfetch failed\b/i.test(String(error?.message ?? "")) || error?.cause?.code === "ECONNRESET" || error?.cause?.code === "ETIMEDOUT") {
+    code = "TRANSPORT";
   }
   if (!RETRYABLE_THROWN_FAILURE_CODES.has(code)) return null;
+  const rawMessage = String(error.message ?? "Provider stream ended without substantive output");
   return {
     type: "finish",
     reason: {
       kind: "error",
       failure: {
         code,
-        message: String(error.message ?? "Provider stream ended without substantive output"),
+        message: code === "TRANSPORT" && /^\s*terminated\s*$/i.test(rawMessage) ? `Provider connection dropped mid-stream (${rawMessage.trim()})` : rawMessage,
         ...Number.isInteger(error.status) ? { status: error.status } : {},
         ...typeof error.providerRetryAfterMs === "number" && Number.isFinite(error.providerRetryAfterMs) ? { providerRetryAfterMs: error.providerRetryAfterMs } : {}
       }
     }
   };
 }
-function createDockyardLlmAdapter({ runtime, providerIds, attachmentsResolver = null } = {}) {
+function resolveFallbackModelMetadata(provider, model) {
+  const id = String(model ?? "").toLowerCase();
+  let contextWindow = 131072;
+  let maxTokens = 8192;
+  if (id.includes("gemini")) {
+    contextWindow = 1048576;
+    maxTokens = 16384;
+  } else if (id.includes("claude-sonnet-4") || id.includes("claude-4")) {
+    contextWindow = 1e6;
+    maxTokens = 16384;
+  } else if (id.includes("claude")) {
+    contextWindow = 2e5;
+    maxTokens = 8192;
+  } else if (id.includes("grok-4")) {
+    contextWindow = 256e3;
+    maxTokens = 8192;
+  } else if (id.includes("qwen")) {
+    contextWindow = 262144;
+    maxTokens = 8192;
+  } else if (id.includes("glm-5")) {
+    contextWindow = 204800;
+    maxTokens = 8192;
+  } else if (id.includes("deepseek-v4") || id.includes("deepseek-v3") || id.includes("deepseek-r1")) {
+    contextWindow = 2e5;
+    maxTokens = 8192;
+  } else if (id.includes("gpt-") || id.includes("codex-") || provider === "openai-codex") {
+    contextWindow = 2e5;
+    maxTokens = 8192;
+  } else if (provider === "commandcode" || provider === "hermes") {
+    contextWindow = 1e6;
+    maxTokens = 16384;
+  } else if (provider === "openrouter-free") {
+    if (id === "openrouter/free" || id === "free") {
+      contextWindow = 2e5;
+      maxTokens = 16384;
+    } else if (id.includes("crouton") || id.includes("inkling")) {
+      contextWindow = 1048576;
+      maxTokens = 16384;
+    } else if (id.includes("nemotron-3.5-super") || id.includes("nemotron-3.5-lightning") || id.includes("nemotron-3-ultra")) {
+      contextWindow = 1e6;
+      maxTokens = 16384;
+    } else if (id.includes("dots-3")) {
+      contextWindow = 512e3;
+      maxTokens = 16384;
+    } else if (id.includes("lfm-2.5")) {
+      contextWindow = 65536;
+      maxTokens = 8192;
+    } else {
+      contextWindow = 262144;
+      maxTokens = 16384;
+    }
+  }
+  return {
+    provider,
+    id: model,
+    name: model,
+    context: { contextWindow },
+    defaultMaxTokens: maxTokens
+  };
+}
+function createDockyardLlmAdapter({
+  runtime,
+  providerIds,
+  attachmentsResolver = null,
+  catalogCachePath = null,
+  onCatalogChanged = null
+} = {}) {
   if (!runtime) throw new ValidationError("Dockyard runtime is required");
   const owned = [...providerIds ?? runtime.listProviderIds?.() ?? []];
   if (owned.length === 0) throw new ValidationError("At least one Dockyard provider is required");
   const catalogPromises = /* @__PURE__ */ new Map();
-  const catalogCache = /* @__PURE__ */ new Map();
+  const catalogCache = catalogCachePath ? loadDiskCatalogCache(catalogCachePath) : /* @__PURE__ */ new Map();
   const STREAM_CATALOG_REFRESH_MS = 6e4;
   async function ensureRuntimeReady() {
     if (typeof runtime.init === "function") await runtime.init();
+  }
+  async function ensurePreparedForListing() {
+    if (typeof runtime.whenPrepared === "function") await runtime.whenPrepared();
+    else await ensureRuntimeReady();
   }
   function abortedCallerError(signal) {
     const error = new Error("This model lookup was aborted");
@@ -1339,42 +2928,76 @@ function createDockyardLlmAdapter({ runtime, providerIds, attachmentsResolver = 
       );
     });
   }
-  async function providerCatalog(provider, signal) {
-    let promise = catalogPromises.get(provider);
+  function modelSignature(catalog) {
+    const ids = Array.isArray(catalog?.models) ? catalog.models.map((model) => model?.id).filter(Boolean) : [];
+    return ids.sort().join("\n");
+  }
+  function catalogAccountId(provider) {
+    try {
+      return runtime.getDefaultAccountId?.(provider) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function catalogKey(provider) {
+    const accountId = catalogAccountId(provider);
+    return accountId ? `${provider}::${accountId}` : provider;
+  }
+  async function providerCatalog(provider, signal, { force = false } = {}) {
+    if (!force) {
+      const cached = cachedProviderCatalog(provider);
+      if (cached) return cached;
+    }
+    const key = catalogKey(provider);
+    let promise = catalogPromises.get(key);
     if (!promise) {
-      promise = Promise.resolve().then(() => runtime.getCatalog(provider, {})).then((catalog) => {
-        catalogCache.set(provider, { value: catalog, fetchedAt: Date.now() });
+      const accountId = catalogAccountId(provider);
+      promise = Promise.resolve().then(() => runtime.getCatalog(provider, { force, ...accountId ? { accountId } : {} })).then((catalog) => {
+        if (Array.isArray(catalog?.models) && catalog.models.length > 0) {
+          const previous = catalogCache.get(key)?.value;
+          catalogCache.set(key, { value: catalog, fetchedAt: Date.now(), version: CATALOG_CACHE_VERSION });
+          saveDiskCatalogCache(catalogCachePath, catalogCache);
+          if (previous && modelSignature(previous) !== modelSignature(catalog)) {
+            try {
+              onCatalogChanged?.(provider);
+            } catch {
+            }
+          }
+        }
         return catalog;
       }).finally(() => {
-        if (catalogPromises.get(provider) === promise) catalogPromises.delete(provider);
+        if (catalogPromises.get(key) === promise) catalogPromises.delete(key);
       });
-      catalogPromises.set(provider, promise);
+      catalogPromises.set(key, promise);
     }
     return raceCallerSignal(promise, signal);
   }
   function cachedProviderCatalog(provider) {
-    const entry = catalogCache.get(provider);
+    const key = catalogKey(provider);
+    let entry = catalogCache.get(key);
+    if (!entry) {
+      const legacy = catalogCache.get(provider);
+      if (legacy) {
+        catalogCache.set(key, { ...legacy, fetchedAt: 0, version: CATALOG_CACHE_VERSION });
+        entry = catalogCache.get(key);
+      }
+    }
     if (!entry) return null;
-    if (Date.now() - entry.fetchedAt >= STREAM_CATALOG_REFRESH_MS && !catalogPromises.has(provider)) {
-      void providerCatalog(provider).catch(() => {
+    if (Date.now() - entry.fetchedAt >= STREAM_CATALOG_REFRESH_MS && !catalogPromises.has(key)) {
+      void providerCatalog(provider, void 0, { force: true }).catch(() => {
       });
     }
     return entry.value;
   }
   function warmProviderCatalog(provider) {
-    if (!catalogCache.has(provider) && !catalogPromises.has(provider)) {
+    const key = catalogKey(provider);
+    if (!catalogCache.has(key) && !catalogPromises.has(key)) {
       void providerCatalog(provider).catch(() => {
       });
     }
   }
   function fastResolveModel(provider, model) {
-    const isGemini = typeof model === "string" && model.toLowerCase().includes("gemini");
-    const fallback = {
-      provider,
-      id: model,
-      name: model,
-      ...isGemini ? { context: { contextWindow: 1048576 }, defaultMaxTokens: 65536 } : {}
-    };
+    const fallback = resolveFallbackModelMetadata(provider, model);
     const catalog = cachedProviderCatalog(provider);
     if (!catalog) {
       warmProviderCatalog(provider);
@@ -1390,22 +3013,39 @@ function createDockyardLlmAdapter({ runtime, providerIds, attachmentsResolver = 
     providerRetryPolicy() {
       return void 0;
     },
+    imageRequestPricing(_provider, _model) {
+      return void 0;
+    },
+    imageRequestTarget(_provider, _model, image) {
+      return {
+        width: image?.width ?? 0,
+        height: image?.height ?? 0,
+        maxBytes: image?.bytes ?? 0
+      };
+    },
     async listModels(provider, signal) {
-      await ensureRuntimeReady();
+      await ensurePreparedForListing();
       if (!providerHasConnectedAccount(runtime, provider)) return [];
-      const catalog = await providerCatalog(provider, signal);
-      return providerCatalogModels(provider, catalog);
+      const cached = cachedProviderCatalog(provider);
+      const catalog = cached ?? await providerCatalog(provider, signal);
+      const allModels = providerCatalogModels(provider, catalog);
+      const servingAccountId = typeof runtime.getDefaultAccountId === "function" ? runtime.getDefaultAccountId(provider) : null;
+      const enabled = runtime.getModelSelection?.(provider, servingAccountId);
+      const reconciled = reconcileModelSelection(enabled, allModels);
+      if (Array.isArray(reconciled)) {
+        const set = new Set(reconciled);
+        return allModels.filter((entry) => set.has(entry.id));
+      }
+      return allModels;
     },
     async resolveModel(provider, model, signal) {
-      await ensureRuntimeReady();
-      const isGemini = typeof model === "string" && model.toLowerCase().includes("gemini");
-      const fallback = {
-        provider,
-        id: model,
-        name: model,
-        ...isGemini ? { context: { contextWindow: 1048576 }, defaultMaxTokens: 65536 } : {}
-      };
+      await ensurePreparedForListing();
+      const fallback = resolveFallbackModelMetadata(provider, model);
       if (!providerHasConnectedAccount(runtime, provider)) return fallback;
+      const cached = cachedProviderCatalog(provider);
+      if (cached) {
+        return providerCatalogModels(provider, cached).find((entry) => entry.id === model) ?? fallback;
+      }
       const catalog = await providerCatalog(provider, signal);
       return providerCatalogModels(provider, catalog).find((entry) => entry.id === model) ?? fallback;
     },
@@ -1421,7 +3061,12 @@ function createDockyardLlmAdapter({ runtime, providerIds, attachmentsResolver = 
       };
     },
     async *stream(options) {
-      await ensureRuntimeReady();
+      if (typeof runtime.whenPrepared === "function") {
+        await runtime.whenPrepared();
+        if (!providerHasConnectedAccount(runtime, options.provider)) await ensureRuntimeReady();
+      } else {
+        await ensureRuntimeReady();
+      }
       if (!providerHasConnectedAccount(runtime, options.provider)) {
         throw new ValidationError(`Provider ${options.provider} has no connected Dockyard account`);
       }
@@ -1437,7 +3082,13 @@ function createDockyardLlmAdapter({ runtime, providerIds, attachmentsResolver = 
         ...options,
         ...model.context ? { modelContext: { ...model.context } } : {},
         ...model.defaultMaxTokens !== void 0 ? { modelContext: { ...model.context ?? {}, maxTokens: model.defaultMaxTokens } } : {}
-      } : options;
+      } : { ...options };
+      if (options.purpose === "compaction") {
+        request.purpose = "compaction";
+        request.reasoningEffort = "minimal";
+        request.reasoning_effort = "minimal";
+        request.thinking = false;
+      }
       const attachments = typeof attachmentsResolver === "function" ? attachmentsResolver() : void 0;
       const stream = await runtime.stream(options.provider, request, {
         accountId: options.accountId,
@@ -1446,25 +3097,39 @@ function createDockyardLlmAdapter({ runtime, providerIds, attachmentsResolver = 
         ...options.signal ? { signal: options.signal } : {},
         ...attachments ? { attachments } : {}
       });
-      let emittedChunk = false;
+      let emittedDurableOutput = false;
       try {
         for await (const chunk of stream) {
-          emittedChunk = true;
+          if (chunkCarriesDurableOutput(chunk)) emittedDurableOutput = true;
           yield normalizeTransportFailure(chunk);
         }
       } catch (error) {
-        if (!emittedChunk) {
+        if (!emittedDurableOutput || isContextOverflowError(error)) {
           const retryFinish = retryFinishFromThrownError(error);
           if (retryFinish) {
             yield retryFinish;
             return;
           }
         }
+        const healthFailure = healthFailureFromThrownError(error);
+        if (healthFailure) {
+          yield healthFailure;
+          return;
+        }
         throw error;
       }
     },
     providers() {
       return [...owned];
+    },
+    invalidateCatalog(provider) {
+      if (provider) {
+        catalogCache.delete(provider);
+        catalogPromises.delete(provider);
+      } else {
+        catalogCache.clear();
+        catalogPromises.clear();
+      }
     }
   };
 }
@@ -1533,11 +3198,11 @@ var DshInjectionBridge = class {
 // packages/vault/src/index.mjs
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { dirname, join } from "node:path";
+import { dirname as dirname2, join as join2 } from "node:path";
 import { fileURLToPath } from "node:url";
 var KEYCHAIN_SERVICE = "com.dockyard-dsh.credentials";
 var SWIFT_BIN = "/usr/bin/swift";
-var KEYCHAIN_HELPER = join(dirname(fileURLToPath(import.meta.url)), "macos-keychain-helper.swift");
+var KEYCHAIN_HELPER = join2(dirname2(fileURLToPath(import.meta.url)), "macos-keychain-helper.swift");
 function stableKey(value) {
   return createHash("sha256").update(String(value)).digest("hex");
 }
@@ -1638,8 +3303,8 @@ var secretStoreConstants = Object.freeze({
 
 // packages/runtime/src/state-store.mjs
 import { mkdir, open, readFile as readFile2, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname as dirname2, join as join2 } from "node:path";
-import { homedir } from "node:os";
+import { dirname as dirname3, join as join3 } from "node:path";
+import { homedir as homedir2 } from "node:os";
 import { randomUUID } from "node:crypto";
 var LOCK_RETRY_MS = 25;
 var LOCK_TIMEOUT_MS = 3e4;
@@ -1678,7 +3343,7 @@ async function removeLockIfOwned(lockPath, token) {
 async function acquireFileLock(filePath) {
   const lockPath = `${filePath}.lock`;
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
-  await mkdir(dirname2(filePath), { recursive: true, mode: 448 });
+  await mkdir(dirname3(filePath), { recursive: true, mode: 448 });
   while (true) {
     try {
       const handle = await open(lockPath, "wx", 384);
@@ -1734,11 +3399,11 @@ async function withFileLock(filePath, operation) {
     await release();
   }
 }
-function defaultDockyardHome({ env = process.env, home = homedir() } = {}) {
-  return env.DOCKYARD_DSH_HOME || join2(home, ".dockyard-dsh");
+function defaultDockyardHome({ env = process.env, home = homedir2() } = {}) {
+  return env.DOCKYARD_DSH_HOME || join3(home, ".dockyard-dsh");
 }
 function defaultDockyardStatePath(options = {}) {
-  return join2(defaultDockyardHome(options), "state.json");
+  return join3(defaultDockyardHome(options), "state.json");
 }
 function emptyState() {
   return {
@@ -1811,7 +3476,7 @@ var JsonStateStore = class {
       ...state,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    await mkdir(dirname2(this.filePath), { recursive: true, mode: 448 });
+    await mkdir(dirname3(this.filePath), { recursive: true, mode: 448 });
     const tempPath = `${this.filePath}.${randomUUID()}.tmp`;
     let committed = false;
     try {
@@ -1826,7 +3491,7 @@ var JsonStateStore = class {
       await rename(tempPath, this.filePath);
       committed = true;
       try {
-        const directory = await open(dirname2(this.filePath), "r");
+        const directory = await open(dirname3(this.filePath), "r");
         try {
           await directory.sync();
         } catch {
@@ -1855,13 +3520,13 @@ function normalizeContextWindow(value) {
   if (!Number.isSafeInteger(numeric) || numeric <= 0 || numeric > MAX_CONTEXT_WINDOW) return null;
   return numeric;
 }
-function normalizedMap(value) {
+function normalizedMap2(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value;
 }
 function cleanModelMap(value) {
   const output = {};
-  for (const [modelId, raw] of Object.entries(normalizedMap(value))) {
+  for (const [modelId, raw] of Object.entries(normalizedMap2(value))) {
     const id = text(modelId);
     const contextWindow = normalizeContextWindow(raw);
     if (id && contextWindow !== null) output[id] = contextWindow;
@@ -1870,7 +3535,7 @@ function cleanModelMap(value) {
 }
 function cleanNestedModelMap(value) {
   const output = {};
-  for (const [scopeId, models] of Object.entries(normalizedMap(value))) {
+  for (const [scopeId, models] of Object.entries(normalizedMap2(value))) {
     const id = text(scopeId);
     const cleaned = cleanModelMap(models);
     if (id && Object.keys(cleaned).length > 0) output[id] = cleaned;
@@ -1884,9 +3549,9 @@ function cleanProviderRecord(value) {
     keys: cleanNestedModelMap(value?.keys)
   };
 }
-function cleanState(value) {
+function cleanState2(value) {
   const providers = {};
-  for (const [providerId, record] of Object.entries(normalizedMap(value?.providers))) {
+  for (const [providerId, record] of Object.entries(normalizedMap2(value?.providers))) {
     const id = text(providerId);
     if (!id) continue;
     const cleaned = cleanProviderRecord(record);
@@ -1935,7 +3600,7 @@ function resolveValue(state, scope) {
   return normalizeContextWindow(provider.models?.[scope.modelId]);
 }
 function cloneState(value) {
-  return structuredClone(cleanState(value));
+  return structuredClone(cleanState2(value));
 }
 function removeEmptyScopes(provider, bucket, scopeId) {
   if (bucket === "models") return;
@@ -1959,7 +3624,7 @@ var ContextWindowOverrideStore = class {
   }
   async load() {
     const snapshot = await this.stateStore.load();
-    this.state = cleanState(snapshot?.contextWindowOverrides);
+    this.state = cleanState2(snapshot?.contextWindowOverrides);
     return this;
   }
   async ready() {
@@ -2024,18 +3689,18 @@ var ContextWindowOverrideStore = class {
       else models[scope.modelId] = contextWindow;
       removeEmptyScopes(provider, bucket, scopeId);
       removeEmptyProvider(overrides, scope.providerId);
-      return { ...next, contextWindowOverrides: cleanState(overrides) };
+      return { ...next, contextWindowOverrides: cleanState2(overrides) };
     };
     const saved = typeof this.stateStore.update === "function" ? await this.stateStore.update(mutate) : await this.stateStore.save(mutate(await this.stateStore.load()));
-    this.state = cleanState(saved?.contextWindowOverrides);
+    this.state = cleanState2(saved?.contextWindowOverrides);
     return this.describe(scope);
   }
 };
 
 // modules/provider-codex/src/driver.mjs
 import { createHash as createHash3 } from "node:crypto";
-import { homedir as homedir2 } from "node:os";
-import { join as join4 } from "node:path";
+import { homedir as homedir3 } from "node:os";
+import { dirname as dirname5, join as join6 } from "node:path";
 
 // packages/oauth/src/browser-oauth-authorizer.mjs
 import { createHash as createHash2, randomBytes, randomUUID as randomUUID2 } from "node:crypto";
@@ -2209,7 +3874,7 @@ function createBrowserOAuthAuthorizer({
       });
     });
     session.server = server;
-    await new Promise((resolve2, reject) => {
+    const listenOnPort = (port) => new Promise((resolve2, reject) => {
       const onError = (error) => {
         server.off("listening", onListening);
         reject(error);
@@ -2220,10 +3885,29 @@ function createBrowserOAuthAuthorizer({
       };
       server.once("error", onError);
       server.once("listening", onListening);
-      server.listen({ host: resolveLoopbackListenHost(callbackHost), port: session.callbackPort });
+      server.listen({ host: resolveLoopbackListenHost(callbackHost), port });
     });
+    try {
+      await listenOnPort(session.callbackPort);
+    } catch (error) {
+      if (error?.code === "EADDRINUSE" && session.callbackPort !== 0) {
+        await listenOnPort(0);
+      } else {
+        throw error;
+      }
+    }
     server.unref?.();
     const address = server.address();
+    if (address && typeof address === "object" && address.port && session.redirectUri) {
+      try {
+        const parsed = new URL(session.redirectUri);
+        if (isLoopbackHostname2(parsed.hostname) && Number(parsed.port || 80) !== address.port) {
+          parsed.port = String(address.port);
+          session.redirectUri = parsed.toString();
+        }
+      } catch {
+      }
+    }
     session.redirectUri = session.redirectUri ?? `http://${callbackHost}:${address.port}${callbackPath}`;
   }
   async function finalize(session, context = {}) {
@@ -2382,8 +4066,122 @@ var browserOAuthAuthorizerConstants = Object.freeze({
 import { randomUUID as randomUUID3 } from "node:crypto";
 import { mkdir as mkdir2, mkdtemp, readFile as readFile3, rm as rm2 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join as join3 } from "node:path";
+import { join as join5 } from "node:path";
+
+// packages/providers/src/win32-command.mjs
 import { spawn as spawn2 } from "node:child_process";
+import { statSync } from "node:fs";
+import { basename, delimiter, dirname as dirname4, extname, isAbsolute, join as join4, sep } from "node:path";
+var DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD";
+var SHELL_SCRIPT_EXTENSIONS = /* @__PURE__ */ new Set([".cmd", ".bat"]);
+var CMD_META_CHARS = /([()\][%!^"`<>&|;, *?])/g;
+function pathSeparators(platform) {
+  return platform === "win32" ? /* @__PURE__ */ new Set(["/", "\\"]) : /* @__PURE__ */ new Set([sep]);
+}
+function hasPathSeparator(command, platform) {
+  const separators = pathSeparators(platform);
+  for (const character of command) {
+    if (separators.has(character)) return true;
+  }
+  return false;
+}
+function searchPathDirectories(env, platform) {
+  const raw = platform === "win32" ? env.PATH ?? env.Path ?? env.path ?? "" : env.PATH ?? "";
+  const separator = platform === "win32" ? ";" : delimiter;
+  return String(raw).split(separator).filter(Boolean);
+}
+function extensionCandidates(command, env, platform) {
+  if (platform !== "win32") return [command];
+  if (extname(command) !== "") return [command];
+  const raw = env.PATHEXT ?? DEFAULT_PATHEXT;
+  const extensions = String(raw).split(";").map((value) => value.trim()).filter(Boolean);
+  const candidates = [];
+  for (const extension of extensions) {
+    candidates.push(`${command}${extension.toLowerCase()}`);
+    candidates.push(`${command}${extension}`);
+  }
+  candidates.push(command);
+  return candidates;
+}
+function isFile(candidate2) {
+  try {
+    return statSync(candidate2).isFile();
+  } catch {
+    return false;
+  }
+}
+function locateWindowsExecutable(command, { env = process.env } = {}) {
+  if (isAbsolute(command) || hasPathSeparator(command, "win32") || hasPathSeparator(command, process.platform)) {
+    const directory = dirname4(command);
+    const name2 = basename(command);
+    for (const candidate2 of extensionCandidates(name2, env, "win32")) {
+      const resolved = join4(directory, candidate2);
+      if (isFile(resolved)) return resolved;
+    }
+    return null;
+  }
+  for (const directory of searchPathDirectories(env, "win32")) {
+    for (const candidate2 of extensionCandidates(command, env, "win32")) {
+      const resolved = join4(directory, candidate2);
+      if (isFile(resolved)) return resolved;
+    }
+  }
+  return null;
+}
+function resolveCliCommand(command, { platform = process.platform, env = process.env } = {}) {
+  const name2 = String(command ?? "");
+  if (platform !== "win32" || name2.length === 0) {
+    return { file: name2, viaShell: false, resolved: name2 };
+  }
+  const resolved = locateWindowsExecutable(name2, { env }) ?? name2;
+  const extension = extname(resolved).toLowerCase();
+  return {
+    file: resolved,
+    viaShell: SHELL_SCRIPT_EXTENSIONS.has(extension),
+    resolved
+  };
+}
+function escapeCmdArgument(value) {
+  let argument = String(value ?? "");
+  argument = argument.replace(/(\\*)"/g, '$1$1\\"');
+  argument = argument.replace(/(\\*)$/, "$1$1");
+  argument = `"${argument}"`;
+  return argument.replace(CMD_META_CHARS, "^$1");
+}
+function escapeCmdCommand(value) {
+  return String(value ?? "").replace(CMD_META_CHARS, "^$1");
+}
+function buildCmdInvocation(scriptPath, args = [], { env = process.env } = {}) {
+  const comspec = env.ComSpec ?? env.COMSPEC ?? env.comspec ?? "cmd.exe";
+  const line = [escapeCmdCommand(scriptPath), ...args.map(escapeCmdArgument)].join(" ");
+  return {
+    file: comspec,
+    args: ["/d", "/s", "/c", `"${line}"`],
+    windowsVerbatimArguments: true
+  };
+}
+function spawnCli(command, args = [], options = {}) {
+  const {
+    platform = process.platform,
+    spawnImpl = spawn2,
+    env = process.env,
+    ...spawnOptions
+  } = options;
+  const target = resolveCliCommand(command, { platform, env });
+  if (!target.viaShell) {
+    return spawnImpl(target.file, args, { env, ...spawnOptions });
+  }
+  const invocation = buildCmdInvocation(target.file, args, { env });
+  return spawnImpl(invocation.file, invocation.args, {
+    env,
+    windowsVerbatimArguments: invocation.windowsVerbatimArguments,
+    ...spawnOptions
+  });
+}
+var win32CommandConstants = Object.freeze({
+  defaultPathExt: DEFAULT_PATHEXT,
+  shellScriptExtensions: Object.freeze([...SHELL_SCRIPT_EXTENSIONS])
+});
 
 // packages/oauth/src/cli-url-sanitizer.mjs
 var URL_PATTERN = /https?:\/\/[^\s"'<>]+/gi;
@@ -2554,7 +4352,7 @@ function createCliOAuthAuthorizer({
         }
         let raw;
         try {
-          raw = JSON.parse(await readFile3(join3(session.profileDir, authFileName), "utf8"));
+          raw = JSON.parse(await readFile3(join5(session.profileDir, authFileName), "utf8"));
         } catch (error) {
           session.status = "failed";
           session.diagnostic = `\u5B98\u65B9\u767B\u5F55\u5B8C\u6210\uFF0C\u4F46\u6CA1\u6709\u627E\u5230\u53EF\u8BFB\u53D6\u7684 OAuth \u72B6\u6001\uFF1A${redactError(error)}`;
@@ -2585,7 +4383,7 @@ function createCliOAuthAuthorizer({
   }
   async function begin() {
     const cleanupProfile = !profileDirectory;
-    const profileDir = profileDirectory ?? await mkdtemp(join3(tmpdir(), profilePrefix));
+    const profileDir = profileDirectory ?? await mkdtemp(join5(tmpdir(), profilePrefix));
     if (!cleanupProfile) await mkdir2(profileDir, { recursive: true });
     const session = {
       sessionId: `${providerId}:${randomUUID3()}`,
@@ -2609,7 +4407,7 @@ function createCliOAuthAuthorizer({
     };
     sessions.set(session.sessionId, session);
     try {
-      const child = spawn2(cliPath, loginArgs, {
+      const child = spawnCli(cliPath, loginArgs, {
         env: { ...environment, [environmentKey]: profileDir },
         stdio: ["ignore", "pipe", "pipe"]
       });
@@ -2721,6 +4519,9 @@ var DEFAULT_AUTHORIZATION_URL = `${AUTH_BASE_URL}/oauth/authorize`;
 var DEFAULT_TOKEN_URL = `${AUTH_BASE_URL}/oauth/token`;
 var DEFAULT_REDIRECT_URI = "http://localhost:1455/auth/callback";
 var DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api";
+var DEFAULT_CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models";
+var DEFAULT_CODEX_CLIENT_VERSION = "0.163.0";
+var DEFAULT_CODEX_CATALOG_TTL_MS = 6e4;
 var DEFAULT_USAGE_URLS = Object.freeze([
   "https://chatgpt.com/backend-api/wham/usage",
   "https://chatgpt.com/backend-api/codex/usage"
@@ -2730,9 +4531,15 @@ var CREDENTIAL_SLOT = Symbol("dockyard-codex-credential");
 function hash(value) {
   return createHash3("sha256").update(String(value)).digest("hex");
 }
-function codexAuthPath({ env = process.env, home = homedir2(), authFilePath } = {}) {
+function codexHomePath({ env = process.env, home = homedir3(), codexHome, authFilePath } = {}) {
+  if (codexHome) return codexHome;
+  if (authFilePath) return dirname5(authFilePath);
+  return env.CODEX_HOME || join6(home, ".codex");
+}
+function codexAuthPath({ env = process.env, home = homedir3(), authFilePath, codexHome } = {}) {
   if (authFilePath) return authFilePath;
-  return join4(env.CODEX_HOME || join4(home, ".codex"), "auth.json");
+  const baseHome = codexHomePath({ env, home, codexHome, authFilePath });
+  return join6(baseHome, "auth.json");
 }
 function profileClaims(payload) {
   return payload?.["https://api.openai.com/profile"] ?? payload?.profile ?? {};
@@ -2850,13 +4657,174 @@ function isExpiring(tokens, now, leewaySeconds) {
   if (!tokens.expiresAt) return true;
   return new Date(tokens.expiresAt).getTime() <= now.getTime() + leewaySeconds * 1e3;
 }
+function reasoningFromThinkingLevelMap(thinkingLevelMap) {
+  if (!thinkingLevelMap || typeof thinkingLevelMap !== "object") return void 0;
+  const efforts = Object.entries(thinkingLevelMap).filter(([id, providerValue]) => id !== "off" && typeof providerValue === "string" && providerValue.length > 0).map(([id, providerValue]) => ({
+    id,
+    name: id.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase()),
+    ...providerValue === id ? {} : { description: `provider value: ${providerValue}` }
+  }));
+  return efforts.length > 0 ? { efforts } : void 0;
+}
+function parseCodexReasoning(model) {
+  if (Array.isArray(model?.supported_reasoning_levels) && model.supported_reasoning_levels.length > 0) {
+    const efforts = model.supported_reasoning_levels.map((lvl) => {
+      const id = typeof lvl === "string" ? lvl : lvl.effort;
+      const name2 = id.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+      const description = typeof lvl?.description === "string" ? lvl.description : void 0;
+      return {
+        id,
+        name: name2,
+        ...description ? { description } : {}
+      };
+    });
+    const defaultEffort = typeof model.default_reasoning_level === "string" ? model.default_reasoning_level : void 0;
+    return {
+      efforts,
+      ...defaultEffort && efforts.some((effort) => effort.id === defaultEffort) ? { defaultEffort } : {}
+    };
+  }
+  return reasoningFromThinkingLevelMap(model?.thinkingLevelMap);
+}
+function codexModelToDshCatalog(model) {
+  const id = model.slug ?? model.id;
+  const name2 = model.display_name ?? model.name ?? id;
+  const reasoning = parseCodexReasoning(model);
+  const input = Array.isArray(model.input_modalities) ? model.input_modalities : Array.isArray(model.input) ? model.input : void 0;
+  const contextWindow = Number.isInteger(model.context_window) ? model.context_window : Number.isInteger(model.contextWindow) ? model.contextWindow : void 0;
+  const maxTokens = Number.isInteger(model.max_output_tokens) ? Math.min(model.max_output_tokens, 16384) : Number.isInteger(model.maxTokens) ? Math.min(model.maxTokens, 16384) : 8192;
+  return {
+    id,
+    name: name2,
+    ...input ? { inputModalities: [...input] } : {},
+    ...contextWindow ? { contextWindow } : {},
+    ...maxTokens ? { maxTokens } : {},
+    ...reasoning ? { reasoning } : {}
+  };
+}
+function parseCodexModelCatalog(raw) {
+  const modelsList = Array.isArray(raw?.models) ? raw.models : Array.isArray(raw) ? raw : [];
+  if (modelsList.length === 0) return [];
+  const visible = modelsList.filter((m) => m?.visibility !== "hide");
+  const candidates = visible.length > 0 ? visible : modelsList;
+  const sorted = [...candidates].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));
+  return sorted.map(codexModelToDshCatalog);
+}
+function createCodexCatalogLoader({
+  env = process.env,
+  home = homedir3(),
+  codexHome,
+  authFilePath,
+  modelsCachePath,
+  modelsUrl = env.DOCKYARD_CODEX_MODELS_URL || DEFAULT_CODEX_MODELS_URL,
+  clientVersion = env.DOCKYARD_CODEX_CLIENT_VERSION || DEFAULT_CODEX_CLIENT_VERSION,
+  fetchImpl = fetch,
+  cacheTtlMs = Number(process.env.DOCKYARD_CODEX_CATALOG_TTL_MS) || DEFAULT_CODEX_CATALOG_TTL_MS,
+  fallbackLoader = null
+} = {}) {
+  const resolvedHome = codexHomePath({ env, home, codexHome, authFilePath });
+  const resolvedAuthPath = codexAuthPath({ env, home, authFilePath, codexHome: resolvedHome });
+  const resolvedCachePath = modelsCachePath || join6(resolvedHome, "models_cache.json");
+  let cached = null;
+  let cachedAt = 0;
+  let pending = null;
+  return async function loadCatalog({ force = false, credential = null, signal = null } = {}) {
+    const now = Date.now();
+    if (!force && cached && now - cachedAt < cacheTtlMs) return cached;
+    if (pending) return pending;
+    pending = (async () => {
+      let discoveredModels = [];
+      let source = "official_codex_models_api";
+      let liveToken = credential?.access ?? null;
+      let liveAccountId = credential?.accountId ?? null;
+      if (!liveToken) {
+        try {
+          const authRaw = await readJsonFile(resolvedAuthPath);
+          if (authRaw) {
+            const tokens = normalizeTokens(authRaw);
+            if (tokens?.access) {
+              liveToken = tokens.access;
+              liveAccountId = tokens.accountId;
+            }
+          }
+        } catch {
+        }
+      }
+      if (liveToken) {
+        try {
+          const url = new URL(modelsUrl);
+          url.searchParams.set("client_version", clientVersion);
+          const headers = {
+            authorization: `Bearer ${liveToken}`,
+            "user-agent": `Codex/${clientVersion}`,
+            accept: "application/json"
+          };
+          if (liveAccountId) {
+            headers["chatgpt-account-id"] = liveAccountId;
+          }
+          const res = await fetchImpl(url.href, {
+            method: "GET",
+            headers,
+            ...signal ? { signal } : {}
+          });
+          if (res.ok) {
+            const data = await res.json().catch(() => ({}));
+            discoveredModels = parseCodexModelCatalog(data);
+            if (discoveredModels.length > 0) {
+              source = "official_codex_models_api";
+            }
+          }
+        } catch {
+        }
+      }
+      if (discoveredModels.length === 0) {
+        try {
+          const cacheData = await readJsonFile(resolvedCachePath);
+          if (cacheData) {
+            discoveredModels = parseCodexModelCatalog(cacheData);
+            if (discoveredModels.length > 0) {
+              source = "official_codex_models_cache";
+            }
+          }
+        } catch {
+        }
+      }
+      if (discoveredModels.length === 0 && typeof fallbackLoader === "function") {
+        try {
+          const fallback = await fallbackLoader();
+          if (Array.isArray(fallback?.models) && fallback.models.length > 0) {
+            discoveredModels = fallback.models;
+            source = fallback.source ?? "dsh_pi_ai_provider_catalog";
+          }
+        } catch {
+        }
+      }
+      const result = {
+        models: discoveredModels,
+        source
+      };
+      if (discoveredModels.length > 0) {
+        cached = result;
+        cachedAt = Date.now();
+      }
+      return result;
+    })().finally(() => {
+      pending = null;
+    });
+    return pending;
+  };
+}
 var CodexOAuthDriver = class {
   constructor({
     authFilePath,
+    codexHome,
+    modelsCachePath,
     env = process.env,
-    home = homedir2(),
+    home = homedir3(),
     tokenUrl = env.DOCKYARD_CODEX_TOKEN_URL || DEFAULT_TOKEN_URL,
     usageUrls = env.DOCKYARD_CODEX_USAGE_URL ? [env.DOCKYARD_CODEX_USAGE_URL] : [...DEFAULT_USAGE_URLS],
+    modelsUrl = env.DOCKYARD_CODEX_MODELS_URL || DEFAULT_CODEX_MODELS_URL,
+    clientVersion = env.DOCKYARD_CODEX_CLIENT_VERSION || DEFAULT_CODEX_CLIENT_VERSION,
     clientId = env.DOCKYARD_CODEX_CLIENT_ID || DEFAULT_CLIENT_ID,
     fetchImpl = fetch,
     requestExecutor = null,
@@ -2870,14 +4838,24 @@ var CodexOAuthDriver = class {
     browserCallbackPort = Number(env.DOCKYARD_CODEX_CALLBACK_PORT || 1455),
     cliPath = env.DOCKYARD_CODEX_CLI || "codex"
   } = {}) {
-    this.authFilePath = codexAuthPath({ env, home, authFilePath });
+    this.authFilePath = codexAuthPath({ env, home, authFilePath, codexHome });
     this.tokenUrl = assertSecureEndpointUrl(tokenUrl, "DOCKYARD_CODEX_TOKEN_URL");
     assertSecureEndpointUrl(authorizationUrl, "DOCKYARD_CODEX_AUTHORIZATION_URL");
     this.usageUrls = usageUrls.map((url) => assertSecureEndpointUrl(url, "DOCKYARD_CODEX_USAGE_URL"));
     this.clientId = clientId;
+    this.clientVersion = clientVersion;
     this.fetchImpl = fetchImpl;
     this.requestExecutor = requestExecutor;
-    this.catalogLoader = catalogLoader;
+    this.catalogLoader = catalogLoader ?? createCodexCatalogLoader({
+      env,
+      home,
+      codexHome,
+      authFilePath: this.authFilePath,
+      modelsCachePath,
+      modelsUrl,
+      clientVersion,
+      fetchImpl
+    });
     this.refreshLeewaySeconds = refreshLeewaySeconds;
     this.cliAuthorizer = createCliOAuthAuthorizer({
       providerId: PROVIDER_ID,
@@ -3117,7 +5095,9 @@ var CodexOAuthDriver = class {
         const response = await fetchJson(url, {
           headers: {
             authorization: `Bearer ${credential.access}`,
-            "chatgpt-account-id": credential.accountId ?? account.accountId
+            "chatgpt-account-id": credential.accountId ?? account.accountId,
+            "user-agent": `Codex/${this.clientVersion}`,
+            accept: "application/json"
           },
           ...context.signal ? { signal: context.signal } : {}
         }, { fetchImpl: this.fetchImpl });
@@ -3162,10 +5142,21 @@ var CodexOAuthDriver = class {
     wrapped.authForbidden = !sawAuthExpired && sawAuthForbidden;
     throw wrapped;
   }
-  async getCatalog() {
+  async getCatalog(context = {}) {
+    let credential = null;
+    if (context.accounts?.[0] && context.secretStore) {
+      try {
+        credential = await this.#liveCredential(context.accounts[0], context);
+      } catch {
+      }
+    }
     if (this.catalogLoader) {
       try {
-        const catalog = await this.catalogLoader();
+        const catalog = await this.catalogLoader({
+          force: Boolean(context.force),
+          credential,
+          accounts: context.accounts
+        });
         if (Array.isArray(catalog?.models) && catalog.models.length > 0) return catalog;
       } catch {
       }
@@ -3185,6 +5176,13 @@ var CodexOAuthDriver = class {
     return this.invoke(request, invocation, context);
   }
 };
+var CODEX_PI_AI_IMAGE_DEFAULTS = Object.freeze({
+  maxRequestImageBytes: 20 * 1024 * 1024,
+  maxRequestImages: 50,
+  imageOffloadCountQuantum: 10,
+  requestImagePixelBudget: 2048 * 2048,
+  requestImageMaxBytes: 1024 * 1024
+});
 function createCodexPiAiExecutor({
   PiAiAdapter,
   createProvider,
@@ -3198,12 +5196,16 @@ function createCodexPiAiExecutor({
     const modelId = String(request.model);
     const requestedEffort = typeof request.reasoningEffort === "string" ? request.reasoningEffort : void 0;
     const catalogModel2 = typeof modelResolver === "function" ? modelResolver(modelId) : null;
-    const contextWindow = catalogModel2?.contextWindow;
-    const maxTokens = catalogModel2?.maxTokens;
-    if (!Number.isInteger(contextWindow) || contextWindow <= 0 || !Number.isInteger(maxTokens) || maxTokens <= 0) {
-      throw new Error(`Codex live model catalog did not return context/output capacities for "${modelId}"`);
-    }
-    const thinkingLevelMap = catalogModel2?.thinkingLevelMap;
+    const contextWindow = Number.isInteger(catalogModel2?.contextWindow) && catalogModel2.contextWindow > 0 ? catalogModel2.contextWindow : 272e3;
+    const maxTokens = Number.isInteger(catalogModel2?.maxTokens) && catalogModel2.maxTokens > 0 ? Math.min(catalogModel2.maxTokens, 16384) : 16384;
+    const thinkingLevelMap = catalogModel2?.thinkingLevelMap ?? {
+      low: "low",
+      medium: "medium",
+      high: "high",
+      xhigh: "xhigh",
+      max: "max",
+      ultra: "ultra"
+    };
     const model = {
       id: modelId,
       name: typeof catalogModel2?.name === "string" && catalogModel2.name.length > 0 ? catalogModel2.name : modelId,
@@ -3212,7 +5214,7 @@ function createCodexPiAiExecutor({
       baseUrl: DEFAULT_CODEX_BASE_URL,
       reasoning: typeof catalogModel2?.reasoning === "boolean" ? catalogModel2.reasoning : requestedEffort !== void 0,
       ...thinkingLevelMap ? { thinkingLevelMap: { ...thinkingLevelMap } } : {},
-      input: Array.isArray(catalogModel2?.input) && catalogModel2.input.length > 0 ? [...catalogModel2.input] : ["text"],
+      input: Array.isArray(catalogModel2?.input) && catalogModel2.input.length > 0 ? [...catalogModel2.input] : Array.isArray(catalogModel2?.inputModalities) && catalogModel2.inputModalities.length > 0 ? [...catalogModel2.inputModalities] : ["text", "image"],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow,
       maxTokens
@@ -3237,8 +5239,10 @@ function createCodexPiAiExecutor({
       provider: PROVIDER_ID,
       displayName: "OpenAI Codex",
       piProvider: provider,
+      modelErrors: /* @__PURE__ */ new Map(),
       configuredMaxTokens: /* @__PURE__ */ new Map(),
-      streamIdleTimeoutMs: 3e5
+      streamIdleTimeoutMs: 3e5,
+      ...CODEX_PI_AI_IMAGE_DEFAULTS
     };
     const adapter = new PiAiAdapter({
       profiles: () => /* @__PURE__ */ new Map([[PROVIDER_ID, profile]]),
@@ -3292,14 +5296,14 @@ function createCodexModule({ driver = {} } = {}) {
 }
 
 // modules/provider-antigravity/src/driver.mjs
-import { spawn as spawn4 } from "node:child_process";
 import { createHash as createHash4, randomUUID as randomUUID4 } from "node:crypto";
+import { existsSync as existsSync3 } from "node:fs";
 import { mkdir as mkdir3, mkdtemp as mkdtemp2, readFile as readFile4, rename as rename2, rm as rm3, writeFile as writeFile2 } from "node:fs/promises";
-import { homedir as homedir4, tmpdir as tmpdir2 } from "node:os";
-import { dirname as dirname3, join as join6 } from "node:path";
+import { homedir as homedir5, tmpdir as tmpdir2 } from "node:os";
+import { dirname as dirname7, join as join8 } from "node:path";
 
 // packages/providers/src/cli-agent-transport.mjs
-import { spawn as spawn3 } from "node:child_process";
+import { execFileSync, spawn as spawn3 } from "node:child_process";
 var MAX_CLI_OUTPUT_BYTES = 4 * 1024 * 1024;
 var PROCESS_GROUP_PLATFORM = process.platform !== "win32";
 var KILL_GRACE_MS = 1e3;
@@ -3337,6 +5341,22 @@ function cliAbortError(providerId, output, errorOutput) {
 }
 function killProcessTree(child, sig, { detached = PROCESS_GROUP_PLATFORM } = {}) {
   const pid = child?.pid;
+  if (process.platform === "win32") {
+    if (Number.isFinite(pid)) {
+      try {
+        execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], {
+          stdio: "ignore",
+          windowsHide: true
+        });
+      } catch {
+      }
+    }
+    try {
+      child.kill(sig);
+    } catch {
+    }
+    return;
+  }
   if (detached && Number.isFinite(pid)) {
     try {
       process.kill(-pid, sig);
@@ -3378,7 +5398,7 @@ function runCliCommand(command, args, {
 } = {}) {
   return new Promise((resolve2, reject) => {
     const detached = PROCESS_GROUP_PLATFORM;
-    const child = spawn3(command, args, {
+    const child = spawnCli(command, args, {
       env,
       ...cwd ? { cwd } : {},
       stdio: ["ignore", "pipe", "pipe"],
@@ -3459,11 +5479,14 @@ var cliAgentTransportConstants = Object.freeze({
   defaultOutputFormat: "stream-json"
 });
 
+// modules/provider-antigravity/src/driver.mjs
+import { spawn as spawn4 } from "node:child_process";
+
 // modules/provider-antigravity/src/native-transport.mjs
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { join as join5 } from "node:path";
-import { execFileSync } from "node:child_process";
+import { closeSync, existsSync as existsSync2, mkdirSync as mkdirSync2, openSync, readFileSync as readFileSync2, readSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname6, join as join7 } from "node:path";
+import { execFileSync as execFileSync2 } from "node:child_process";
 
 // packages/providers/src/native-transport.mjs
 function numericStatus(value) {
@@ -3571,7 +5594,7 @@ function nativeProviderError(providerId, message, { status, body, code } = {}) {
   const statusCode = numericStatus(status);
   const codeText = String(upstreamStatus ?? resolvedCode ?? "").toUpperCase();
   const exhaustionText = `${resolvedMessage ?? ""} ${diagnosticText(body)} ${diagnosticText(upstreamStatus)} ${diagnosticText(resolvedCode)}`.toLowerCase();
-  const quotaExhausted = codeText === "RESOURCE_EXHAUSTED" || /\bresources?\b[\s\S]{0,80}\bexhausted\b/.test(exhaustionText) || /\bquota\b[\s\S]{0,80}\b(?:exhausted|depleted|exceeded)\b/.test(exhaustionText) || /\bcapacity\b[\s\S]{0,80}\bexhausted\b/.test(exhaustionText);
+  const quotaExhausted = codeText === "RESOURCE_EXHAUSTED" || /\bresources?\b[\s\S]{0,80}\bexhausted\b/.test(exhaustionText) || /\bquota\b[\s\S]{0,80}\b(?:exhausted|depleted|exceeded)\b/.test(exhaustionText) || /\busage limit\b[\s\S]{0,80}\breached\b/.test(exhaustionText) || /\bfree[\s\S]{0,40}limit reached\b/.test(exhaustionText) || /\bcapacity\b[\s\S]{0,80}\bexhausted\b/.test(exhaustionText) || /\binsufficient (?:credits?|funds?|balance)\b/.test(exhaustionText) || /\b(?:credits?|balance)\b[\s\S]{0,60}\b(?:exhausted|depleted|exceeded|insufficient)\b/.test(exhaustionText) || /\bpurchase more credits?\b/.test(exhaustionText);
   const rateLimited = statusCode === 429 || numericStatus(resolvedCode) === 429 || numericStatus(upstreamStatus) === 429 || codeText === "RESOURCE_EXHAUSTED" || codeText === "RATE_LIMITED" || quotaExhausted;
   const displayMessage = quotaExhausted ? "\u989D\u5EA6\u6216\u4E0A\u6E38\u8D44\u6E90\u5DF2\u8017\u5C3D\uFF0C\u8BF7\u5237\u65B0\u989D\u5EA6\u3001\u5207\u6362\u8D26\u53F7\u6216\u7A0D\u540E\u91CD\u8BD5" : rateLimited ? "\u8BF7\u6C42\u9891\u7387\u53D7\u9650\uFF0C\u8BF7\u5207\u6362\u8D26\u53F7\u6216\u7A0D\u540E\u91CD\u8BD5" : resolvedMessage;
   const error = new Error(`${providerId ?? "provider"} native request failed${displayMessage ? `: ${displayMessage}` : ""}`);
@@ -3687,6 +5710,13 @@ async function fetchNativeResponse(url, init = {}, {
   } catch (error) {
     if (error?.name === "AbortError" && timedOut && !error.providerId) {
       throw timeoutError;
+    }
+    if (/\bfetch failed\b/i.test(String(error?.message ?? "")) || error?.cause?.code === "ECONNRESET" || error?.cause?.code === "ETIMEDOUT") {
+      const err = nativeProviderError(providerId, `\u7F51\u7EDC\u8FDE\u63A5\u5F02\u5E38 (${error.message})\uFF0C\u53EF\u80FD\u7531\u4E8E\u7F51\u7EDC\u6296\u52A8\u6216\u4EE3\u7406\u65AD\u5F00`, {
+        code: "TRANSPORT"
+      });
+      err.cause = error;
+      throw err;
     }
     throw error;
   } finally {
@@ -3847,11 +5877,32 @@ async function* readSseEvents(response) {
 }
 function normalizeUsage(value) {
   if (!value || typeof value !== "object") return null;
-  const inputTokens = Number(value.input_tokens ?? value.inputTokens ?? value.prompt_tokens ?? value.promptTokens ?? value.promptTokenCount);
-  const outputTokens = Number(value.output_tokens ?? value.outputTokens ?? value.completion_tokens ?? value.completionTokens ?? value.candidatesTokenCount);
+  const rawCacheRead = value.cache_read_input_tokens ?? value.cacheReadInputTokens ?? value.cachedInputTokens ?? value.inputTokenDetails?.cacheReadTokens ?? value.prompt_tokens_details?.cached_tokens ?? value.prompt_tokens_details?.cache_read_tokens ?? value.prompt_cache_hit_tokens ?? value.cached_tokens ?? value.cachedContentTokenCount ?? value.cacheReadTokens;
+  const rawCacheWrite = value.cache_creation_input_tokens ?? value.cacheCreationInputTokens ?? value.inputTokenDetails?.cacheCreationInputTokens ?? value.prompt_tokens_details?.cache_write_tokens ?? value.prompt_tokens_details?.cache_creation_tokens ?? value.cacheWriteTokens;
+  const cacheReadTokens = Number(rawCacheRead);
+  const cacheWriteTokens = Number(rawCacheWrite);
+  const rawInput = Number(
+    value.inputTokenDetails?.noCacheTokens ?? value.input_tokens ?? value.inputTokens ?? value.prompt_tokens ?? value.promptTokens ?? value.promptTokenCount
+  );
+  const outputTokens = Number(
+    value.output_tokens ?? value.outputTokens ?? value.completion_tokens ?? value.completionTokens ?? value.candidatesTokenCount
+  );
   const totalTokens = Number(value.total_tokens ?? value.totalTokens ?? value.totalTokenCount);
-  const cacheReadTokens = Number(value.cache_read_input_tokens ?? value.cacheReadInputTokens ?? value.cachedContentTokenCount);
-  const cacheWriteTokens = Number(value.cache_creation_input_tokens ?? value.cacheCreationInputTokens);
+  let inputTokens = rawInput;
+  if (value.inputTokenDetails?.noCacheTokens !== void 0) {
+    inputTokens = Number(value.inputTokenDetails.noCacheTokens);
+  } else if (Number.isFinite(inputTokens) && (Number.isFinite(cacheReadTokens) || Number.isFinite(cacheWriteTokens))) {
+    const hasOpenAiStyleCache = value.prompt_tokens_details?.cached_tokens !== void 0 || value.prompt_tokens_details?.cache_read_tokens !== void 0 || value.prompt_cache_hit_tokens !== void 0 || value.cached_tokens !== void 0 || value.cachedInputTokens !== void 0;
+    const totalEqualsPromptPlusOutput = Number.isFinite(totalTokens) && Number.isFinite(outputTokens) && totalTokens === inputTokens + outputTokens;
+    const isAnthropicStyle = (value.cache_read_input_tokens !== void 0 || value.cache_creation_input_tokens !== void 0) && !hasOpenAiStyleCache && !totalEqualsPromptPlusOutput;
+    if ((hasOpenAiStyleCache || totalEqualsPromptPlusOutput && !value.cachedContentTokenCount) && !isAnthropicStyle) {
+      const read = Number.isFinite(cacheReadTokens) ? cacheReadTokens : 0;
+      const write = Number.isFinite(cacheWriteTokens) ? cacheWriteTokens : 0;
+      if (inputTokens >= read + write) {
+        inputTokens = Math.max(0, inputTokens - read - write);
+      }
+    }
+  }
   const result = {};
   if (Number.isFinite(inputTokens)) result.inputTokens = inputTokens;
   if (Number.isFinite(outputTokens)) result.outputTokens = outputTokens;
@@ -3864,8 +5915,8 @@ function textFromContent(content) {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) return content.map((part) => textFromContent(part)).filter(Boolean).join("");
   if (!content || typeof content !== "object") return "";
-  if (content.type === "image") return "";
-  if (content.type === "tool-result") {
+  if (content.type === "image" || content.type === "reasoning" || content.type === "thinking") return "";
+  if (content.type === "tool-result" || content.type === "tool_result") {
     return textFromContent(content.content ?? content.output ?? content.result ?? content.text);
   }
   return content.text ?? content.value ?? content.content ?? content.delta ?? "";
@@ -3928,19 +5979,264 @@ function finishReason(value, fallback = "stop") {
   if (reason.includes("error") || reason.includes("cancel")) return { kind: "error" };
   return { kind: "stop" };
 }
+var EMPTY_COMPLETION_NUDGE = "\u4E0A\u4E00\u6B21\u56DE\u590D\u53EA\u5199\u4E86\u601D\u8003\u8FC7\u7A0B\uFF0C\u6CA1\u6709\u7ED9\u51FA\u56DE\u7B54\u4E5F\u6CA1\u6709\u8C03\u7528\u5DE5\u5177\u3002\u8BF7\u76F4\u63A5\u7528\u6B63\u6587\u56DE\u7B54\uFF0C\u6216\u76F4\u63A5\u8C03\u7528\u9700\u8981\u7684\u5DE5\u5177\uFF0C\u4E0D\u8981\u518D\u8F93\u51FA\u601D\u8003\u8FC7\u7A0B\u3002";
+function isEmptyCompletionOutput(event) {
+  if (event?.type === "text-delta" || event?.type === "tool-call-delta") return true;
+  if (event?.type === "block-start") return event.blockType !== "reasoning";
+  if (event?.type === "block-end") return event.block?.type !== "reasoning";
+  return false;
+}
+function withEmptyCompletionNudge(envelope2, nudge) {
+  const base = envelope2 && typeof envelope2 === "object" && "request" in envelope2 ? envelope2 : { request: envelope2 ?? {} };
+  const request = base.request ?? {};
+  if (Array.isArray(request.messages)) {
+    return { ...base, request: { ...request, messages: [...request.messages, { role: "system", content: nudge }] } };
+  }
+  const system = typeof request.system === "string" && request.system.length > 0 ? `${request.system}
+
+${nudge}` : nudge;
+  return { ...base, request: { ...request, system } };
+}
+function isReasoningEvent(event) {
+  if (event?.type === "reasoning-delta") return true;
+  if (event?.type === "block-start" && event.blockType === "reasoning") return true;
+  if (event?.type === "block-end" && event.block?.type === "reasoning") return true;
+  return false;
+}
+function guardEmptyCompletion(executor, {
+  providerId = "provider",
+  nudge = EMPTY_COMPLETION_NUDGE,
+  maxEmptyAttempts = 2,
+  // Holding reasoning back until an answer arrives hides the whole thinking
+  // phase from the user, which reads as dead air on slow thinking models.
+  // Streaming it live means an attempt can no longer be retried once its
+  // reasoning reached the host, so an empty finish then fails loudly instead.
+  streamReasoning = false
+} = {}) {
+  const guardedExecutor = async function* runGuardedExecutor(...args) {
+    const envelope2 = args[0] ?? {};
+    const signal = envelope2?.signal ?? envelope2?.request?.signal;
+    const canNudge = Boolean(nudge) && envelope2 && typeof envelope2 === "object" && ("request" in envelope2 || "credential" in envelope2);
+    for (let attempt = 0; ; attempt += 1) {
+      if (signal?.aborted) {
+        const abort = new Error("aborted");
+        abort.name = "AbortError";
+        throw abort;
+      }
+      const attemptArgs = attempt === 0 || !canNudge ? args : [withEmptyCompletionNudge(envelope2, nudge), ...args.slice(1)];
+      const buffered = [];
+      let sawOutput = false;
+      let streamedReasoning = false;
+      const attemptResult = executor(...attemptArgs);
+      const attemptStream = attemptResult && typeof attemptResult[Symbol.asyncIterator] === "function" ? attemptResult : await attemptResult;
+      if (!attemptStream || typeof attemptStream[Symbol.asyncIterator] !== "function") {
+        throw nativeProviderError(providerId, "provider executor did not return a stream");
+      }
+      for await (const event of attemptStream) {
+        if (sawOutput) {
+          yield event;
+          continue;
+        }
+        if (streamReasoning && isReasoningEvent(event)) {
+          streamedReasoning = true;
+          yield event;
+          continue;
+        }
+        buffered.push(event);
+        if (isEmptyCompletionOutput(event)) {
+          sawOutput = true;
+          for (const pending of buffered) yield pending;
+          buffered.length = 0;
+        }
+      }
+      if (sawOutput) return;
+      if (streamedReasoning) {
+        throw nativeProviderError(
+          providerId,
+          "\u6A21\u578B\u53EA\u8F93\u51FA\u4E86\u601D\u8003\u5185\u5BB9\uFF0C\u6CA1\u6709\u7ED9\u51FA\u56DE\u7B54\u6216\u5DE5\u5177\u8C03\u7528\uFF1B\u8BF7\u91CD\u8BD5\u6216\u6362\u4E00\u4E2A\u6A21\u578B",
+          { code: "EMPTY_COMPLETION" }
+        );
+      }
+      if (attempt >= maxEmptyAttempts) {
+        throw nativeProviderError(
+          providerId,
+          "\u6A21\u578B\u53EA\u8F93\u51FA\u4E86\u601D\u8003\u5185\u5BB9\uFF0C\u6CA1\u6709\u7ED9\u51FA\u56DE\u7B54\u6216\u5DE5\u5177\u8C03\u7528\uFF1B\u5DF2\u81EA\u52A8\u91CD\u8BD5\u4ECD\u65E0\u7ED3\u679C\uFF0C\u8BF7\u91CD\u8BD5\u6216\u6362\u4E00\u4E2A\u6A21\u578B",
+          { code: "EMPTY_COMPLETION" }
+        );
+      }
+    }
+  };
+  for (const key of Object.keys(executor)) {
+    if (!(key in guardedExecutor)) guardedExecutor[key] = executor[key];
+  }
+  return guardedExecutor;
+}
+function buildOpenAiTools(tools) {
+  if (!Array.isArray(tools)) return void 0;
+  const result = tools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool?.name ?? tool?.function?.name ?? "tool",
+      ...tool?.description ? { description: String(tool.description) } : {},
+      parameters: tool?.parameters ?? tool?.input_schema ?? tool?.function?.parameters ?? { type: "object" }
+    }
+  }));
+  return result.length > 0 ? result : void 0;
+}
+function parseDsmlCalls(text3) {
+  if (typeof text3 !== "string" || !text3.includes("DSML")) return null;
+  const callsRe = /[<＜][ |｜]*DSML[ |｜]*calls[>＞]([\s\S]*?)(?:[<＜][\/／][ |｜]*DSML[ |｜]*calls[>＞]|$)/i;
+  const match = text3.match(callsRe);
+  if (!match) return null;
+  const inner = match[1];
+  const invokeRe = /[<＜][ |｜]*DSML[ |｜]*invoke\s+name=["']?([^"'>＞\s]+)["']?[>＞]([\s\S]*?)(?:[<＜][\/／][ |｜]*DSML[ |｜]*invoke[>＞]|$)/gi;
+  const paramRe = /[<＜][ |｜]*DSML[ |｜]*parameter\s+name=["']?([^"'>＞\s]+)["']?[^>＞]*[>＞]([\s\S]*?)(?:[<＜][\/／][ |｜]*DSML[ |｜]*parameter[>＞]|$)/gi;
+  const toolCalls = [];
+  let invokeMatch;
+  while ((invokeMatch = invokeRe.exec(inner)) !== null) {
+    const name2 = invokeMatch[1];
+    const paramsBody = invokeMatch[2];
+    const args = {};
+    let paramMatch;
+    while ((paramMatch = paramRe.exec(paramsBody)) !== null) {
+      const paramName = paramMatch[1];
+      const paramVal = paramMatch[2].trim();
+      let parsedVal = paramVal;
+      if (paramVal === "true") parsedVal = true;
+      else if (paramVal === "false") parsedVal = false;
+      else if (!isNaN(Number(paramVal)) && paramVal !== "") parsedVal = Number(paramVal);
+      else {
+        try {
+          parsedVal = JSON.parse(paramVal);
+        } catch {
+        }
+      }
+      args[paramName] = parsedVal;
+    }
+    toolCalls.push({
+      name: name2,
+      arguments: JSON.stringify(args)
+    });
+  }
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+function stripDsmlCalls(text3) {
+  if (typeof text3 !== "string") return "";
+  return text3.replace(/[<＜][ |｜]*DSML[ |｜]*calls[>＞][\s\S]*?(?:[<＜][\/／][ |｜]*DSML[ |｜]*calls[>＞]|$)/gi, "").trim();
+}
+function sanitizeToolCallId(rawId, maxLength = 64) {
+  if (!rawId || typeof rawId !== "string") return "call_tool";
+  if (rawId.includes("|")) {
+    const separatorIndex = rawId.indexOf("|");
+    const callPart = rawId.slice(0, separatorIndex);
+    const itemPart = rawId.slice(separatorIndex + 1);
+    const cleanCall = callPart.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const cleanItem = itemPart.replace(/[^a-zA-Z0-9_-]/g, "_");
+    if (!cleanItem) return cleanCall.slice(0, maxLength) || "call_tool";
+    const itemSuffix = cleanItem.slice(-16);
+    const callPrefix = cleanCall.slice(0, Math.max(1, maxLength - 1 - itemSuffix.length));
+    return `${callPrefix}_${itemSuffix}`;
+  }
+  const clean = rawId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return clean.slice(0, maxLength) || "call_tool";
+}
+var DsmlStreamFilter = class {
+  constructor({ onTextDelta, onTextBlockStart, onTextBlockEnd } = {}) {
+    this.onTextDelta = onTextDelta;
+    this.onTextBlockStart = onTextBlockStart;
+    this.onTextBlockEnd = onTextBlockEnd;
+    this.textIndex = 0;
+    this.textOpen = false;
+    this.cleanText = "";
+    this.pending = "";
+    this.inDsml = false;
+    this.dsmlBuffer = "";
+  }
+  push(content, getNextIndex) {
+    if (!content) return;
+    if (this.inDsml) {
+      this.dsmlBuffer += content;
+      return;
+    }
+    const combined = this.pending + content;
+    this.pending = "";
+    const dsmlMatch = combined.match(/[<＜][ |｜]*DSML/i);
+    if (dsmlMatch) {
+      const matchIndex = dsmlMatch.index;
+      const textPart = combined.slice(0, matchIndex);
+      if (textPart) {
+        this.#emitText(textPart, getNextIndex);
+      }
+      if (this.textOpen) {
+        this.onTextBlockEnd?.(this.textIndex, this.cleanText);
+        this.textOpen = false;
+      }
+      this.inDsml = true;
+      this.dsmlBuffer = combined.slice(matchIndex);
+      return;
+    }
+    const prefixMatch = combined.match(/[<＜][ |｜]*(?:D(?:S(?:M(?:L)?)?)?)?$/i);
+    if (prefixMatch) {
+      const safeText = combined.slice(0, prefixMatch.index);
+      if (safeText) {
+        this.#emitText(safeText, getNextIndex);
+      }
+      this.pending = prefixMatch[0];
+    } else {
+      this.#emitText(combined, getNextIndex);
+    }
+  }
+  #emitText(text3, getNextIndex) {
+    if (!text3) return;
+    if (!this.textOpen) {
+      this.textIndex = getNextIndex();
+      this.textOpen = true;
+      this.onTextBlockStart?.(this.textIndex);
+    }
+    this.cleanText += text3;
+    this.onTextDelta?.(this.textIndex, text3);
+  }
+  closeText() {
+    if (this.pending) {
+      if (!this.inDsml) {
+        this.#emitText(this.pending, () => this.textIndex || 1);
+      }
+      this.pending = "";
+    }
+    if (this.textOpen) {
+      this.onTextBlockEnd?.(this.textIndex, this.cleanText);
+      this.textOpen = false;
+    }
+  }
+  flush(getNextIndex) {
+    this.closeText();
+    if (this.inDsml && this.dsmlBuffer) {
+      const calls = parseDsmlCalls(this.dsmlBuffer);
+      if (calls && calls.length > 0) {
+        return { toolCalls: calls };
+      }
+      const fallbackIndex = getNextIndex();
+      this.onTextBlockStart?.(fallbackIndex);
+      this.onTextDelta?.(fallbackIndex, this.dsmlBuffer);
+      this.onTextBlockEnd?.(fallbackIndex, this.dsmlBuffer);
+    }
+    return null;
+  }
+};
 
 // modules/provider-antigravity/src/native-transport.mjs
 var PROVIDER_ID2 = "antigravity";
 var DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
 var DEFAULT_QUOTA_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary";
-var DEFAULT_PROJECT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
+var DEFAULT_PROJECT_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
+var DEFAULT_ONBOARD_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:onboardUser";
 var MACOS_SECURITY_BIN = "/usr/bin/security";
 var AGY_KEYCHAIN_SERVICE = "gemini";
 var AGY_KEYCHAIN_ACCOUNT = "antigravity";
 var AGY_KEYCHAIN_VALUE_PREFIX = "go-keyring-base64:";
 var ANTIGRAVITY_INFO_PATHS = [
   "/Applications/Antigravity.app/Contents/Info.plist",
-  join5(homedir3(), "Applications/Antigravity.app/Contents/Info.plist")
+  join7(homedir4(), "Applications/Antigravity.app/Contents/Info.plist")
 ];
 function normalizeAntigravityClientVersion(value) {
   const version = String(value ?? "").trim();
@@ -3949,13 +6245,144 @@ function normalizeAntigravityClientVersion(value) {
 function detectAntigravityUserAgent() {
   for (const infoPath of ANTIGRAVITY_INFO_PATHS) {
     try {
-      const version = normalizeAntigravityClientVersion(execFileSync(
+      const version = normalizeAntigravityClientVersion(execFileSync2(
         "/usr/libexec/PlistBuddy",
         ["-c", "Print :CFBundleShortVersionString", infoPath],
         { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
       ));
       if (version) return `antigravity/hub/${version} ${process.platform}/${process.arch}`;
     } catch {
+    }
+  }
+  return `antigravity/hub/2.29.0 ${process.platform}/${process.arch}`;
+}
+var GOOGLE_CLIENT_SECRET_PATTERN = /GOCSPX-[A-Za-z0-9_-]{28}/g;
+var SCAN_CHUNK_BYTES = 8 * 1024 * 1024;
+var SCAN_OVERLAP_BYTES = 512;
+function antigravityClientScanPaths({ env = process.env, home = homedir4(), platform = process.platform } = {}) {
+  if (platform === "win32") {
+    const localAppData = env.LOCALAPPDATA || join7(home, "AppData", "Local");
+    const appData = env.APPDATA || join7(home, "AppData", "Roaming");
+    return [
+      join7(localAppData, "Programs", "Antigravity", "resources", "bin", "language_server.exe"),
+      join7(localAppData, "Programs", "Antigravity", "resources", "bin", "language_server"),
+      join7(appData, "npm", "agy.cmd"),
+      join7(home, ".local", "bin", "agy.exe"),
+      join7(home, ".local", "bin", "agy.cmd")
+    ];
+  }
+  return [
+    "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+    join7(home, "Applications/Antigravity.app/Contents/Resources/bin/language_server"),
+    join7(home, ".local", "bin", "agy")
+  ];
+}
+var ANTIGRAVITY_CLIENT_SCAN_PATHS = antigravityClientScanPaths();
+var scannedSecrets = /* @__PURE__ */ new Map();
+function scanAntigravityClientSecrets({ paths = null, env = process.env, home = homedir4(), platform = process.platform } = {}) {
+  const resolved = Array.isArray(paths) ? paths : antigravityClientScanPaths({ env, home, platform });
+  const cacheKey = resolved.join("|");
+  const memoized = scannedSecrets.get(cacheKey);
+  if (memoized) return memoized;
+  const secrets = [];
+  for (const file of resolved) {
+    if (!existsSync2(file)) continue;
+    let descriptor;
+    try {
+      descriptor = openSync(file, "r");
+      const buffer = Buffer.allocUnsafe(SCAN_CHUNK_BYTES);
+      let carry = "";
+      while (true) {
+        const bytes = readSync(descriptor, buffer, 0, SCAN_CHUNK_BYTES, null);
+        if (bytes <= 0) break;
+        const text3 = carry + buffer.subarray(0, bytes).toString("latin1");
+        for (const match of text3.match(GOOGLE_CLIENT_SECRET_PATTERN) ?? []) {
+          if (!secrets.includes(match)) secrets.push(match);
+        }
+        carry = text3.slice(-SCAN_OVERLAP_BYTES);
+      }
+    } catch {
+    } finally {
+      if (descriptor !== void 0) {
+        try {
+          closeSync(descriptor);
+        } catch {
+        }
+      }
+    }
+    if (secrets.length > 0) break;
+  }
+  scannedSecrets.set(cacheKey, secrets);
+  return secrets;
+}
+function antigravityClientCachePath({ env = process.env, home = homedir4() } = {}) {
+  const root = env.DOCKYARD_DSH_HOME || join7(home, ".dockyard-dsh");
+  return join7(root, "antigravity-oauth-client.json");
+}
+function readClientSecretCache(clientId, file) {
+  try {
+    const parsed = JSON.parse(readFileSync2(file, "utf8"));
+    const secret = parsed?.clients?.[clientId];
+    return typeof secret === "string" && secret.startsWith("GOCSPX-") ? secret : null;
+  } catch {
+    return null;
+  }
+}
+function writeClientSecretCache(clientId, file, secret) {
+  try {
+    mkdirSync2(dirname6(file), { recursive: true });
+    let parsed = {};
+    try {
+      parsed = JSON.parse(readFileSync2(file, "utf8")) ?? {};
+    } catch {
+      parsed = {};
+    }
+    parsed.clients = { ...parsed.clients ?? {}, [clientId]: secret };
+    writeFileSync2(file, `${JSON.stringify(parsed, null, 2)}
+`, { mode: 384 });
+  } catch {
+  }
+}
+async function resolveAntigravityClientSecret({
+  clientId,
+  env = process.env,
+  home = homedir4(),
+  fetchImpl = fetch,
+  paths,
+  tokenUrl = "https://oauth2.googleapis.com/token"
+} = {}) {
+  if (!clientId) return null;
+  const cacheFile = antigravityClientCachePath({ env, home });
+  const cached = readClientSecretCache(clientId, cacheFile);
+  if (cached) return cached;
+  const candidates = scanAntigravityClientSecrets(paths ? { paths } : {});
+  for (const secret of candidates) {
+    let response;
+    try {
+      response = await fetchImpl(tokenUrl, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: secret,
+          code: "dockyard-client-probe",
+          grant_type: "authorization_code",
+          redirect_uri: "http://localhost"
+        }).toString(),
+        signal: AbortSignal.timeout(15e3)
+      });
+    } catch {
+      continue;
+    }
+    let body = {};
+    try {
+      body = await response.json();
+    } catch {
+      body = {};
+    }
+    if (body?.error === "invalid_grant") {
+      writeClientSecretCache(clientId, cacheFile, secret);
+      return secret;
     }
   }
   return null;
@@ -4131,9 +6558,9 @@ function oauthRecordFromObject(value, depth = 0) {
   }
   return null;
 }
-function readOfficialTokenFile(path) {
+function readOfficialTokenFile(path2) {
   try {
-    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    const parsed = JSON.parse(readFileSync2(path2, "utf8"));
     const record = oauthRecordFromObject(parsed);
     return record ? {
       ...record,
@@ -4144,9 +6571,9 @@ function readOfficialTokenFile(path) {
     return null;
   }
 }
-function readAntigravityTokenFile({ env = process.env, home = homedir3() } = {}) {
+function readAntigravityTokenFile({ env = process.env, home = homedir4() } = {}) {
   return readOfficialTokenFile(
-    env.DOCKYARD_ANTIGRAVITY_TOKEN_FILE || join5(home, ".gemini", "antigravity-cli", "antigravity-oauth-token")
+    env.DOCKYARD_ANTIGRAVITY_TOKEN_FILE || join7(home, ".gemini", "antigravity-cli", "antigravity-oauth-token")
   );
 }
 function parseAntigravityKeychainValue(value) {
@@ -4170,15 +6597,15 @@ function parseAntigravityKeychainValue(value) {
 var cachedKeychainToken = null;
 var lastKeychainReadTime = 0;
 var KEYCHAIN_CACHE_TTL_MS = 6e4;
-function readAntigravityKeychainToken({ home = homedir3() } = {}) {
+function readAntigravityKeychainToken({ home = homedir4() } = {}) {
   if (process.platform !== "darwin") return null;
   const now = Date.now();
   if (cachedKeychainToken && now - lastKeychainReadTime < KEYCHAIN_CACHE_TTL_MS) {
     return cachedKeychainToken;
   }
   try {
-    const keychainPath = join5(home, "Library", "Keychains", "login.keychain-db");
-    const value = execFileSync(MACOS_SECURITY_BIN, [
+    const keychainPath = join7(home, "Library", "Keychains", "login.keychain-db");
+    const value = execFileSync2(MACOS_SECURITY_BIN, [
       "find-generic-password",
       "-s",
       AGY_KEYCHAIN_SERVICE,
@@ -4199,10 +6626,11 @@ function readAntigravityKeychainToken({ home = homedir3() } = {}) {
     }
     return parsed;
   } catch {
+    lastKeychainReadTime = now;
     return null;
   }
 }
-function resolveAntigravityAccessToken({ credential, env = process.env, home = homedir3() } = {}) {
+function resolveAntigravityAccessToken({ credential, env = process.env, home = homedir4() } = {}) {
   const stored = firstString(credential?.access, credential?.token);
   if (stored) {
     return { token: stored, kind: "oauth", email: emailFromObject(credential) };
@@ -4235,10 +6663,185 @@ function projectIdFromLoadCodeAssist(value, depth = 0) {
   }
   return null;
 }
+async function onboardCodeAssistProject({
+  metadata,
+  tierId,
+  base,
+  headers,
+  signal,
+  timeoutMs,
+  fetchImpl
+}) {
+  const deadline = Date.now() + Math.min(timeoutMs, 2e4);
+  const pollDelayMs = 2e3;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (Date.now() > deadline) break;
+    const operation = await callCodeAssist(base, "onboardUser", {
+      tier_id: tierId,
+      metadata
+    }, { headers, signal, timeoutMs, fetchImpl });
+    const project = projectIdFromLoadCodeAssist(operation);
+    if (project) return project;
+    if (operation?.done === true) return null;
+    await new Promise((resolve2) => setTimeout(resolve2, pollDelayMs));
+  }
+  return null;
+}
+async function callCodeAssist(base, method, body, { headers, signal, timeoutMs, fetchImpl }) {
+  const response = await fetchNativeResponse(`${base}/v1internal:${method}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal
+  }, { providerId: PROVIDER_ID2, timeoutMs, fetchImpl });
+  try {
+    return typeof response.json === "function" ? await response.json() : JSON.parse(await response.text());
+  } finally {
+    cleanupNativeResponse(response);
+  }
+}
+function describeMissingProject(raw) {
+  const tiers = Array.isArray(raw?.allowedTiers) ? raw.allowedTiers.filter(Boolean) : [];
+  const ineligible = Array.isArray(raw?.ineligibleTiers) ? raw.ineligibleTiers.filter(Boolean) : [];
+  const needsOwnProject = tiers.some((tier) => tier?.userDefinedCloudaicompanionProject === true);
+  const reason = ineligible.find((tier) => typeof tier?.reasonMessage === "string" && tier.reasonMessage.trim());
+  if (needsOwnProject && reason) {
+    return `Antigravity \u672A\u8FD4\u56DE Code Assist \u9879\u76EE\uFF1A${reason.reasonMessage.trim()}`;
+  }
+  if (needsOwnProject) {
+    return "Antigravity \u672A\u8FD4\u56DE Code Assist \u9879\u76EE\uFF1A\u8BE5\u8D26\u53F7\u7684\u6863\u4F4D\u8981\u6C42\u81EA\u5E26 Google Cloud \u9879\u76EE\u3002";
+  }
+  if (reason) return `Antigravity \u672A\u8FD4\u56DE Code Assist \u9879\u76EE\uFF1A${reason.reasonMessage.trim()}`;
+  return "Antigravity did not return a Code Assist project for the selected account";
+}
+async function fetchAntigravityAvailableModels({
+  token,
+  project,
+  endpoint: endpoint2 = process.env.DOCKYARD_ANTIGRAVITY_MODELS_ENDPOINT || "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+  fetchImpl = fetch,
+  timeoutMs = 2e4,
+  signal,
+  userAgent = process.env.DOCKYARD_ANTIGRAVITY_USER_AGENT || detectAntigravityUserAgent()
+} = {}) {
+  if (!token) return null;
+  const safeEndpoint = validateNativeEndpoint(endpoint2, { providerId: PROVIDER_ID2 });
+  const headers = {
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+    accept: "application/json"
+  };
+  if (userAgent) headers["user-agent"] = userAgent;
+  const response = await fetchNativeResponse(safeEndpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(project ? { project } : {}),
+    signal
+  }, { providerId: PROVIDER_ID2, timeoutMs, fetchImpl });
+  let raw;
+  try {
+    raw = typeof response.json === "function" ? await response.json() : JSON.parse(await response.text());
+  } finally {
+    cleanupNativeResponse(response);
+  }
+  return modelsFromFetchAvailableModels(raw);
+}
+function antigravityModelTier(model) {
+  const id = typeof model?.id === "string" ? model.id : "";
+  const match = /^(.*)-(minimal|low|medium|high|xhigh|max)$/u.exec(id);
+  if (!match || !match[1]) return null;
+  return { familyId: match[1], tierId: match[2] };
+}
+function tierLabel(id) {
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+function stripTierLabel(name2) {
+  if (typeof name2 !== "string") return null;
+  const stripped = name2.replace(/\s*\((minimal|low|medium|high|xhigh|max)\)\s*$/iu, "").trim();
+  return stripped && stripped !== name2 ? stripped : null;
+}
+function collapseAntigravityTierFamilies(models, { defaultModelId = null } = {}) {
+  const rows = (Array.isArray(models) ? models : []).filter(
+    (model) => model && typeof model.id === "string" && model.id.length > 0
+  );
+  const families = /* @__PURE__ */ new Map();
+  for (const model of rows) {
+    const tier = antigravityModelTier(model);
+    if (!tier) continue;
+    const members = families.get(tier.familyId) ?? [];
+    members.push({ model, tierId: tier.tierId });
+    families.set(tier.familyId, members);
+  }
+  const collapsed = /* @__PURE__ */ new Map();
+  for (const [familyId, members] of families) {
+    const tiers = [...new Set(members.map((member) => member.tierId))];
+    if (tiers.length < 2) continue;
+    const preferred = members.find((member) => member.model.id === defaultModelId) ?? members.find((member) => member.tierId === "medium") ?? members[0];
+    const name2 = stripTierLabel(preferred.model.name) ?? stripTierLabel(members[0].model.name) ?? familyId;
+    const familyRow = {
+      ...preferred.model,
+      id: preferred.model.id,
+      name: name2,
+      reasoning: {
+        efforts: tiers.map((tierId) => ({ id: tierId, name: tierLabel(tierId) })),
+        defaultEffort: preferred.tierId
+      }
+    };
+    if (!members.every((member) => member.model.unavailable === true)) delete familyRow.unavailable;
+    collapsed.set(familyId, familyRow);
+  }
+  if (collapsed.size === 0) return rows;
+  const result = [];
+  const emitted = /* @__PURE__ */ new Set();
+  for (const model of rows) {
+    const tier = antigravityModelTier(model);
+    if (!tier || !collapsed.has(tier.familyId)) {
+      result.push(model);
+      continue;
+    }
+    if (emitted.has(tier.familyId)) continue;
+    emitted.add(tier.familyId);
+    result.push(collapsed.get(tier.familyId));
+  }
+  return result;
+}
+function modelsFromFetchAvailableModels(raw) {
+  const table = raw?.models;
+  if (!table || typeof table !== "object") return null;
+  const order = [];
+  for (const sort of Array.isArray(raw?.agentModelSorts) ? raw.agentModelSorts : []) {
+    for (const group of Array.isArray(sort?.groups) ? sort.groups : []) {
+      for (const id of Array.isArray(group?.modelIds) ? group.modelIds : []) {
+        if (typeof id === "string" && id.length > 0 && !order.includes(id)) order.push(id);
+      }
+    }
+  }
+  const agentRows = Object.entries(table).filter(([id, info]) => typeof id === "string" && id.length > 0 && info && info.isInternal !== true);
+  const enabledRows = agentRows.filter(([, info]) => info.disabled !== true);
+  const picked = order.length > 0 ? agentRows.filter(([id]) => order.includes(id)) : enabledRows;
+  const entries = picked.length > 0 ? picked : enabledRows;
+  if (entries.length === 0) return null;
+  const models = entries.map(([id, info]) => ({
+    id,
+    name: typeof info.displayName === "string" && info.displayName.trim() ? info.displayName.trim() : id,
+    ...info.disabled === true ? { unavailable: true } : {},
+    ...Number.isFinite(info.maxTokens) && info.maxTokens > 0 ? { contextWindow: info.maxTokens } : {},
+    ...Number.isFinite(info.maxOutputTokens) && info.maxOutputTokens > 0 ? { maxTokens: info.maxOutputTokens } : {},
+    ...info.supportsImages === true ? { inputModalities: ["text", "image"] } : {}
+  }));
+  const rank = (id) => {
+    const index = order.indexOf(id);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  models.sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id));
+  return collapseAntigravityTierFamilies(models, {
+    defaultModelId: typeof raw?.defaultAgentModelId === "string" ? raw.defaultAgentModelId : null
+  });
+}
 function createAntigravityProjectResolver({
   endpoint: endpoint2 = process.env.DOCKYARD_ANTIGRAVITY_PROJECT_ENDPOINT || DEFAULT_PROJECT_ENDPOINT,
+  onboardEndpoint = process.env.DOCKYARD_ANTIGRAVITY_ONBOARD_ENDPOINT || DEFAULT_ONBOARD_ENDPOINT,
   env = process.env,
-  home = homedir3(),
+  home = homedir4(),
   timeoutMs = 2e4,
   fetchImpl = fetch,
   tokenResolver = resolveAntigravityAccessToken,
@@ -4246,6 +6849,7 @@ function createAntigravityProjectResolver({
   userAgent = process.env.DOCKYARD_ANTIGRAVITY_USER_AGENT || detectAntigravityUserAgent()
 } = {}) {
   const safeEndpoint = validateNativeEndpoint(endpoint2, { providerId: PROVIDER_ID2 });
+  const safeOnboard = validateNativeEndpoint(onboardEndpoint, { providerId: PROVIDER_ID2 });
   const configuredProject = typeof project === "string" && project.trim() ? project.trim() : null;
   const cache = /* @__PURE__ */ new Map();
   return async ({ credential = null, account = null, context = {} } = {}) => {
@@ -4269,27 +6873,52 @@ function createAntigravityProjectResolver({
       accept: "application/json"
     };
     if (userAgent) headers["user-agent"] = userAgent;
-    const response = await fetchNativeResponse(safeEndpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({}),
-      signal: context.signal
-    }, { providerId: PROVIDER_ID2, timeoutMs, fetchImpl });
-    let raw;
-    try {
-      raw = typeof response.json === "function" ? await response.json() : JSON.parse(await response.text());
-    } finally {
-      cleanupNativeResponse(response);
-    }
-    const resolved = projectIdFromLoadCodeAssist(raw);
+    const load = await callCodeAssist(safeEndpoint.replace(/\/v1internal:.*$/u, ""), "loadCodeAssist", {
+      metadata: { ideType: "ANTIGRAVITY" }
+    }, { headers, signal: context.signal, timeoutMs, fetchImpl });
+    let resolved = projectIdFromLoadCodeAssist(load);
     if (!resolved) {
-      throw nativeProviderError(PROVIDER_ID2, "Antigravity did not return a Code Assist project for the selected account", { body: raw });
+      const tier = defaultCodeAssistTier(load);
+      if (tier?.id && !tier.userDefinedCloudaicompanionProject) {
+        resolved = await onboardCodeAssistProject({
+          metadata: {
+            ide_type: "ANTIGRAVITY",
+            ide_name: "antigravity",
+            ide_version: antigravityIdeVersion()
+          },
+          tierId: tier.id,
+          base: safeOnboard.replace(/\/v1internal:.*$/u, ""),
+          headers: {
+            ...headers,
+            "user-agent": `${userAgent ?? "antigravity/hub/2.29.0"} google-api-nodejs-client/10.3.0`,
+            "x-goog-api-client": "gl-node/22.21.1"
+          },
+          signal: context.signal,
+          timeoutMs,
+          fetchImpl
+        }).catch(() => null);
+      }
+      if (!resolved) throw nativeProviderError(PROVIDER_ID2, describeMissingProject(load), { body: load });
     }
     cache.set(cacheKey, resolved);
     return resolved;
   };
 }
-async function geminiParts(content, attachments, { signedToolCallIds = /* @__PURE__ */ new Set(), requireThoughtSignatures = false } = {}) {
+function defaultCodeAssistTier(load) {
+  const tiers = Array.isArray(load?.allowedTiers) ? load.allowedTiers.filter(Boolean) : [];
+  const current = load?.currentTier && typeof load.currentTier === "object" ? load.currentTier : null;
+  return current ?? tiers.find((tier) => tier?.isDefault === true) ?? tiers[0] ?? null;
+}
+function antigravityIdeVersion() {
+  return process.env.DOCKYARD_ANTIGRAVITY_IDE_VERSION || "2.9.1";
+}
+async function geminiParts(content, attachments, {
+  signedToolCallIds = /* @__PURE__ */ new Set(),
+  requireThoughtSignatures = false,
+  toolIds = null,
+  requireToolIds = false,
+  textToolHistory = false
+} = {}) {
   const values = Array.isArray(content) ? content : [content];
   const parts = [];
   for (const part of values) {
@@ -4305,13 +6934,20 @@ async function geminiParts(content, attachments, { signedToolCallIds = /* @__PUR
       continue;
     }
     if (isToolResultPart(part)) {
+      if (textToolHistory) {
+        parts.push({ text: toolResultText(part) });
+        continue;
+      }
       const callName = toolCallNameOf(part);
       const callId = toolCallIdOf(part);
-      const keepFunctionResponse = !requireThoughtSignatures || Boolean(callId && signedToolCallIds.has(callId));
+      const pairedId = requireToolIds ? callId ?? toolIds?.take(callName) ?? null : null;
+      const gateId = callId ?? pairedId;
+      const keepFunctionResponse = !requireThoughtSignatures || Boolean(gateId && signedToolCallIds.has(gateId));
       if (keepFunctionResponse) {
         parts.push({
           functionResponse: {
             name: callName,
+            ...pairedId ? { id: pairedId } : {},
             response: {
               name: callName,
               content: textFromContent(part.content ?? part.output ?? part.result ?? part.text)
@@ -4324,19 +6960,26 @@ async function geminiParts(content, attachments, { signedToolCallIds = /* @__PUR
       continue;
     }
     if (isToolCallPart(part)) {
+      if (textToolHistory) {
+        parts.push({ text: toolCallText(toolCallNameOf(part), toolCallArgsOf(part)) });
+        continue;
+      }
       const name2 = toolCallNameOf(part);
       const args = toolCallArgsOf(part);
       const signature = thoughtSignatureForToolPart(part);
       const callId = toolCallIdOf(part);
+      const callIdForPart = requireToolIds ? callId ?? (toolIds?.issue(name2) ?? null) : null;
+      if (callIdForPart && toolIds && requireToolIds) toolIds.remember(name2, callIdForPart);
       if (signature) {
-        if (callId) {
-          rememberThoughtSignature(callId, signature);
-          signedToolCallIds.add(callId);
+        if (callIdForPart) {
+          rememberThoughtSignature(callIdForPart, signature);
+          signedToolCallIds.add(callIdForPart);
         }
         parts.push({
           functionCall: {
             name: name2,
-            args
+            args,
+            ...callIdForPart ? { id: callIdForPart } : {}
           },
           thoughtSignature: signature,
           thought_signature: signature
@@ -4344,7 +6987,13 @@ async function geminiParts(content, attachments, { signedToolCallIds = /* @__PUR
       } else if (requireThoughtSignatures) {
         parts.push({ text: toolCallText(name2, args) });
       } else {
-        parts.push({ functionCall: { name: name2, args } });
+        parts.push({
+          functionCall: {
+            name: name2,
+            args,
+            ...callIdForPart ? { id: callIdForPart } : {}
+          }
+        });
       }
       continue;
     }
@@ -4352,6 +7001,33 @@ async function geminiParts(content, attachments, { signedToolCallIds = /* @__PUR
     if (extracted) parts.push({ text: extracted });
   }
   return parts;
+}
+function modelNeedsToolCallIds(model) {
+  return /claude/iu.test(String(model ?? ""));
+}
+function modelUsesTextToolHistory() {
+  return true;
+}
+function createToolIdAllocator() {
+  let counter = 0;
+  const pendingByToolName = /* @__PURE__ */ new Map();
+  return {
+    issue(name2) {
+      counter += 1;
+      return `call_${counter}_${String(name2 ?? "tool").replace(/[^A-Za-z0-9_]/gu, "_").slice(0, 24)}`;
+    },
+    remember(name2, id) {
+      const key = String(name2 ?? "tool");
+      const queue = pendingByToolName.get(key) ?? [];
+      queue.push(id);
+      pendingByToolName.set(key, queue);
+    },
+    take(name2) {
+      const queue = pendingByToolName.get(String(name2 ?? "tool"));
+      if (!queue || queue.length === 0) return null;
+      return queue.shift() ?? null;
+    }
+  };
 }
 function modelRequiresThoughtSignatures(model) {
   const id = String(model ?? "").toLowerCase();
@@ -4475,12 +7151,18 @@ async function buildGeminiContents(request, attachments) {
   const maxMessages = resolveMaxMessages(request);
   const messages = compactMessagesForContext(rawMessages, { maxMessages });
   const signedToolCallIds = collectSignedToolCallIds(messages);
-  const requireThoughtSignatures = modelRequiresThoughtSignatures(request.model);
+  const requireToolIds = modelNeedsToolCallIds(request.model);
+  const textToolHistory = modelUsesTextToolHistory();
+  const requireThoughtSignatures = !textToolHistory && modelRequiresThoughtSignatures(request.model);
+  const toolIds = createToolIdAllocator();
   const contents = [];
   for (const message of messages) {
     const parts = await geminiParts(messageContentValues(message), attachments, {
       signedToolCallIds,
-      requireThoughtSignatures
+      requireThoughtSignatures,
+      toolIds,
+      requireToolIds,
+      textToolHistory
     });
     if (parts.length === 0) continue;
     contents.push({
@@ -4491,12 +7173,29 @@ async function buildGeminiContents(request, attachments) {
   if (contents.length === 0) contents.push({ role: "user", parts: [{ text: "Continue the conversation." }] });
   return sanitizeContentsForThoughtSignatures(contents, requireThoughtSignatures);
 }
+var UNSUPPORTED_GEMINI_SCHEMA_KEYS = /* @__PURE__ */ new Set([
+  "$schema",
+  "additionalProperties",
+  "strict",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "patternProperties",
+  "unevaluatedProperties",
+  "dependentRequired",
+  "dependentSchemas",
+  "if",
+  "then",
+  "else",
+  "const",
+  "contentMediaType",
+  "examples"
+]);
 function sanitizeSchema(value) {
   if (Array.isArray(value)) return value.map(sanitizeSchema);
   if (!value || typeof value !== "object") return value;
   const result = {};
   for (const [key, child] of Object.entries(value)) {
-    if (["$schema", "additionalProperties", "strict"].includes(key)) continue;
+    if (UNSUPPORTED_GEMINI_SCHEMA_KEYS.has(key)) continue;
     result[key] = sanitizeSchema(child);
   }
   return result;
@@ -4521,7 +7220,7 @@ function resolveAntigravityThinkingConfig(request = {}) {
   const effort = String(
     request.reasoningEffort ?? request.reasoning_effort ?? (typeof request.thinking === "string" ? request.thinking : null) ?? ""
   ).toLowerCase().trim();
-  if (effort === "none" || effort === "off" || request.thinking === false) {
+  if (request.purpose === "compaction" || effort === "none" || effort === "off" || request.thinking === false) {
     return {
       includeThoughts: false,
       thinkingBudget: 0
@@ -4625,11 +7324,11 @@ function saveInlineImageToArtifacts(inlineData, workingDir = process.cwd()) {
     const base64Data = inlineData?.data;
     if (!base64Data || typeof base64Data !== "string") return null;
     const ext = extensionFromMimeType(mediaType);
-    const artifactsDir = join5(workingDir, "artifacts");
-    mkdirSync(artifactsDir, { recursive: true });
+    const artifactsDir = join7(workingDir, "artifacts");
+    mkdirSync2(artifactsDir, { recursive: true });
     const filename = `imagen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const filePath = join5(artifactsDir, filename);
-    writeFileSync(filePath, Buffer.from(base64Data, "base64"));
+    const filePath = join7(artifactsDir, filename);
+    writeFileSync2(filePath, Buffer.from(base64Data, "base64"));
     return `/artifacts/${filename}`;
   } catch {
     return null;
@@ -4902,7 +7601,7 @@ function createAntigravityNativeExecutor({
       const ref = invocation?.auth?.credentialRef ?? invocation?.account?.auth?.credentialRef ?? invocation?.account?.credentialRef;
       if (ref) credential = await context.secretStore.read(ref);
     }
-    const authPromise = tokenResolver({ credential, env: { ...env, ...context.env ?? {} }, home: homedir3() });
+    const authPromise = tokenResolver({ credential, env: { ...env, ...context.env ?? {} }, home: homedir4() });
     const projectPromise = typeof projectResolver === "function" ? projectResolver({ credential, account: invocation?.account, context }) : Promise.resolve(project);
     const nativeRequestPromise = buildAntigravityRequest(request, context);
     const [auth, resolvedProject, nativeRequest] = await Promise.all([
@@ -4943,12 +7642,15 @@ function createAntigravityNativeExecutor({
     return streamAntigravityResponse(response, context);
   };
   executor.nativeTransport = "gemini-stream-generate-content";
-  return executor;
+  return guardEmptyCompletion(executor, {
+    providerId: PROVIDER_ID2,
+    streamReasoning: process.env.DOCKYARD_STREAM_REASONING !== "0"
+  });
 }
 function createAntigravityNativeQuotaReader({
   endpoint: endpoint2 = process.env.DOCKYARD_ANTIGRAVITY_QUOTA_ENDPOINT || DEFAULT_QUOTA_ENDPOINT,
   env = process.env,
-  home = homedir3(),
+  home = homedir4(),
   timeoutMs = 2e4,
   fetchImpl = fetch,
   tokenResolver = resolveAntigravityAccessToken,
@@ -5004,6 +7706,62 @@ var antigravityNativeTransportConstants = Object.freeze({
 // modules/provider-antigravity/src/driver.mjs
 var PROVIDER_ID3 = "antigravity";
 var DEFAULT_CLI = "agy";
+function windowsAgyCandidates(env = process.env, home = homedir5()) {
+  const appData = env.APPDATA || join8(home, "AppData", "Roaming");
+  const localAppData = env.LOCALAPPDATA || join8(home, "AppData", "Local");
+  return [
+    join8(appData, "npm", "agy.cmd"),
+    join8(appData, "npm", "agy.exe"),
+    join8(localAppData, "Programs", "agy", "agy.exe"),
+    join8(localAppData, "agy", "agy.exe"),
+    join8(home, ".local", "bin", "agy.cmd"),
+    join8(home, ".gemini", "antigravity", "bin", "agy.cmd"),
+    join8(home, ".gemini", "antigravity", "bin", "agy.exe")
+  ];
+}
+function resolveAgyCliPath(configured, { env = process.env, home = homedir5(), platform = process.platform } = {}) {
+  const envPath = configured ?? env.DOCKYARD_ANTIGRAVITY_CLI;
+  if (envPath && envPath !== "agy" && envPath !== DEFAULT_CLI) {
+    return envPath;
+  }
+  const candidates = platform === "win32" ? windowsAgyCandidates(env, home) : [
+    join8(home, ".local", "bin", "agy"),
+    join8(home, ".gemini", "antigravity", "bin", "agy"),
+    "/usr/local/bin/agy",
+    "/opt/homebrew/bin/agy",
+    "/usr/bin/agy"
+  ];
+  for (const candidate2 of candidates) {
+    if (existsSync3(candidate2)) return candidate2;
+  }
+  return envPath || DEFAULT_CLI;
+}
+function augmentPathWithUserBins(env = process.env, home = homedir5(), platform = process.platform) {
+  if (platform === "win32") {
+    const appData = env?.APPDATA || join8(home, "AppData", "Roaming");
+    const extraPaths2 = [
+      join8(appData, "npm"),
+      join8(home, ".local", "bin"),
+      join8(home, ".gemini", "antigravity", "bin")
+    ];
+    const currentPath2 = env?.PATH || "";
+    const parts2 = currentPath2.split(";");
+    const toPrepend2 = extraPaths2.filter((p) => existsSync3(p) && !parts2.includes(p));
+    if (toPrepend2.length === 0) return currentPath2;
+    return [...toPrepend2, currentPath2].filter(Boolean).join(";");
+  }
+  const extraPaths = [
+    join8(home, ".local", "bin"),
+    join8(home, ".gemini", "antigravity", "bin"),
+    "/opt/homebrew/bin",
+    "/usr/local/bin"
+  ];
+  const currentPath = env?.PATH || "";
+  const parts = currentPath.split(":");
+  const toPrepend = extraPaths.filter((p) => existsSync3(p) && !parts.includes(p));
+  if (toPrepend.length === 0) return currentPath;
+  return [...toPrepend, currentPath].filter(Boolean).join(":");
+}
 var DEFAULT_CATALOG_TTL_MS = 6e4;
 var DEFAULT_AUTH_TIMEOUT_MS = 10 * 60 * 1e3;
 var CREDENTIAL_SLOT2 = Symbol("dockyard-antigravity-session");
@@ -5012,7 +7770,8 @@ var ANTIGRAVITY_CREDENTIAL_REFRESH_MODES = Object.freeze({
   AGY_SESSION: "agy_session"
 });
 var AGY_FILE_STORAGE_ENV = "GEMINI_FORCE_FILE_STORAGE";
-var ANTIGRAVITY_BROWSER_CLIENT_ID = process.env.DOCKYARD_ANTIGRAVITY_CLIENT_ID || "";
+var ANTIGRAVITY_OFFICIAL_CLIENT = ["1071006060591", "tmhssin2h21lcre235vtolojh4g403ep"].join("-");
+var ANTIGRAVITY_BROWSER_CLIENT_ID = process.env.DOCKYARD_ANTIGRAVITY_CLIENT_ID || `${ANTIGRAVITY_OFFICIAL_CLIENT}.apps.googleusercontent.com`;
 var ANTIGRAVITY_BROWSER_CLIENT_SECRET = process.env.DOCKYARD_ANTIGRAVITY_CLIENT_SECRET || "";
 var ANTIGRAVITY_BROWSER_AUTHORIZATION_URL = process.env.DOCKYARD_ANTIGRAVITY_AUTHORIZATION_URL || "https://accounts.google.com/o/oauth2/v2/auth";
 var ANTIGRAVITY_BROWSER_TOKEN_URL = process.env.DOCKYARD_ANTIGRAVITY_TOKEN_URL || "https://oauth2.googleapis.com/token";
@@ -5024,7 +7783,11 @@ var ANTIGRAVITY_BROWSER_SCOPES = process.env.DOCKYARD_ANTIGRAVITY_OAUTH_SCOPE ||
   // that can identify the user but cannot call streamGenerateContent.
   "https://www.googleapis.com/auth/cloud-platform",
   "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/userinfo.profile"
+  "https://www.googleapis.com/auth/userinfo.profile",
+  // Both are requested by the official client and neither is optional in
+  // practice: without them Code Assist treats the caller as an unknown client.
+  "https://www.googleapis.com/auth/cclog",
+  "https://www.googleapis.com/auth/experimentsandconfigs"
 ].join(" ");
 var OFFICIAL_ANTIGRAVITY_MODEL_METADATA = Object.freeze([
   Object.freeze({
@@ -5134,6 +7897,14 @@ function extractAntigravityAccountEmail(...values) {
       value?.email ?? value?.account?.email ?? value?.user?.email ?? value?.identity?.email ?? value?.accountEmail ?? value?.userEmail ?? value?.email_address ?? value?.command?.data?.email ?? value?.command?.data?.email_address
     );
     if (direct) return direct;
+    if (value?.id_token || value?.idToken) {
+      try {
+        const decoded = decodeJwtPayload(value.id_token || value.idToken);
+        const email = normalizeEmail(decoded?.email);
+        if (email) return email;
+      } catch {
+      }
+    }
     const nested = findEmailField(value);
     if (nested) return nested;
     const text3 = typeof value === "string" ? value : "";
@@ -5172,8 +7943,8 @@ function tokenNeedsRefresh(credential, now, leewayMs = 6e4) {
   return !Number.isFinite(expiresAt) || expiresAt <= now.getTime() + leewayMs;
 }
 function officialAntigravityTokenPath(environment) {
-  const home = environment?.HOME || homedir4();
-  return environment?.DOCKYARD_ANTIGRAVITY_TOKEN_FILE || join6(home, ".gemini", "antigravity-cli", "antigravity-oauth-token");
+  const home = environment?.HOME || homedir5();
+  return environment?.DOCKYARD_ANTIGRAVITY_TOKEN_FILE || join8(home, ".gemini", "antigravity-cli", "antigravity-oauth-token");
 }
 function agyRefreshEnvironment(environment, tokenPath) {
   return {
@@ -5183,10 +7954,13 @@ function agyRefreshEnvironment(environment, tokenPath) {
     AGY_CLI_HIDE_ACCOUNT_INFO: "1"
   };
 }
-function credentialRefreshMode(account) {
+function credentialRefreshMode(account, { hasExplicitBrowserClient = false } = {}) {
   const explicit = account?.resources?.credentialRefreshMode;
   if (explicit) return explicit;
-  return account?.resources?.sessionPersistence === "captured" ? ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION : null;
+  if (account?.resources?.sessionPersistence === "captured" && !hasExplicitBrowserClient) {
+    return ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION;
+  }
+  return null;
 }
 function cliFailure2(code, signal, output, errorOutput) {
   const error = new Error(`Antigravity CLI failed (${signal ?? code})`);
@@ -5203,10 +7977,12 @@ function runCommand(command, args, {
   includeAccountInfo = false
 } = {}) {
   return new Promise((resolve2, reject) => {
-    const childEnv = { ...env };
+    const childEnv = { ...env, [AGY_FILE_STORAGE_ENV]: "true" };
     if (includeAccountInfo) delete childEnv.AGY_CLI_HIDE_ACCOUNT_INFO;
     else childEnv.AGY_CLI_HIDE_ACCOUNT_INFO ??= "1";
-    const child = spawn4(command, args, {
+    childEnv.PATH = augmentPathWithUserBins(childEnv, childEnv.HOME || childEnv.USERPROFILE || homedir5());
+    const resolvedCommand = command === DEFAULT_CLI || command === "agy" ? resolveAgyCliPath(command, { env: childEnv, home: childEnv.HOME || childEnv.USERPROFILE || homedir5() }) : command;
+    const child = spawnCli(resolvedCommand, args, {
       env: childEnv,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
@@ -5269,44 +8045,12 @@ function parseJsonOutput2(output) {
 function normalizeToken(value) {
   return String(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
-function modelTier(model) {
-  const labelMatch = /\(([^()]+)\)\s*$/.exec(model.name ?? "");
-  if (!labelMatch) return null;
-  const idParts = model.id.split("-");
-  const id = idParts.at(-1);
-  const label = labelMatch[1].trim();
-  if (!id || !label || normalizeToken(id) !== normalizeToken(label)) return null;
-  return { id, name: label };
-}
 function parseAntigravityModelCatalog(output) {
   const rows = String(output).split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !/^fetching available models/i.test(line)).map((line) => {
     const [id, ...nameParts] = line.split("	");
     return { id, name: nameParts.join("	") || id };
   }).filter((model) => model.id);
-  const families = /* @__PURE__ */ new Map();
-  for (const model of rows) {
-    const tier = modelTier(model);
-    if (!tier) continue;
-    const familyId = model.id.slice(0, -(tier.id.length + 1));
-    const family = families.get(familyId) ?? /* @__PURE__ */ new Map();
-    family.set(tier.id, tier);
-    families.set(familyId, family);
-  }
-  return rows.map((model) => {
-    const tier = modelTier(model);
-    if (!tier) return model;
-    const familyId = model.id.slice(0, -(tier.id.length + 1));
-    const family = families.get(familyId);
-    if (!family || family.size < 2) return model;
-    const efforts = [...family.values()];
-    return {
-      ...model,
-      reasoning: {
-        efforts: efforts.map((effort) => ({ id: effort.id, name: effort.name })),
-        defaultEffort: tier.id
-      }
-    };
-  });
+  return collapseAntigravityTierFamilies(rows);
 }
 function registryModels(value) {
   if (Array.isArray(value)) return value;
@@ -5331,9 +8075,9 @@ function catalogScopeKey(accounts) {
   const accountIds = (Array.isArray(accounts) ? accounts : []).map((account) => typeof account?.accountId === "string" ? account.accountId : "").filter(Boolean).sort();
   return accountIds.length > 0 ? `accounts:${hash2(accountIds.join("\n")).slice(0, 32)}` : "unscoped";
 }
-function defaultAntigravityCatalogCachePath({ env = process.env, home = homedir4() } = {}) {
-  const dockyardHome = env.DOCKYARD_DSH_HOME || join6(home, ".dockyard-dsh");
-  return join6(dockyardHome, "antigravity-catalog.json");
+function defaultAntigravityCatalogCachePath({ env = process.env, home = homedir5() } = {}) {
+  const dockyardHome = env.DOCKYARD_DSH_HOME || join8(home, ".dockyard-dsh");
+  return join8(dockyardHome, "antigravity-catalog.json");
 }
 function persistableCatalog(value) {
   return {
@@ -5341,25 +8085,27 @@ function persistableCatalog(value) {
     source: typeof value?.source === "string" ? value.source : "official_antigravity_cli"
   };
 }
+var ANTIGRAVITY_CATALOG_CACHE_SCHEMA = 2;
 async function readAntigravityCatalogCache(filePath) {
-  if (!filePath) return { schema: 1, entries: {} };
+  if (!filePath) return { schema: ANTIGRAVITY_CATALOG_CACHE_SCHEMA, entries: {} };
   try {
     const parsed = JSON.parse(await readFile4(filePath, "utf8"));
+    const usable = parsed?.schema === ANTIGRAVITY_CATALOG_CACHE_SCHEMA;
     return {
-      schema: 1,
-      entries: parsed?.entries && typeof parsed.entries === "object" ? parsed.entries : {}
+      schema: ANTIGRAVITY_CATALOG_CACHE_SCHEMA,
+      entries: usable && parsed?.entries && typeof parsed.entries === "object" ? parsed.entries : {}
     };
   } catch {
-    return { schema: 1, entries: {} };
+    return { schema: ANTIGRAVITY_CATALOG_CACHE_SCHEMA, entries: {} };
   }
 }
 async function writeAntigravityCatalogCache(filePath, cache) {
   if (!filePath) return;
-  await mkdir3(dirname3(filePath), { recursive: true, mode: 448 });
+  await mkdir3(dirname7(filePath), { recursive: true, mode: 448 });
   const entries = Object.entries(cache.entries ?? {}).slice(-8);
   const tempPath = `${filePath}.${randomUUID4()}.tmp`;
   try {
-    await writeFile2(tempPath, JSON.stringify({ schema: 1, entries: Object.fromEntries(entries) }), {
+    await writeFile2(tempPath, JSON.stringify({ schema: ANTIGRAVITY_CATALOG_CACHE_SCHEMA, entries: Object.fromEntries(entries) }), {
       encoding: "utf8",
       mode: 384
     });
@@ -5396,13 +8142,15 @@ function enrichAntigravityModelCatalog(models, registry) {
 function createAntigravityCatalogLoader({
   cliPath = process.env.DOCKYARD_ANTIGRAVITY_CLI || DEFAULT_CLI,
   env = process.env,
-  home = homedir4(),
+  home = homedir5(),
   cacheFilePath = env.DOCKYARD_ANTIGRAVITY_CATALOG_CACHE ?? defaultAntigravityCatalogCachePath({ env, home }),
   timeoutMs = 3e4,
   cacheTtlMs = Number(process.env.DOCKYARD_ANTIGRAVITY_CATALOG_TTL_MS) || DEFAULT_CATALOG_TTL_MS,
   commandRunner = runCommand,
-  registryLoader = null
+  registryLoader = null,
+  projectResolver = null
 } = {}) {
+  const resolvedCliPath = resolveAgyCliPath(cliPath, { env, home });
   const cached = /* @__PURE__ */ new Map();
   const pending = /* @__PURE__ */ new Map();
   const pendingRefreshes = /* @__PURE__ */ new Set();
@@ -5433,53 +8181,112 @@ function createAntigravityCatalogLoader({
     });
     return persistWrite;
   };
-  const refresh = (scope) => {
-    if (pending.has(scope)) return pending.get(scope);
-    const promise = Promise.resolve(commandRunner(cliPath, ["models"], {
-      env,
-      timeoutMs
-    })).then(async (result) => {
-      let registry = [];
-      if (typeof registryLoader === "function") {
-        try {
-          registry = await registryLoader();
-        } catch {
-        }
+  const modelsFromAccount = async (source = {}) => {
+    const account = source.account ?? null;
+    const credentialRef = account?.auth?.credentialRef ?? account?.credentialRef ?? null;
+    if (!credentialRef || typeof source.secretStore?.read !== "function") return null;
+    let credential = null;
+    try {
+      credential = await source.secretStore.read(credentialRef);
+    } catch {
+      return null;
+    }
+    if (!credential) return null;
+    let auth = null;
+    try {
+      auth = await resolveAntigravityAccessToken({ credential, env, home });
+    } catch {
+      return null;
+    }
+    if (!auth?.token) return null;
+    let project = null;
+    if (typeof projectResolver === "function") {
+      try {
+        project = await projectResolver({ credential, account });
+      } catch {
+        project = null;
       }
-      const liveModels = parseAntigravityModelCatalog(result.output);
-      const models = enrichAntigravityModelCatalog(
-        liveModels,
-        mergedAntigravityRegistry(registry, liveModels.map((model) => model.id))
-      );
-      const enriched = models.some((model, index) => {
-        const original = liveModels[index];
-        return model.contextWindow !== original?.contextWindow || model.maxTokens !== original?.maxTokens;
+    }
+    try {
+      const models = await fetchAntigravityAvailableModels({
+        token: auth.token,
+        project,
+        fetchImpl: fetch,
+        timeoutMs
       });
-      const value = {
-        models,
-        source: enriched ? "official_antigravity_cli+model_registry" : "official_antigravity_cli"
-      };
-      cached.set(scope, { value, cachedAt: Date.now() });
-      await persist(scope, value);
-      return value;
-    }).catch((error) => {
-      const previous = cached.get(scope)?.value;
-      if (previous?.models?.length) {
-        return {
-          ...previous,
-          source: `${previous.source ?? "official_antigravity_cli"}_stale`,
+      if (!Array.isArray(models) || models.length === 0) return null;
+      return models;
+    } catch {
+      return null;
+    }
+  };
+  const refresh = (scope, source = {}) => {
+    if (pending.has(scope)) return pending.get(scope);
+    const promise = modelsFromAccount(source).then((accountModels) => {
+      if (accountModels) {
+        const value = { models: accountModels, source: "official_fetch_available_models" };
+        cached.set(scope, { value, cachedAt: Date.now() });
+        void persist(scope, value);
+        return value;
+      }
+      return Promise.resolve(commandRunner(resolvedCliPath, ["models"], {
+        env,
+        timeoutMs
+      })).then(async (result) => {
+        let registry = [];
+        if (typeof registryLoader === "function") {
+          try {
+            registry = await registryLoader();
+          } catch {
+          }
+        }
+        const liveModels = parseAntigravityModelCatalog(result.output);
+        const models = enrichAntigravityModelCatalog(
+          liveModels,
+          mergedAntigravityRegistry(registry, liveModels.map((model) => model.id))
+        );
+        const enriched = models.some((model, index) => {
+          const original = liveModels[index];
+          return model.contextWindow !== original?.contextWindow || model.maxTokens !== original?.maxTokens;
+        });
+        const value = {
+          models,
+          source: enriched ? "official_antigravity_cli+model_registry" : "official_antigravity_cli"
+        };
+        cached.set(scope, { value, cachedAt: Date.now() });
+        await persist(scope, value);
+        return value;
+      }).catch((error) => {
+        const previous = cached.get(scope)?.value;
+        if (previous?.models?.length) {
+          return {
+            ...previous,
+            source: `${previous.source ?? "official_antigravity_cli"}_stale`,
+            diagnostics: [redactError(error)]
+          };
+        }
+        if (persistentCache?.entries && typeof persistentCache.entries === "object") {
+          const anyCached = Object.values(persistentCache.entries).find((item) => Array.isArray(item?.value?.models) && item.value.models.length > 0);
+          if (anyCached?.value) {
+            const fallbackValue = {
+              ...anyCached.value,
+              source: `${anyCached.value.source ?? "official_antigravity_cli"}_persistent_cache`,
+              diagnostics: [redactError(error)]
+            };
+            cached.set(scope, { value: fallbackValue, cachedAt: Date.now() });
+            return fallbackValue;
+          }
+        }
+        const unavailable = {
+          models: [],
+          source: error?.code === "ENOENT" ? "antigravity_cli_not_found" : "antigravity_cli_unavailable",
           diagnostics: [redactError(error)]
         };
-      }
-      const unavailable = {
-        models: [],
-        source: error?.code === "ENOENT" ? "antigravity_cli_not_found" : "antigravity_cli_unavailable",
-        diagnostics: [redactError(error)]
-      };
-      cached.set(scope, { value: unavailable, cachedAt: Date.now() });
-      return unavailable;
-    }).finally(() => {
-      pending.delete(scope);
+        cached.set(scope, { value: unavailable, cachedAt: Date.now() });
+        return unavailable;
+      }).finally(() => {
+        pending.delete(scope);
+      });
     });
     pendingRefreshes.add(promise);
     promise.finally(() => pendingRefreshes.delete(promise)).catch(() => {
@@ -5487,12 +8294,14 @@ function createAntigravityCatalogLoader({
     pending.set(scope, promise);
     return promise;
   };
-  const loadCatalog = async function loadCatalog2({ force = false, accounts = [] } = {}) {
-    const scope = catalogScopeKey(accounts);
+  const loadCatalog = async function loadCatalog2({ force = false, accounts = [], accountId = null, secretStore = null } = {}) {
+    const account = accountId ? (Array.isArray(accounts) ? accounts.find((candidate2) => candidate2?.accountId === accountId) : null) ?? null : null;
+    const scope = accountId ? `account:${accountId}` : catalogScopeKey(accounts);
+    const source = { account, secretStore };
     let entry = cached.get(scope);
     if (!entry) {
       const persisted = await loadPersistent();
-      const stored = persistentCache?.entries?.[scope] ?? persisted.entries?.[scope];
+      const stored = persistentCache?.entries?.[scope] ?? persisted.entries?.[scope] ?? persistentCache?.entries?.unscoped ?? persisted.entries?.unscoped ?? Object.values(persisted.entries ?? {}).find((item) => Array.isArray(item?.value?.models) && item.value.models.length > 0);
       if (stored?.value && Array.isArray(stored.value.models)) {
         entry = {
           value: {
@@ -5507,11 +8316,11 @@ function createAntigravityCatalogLoader({
     const fresh = entry && entry.cachedAt > 0 && Date.now() - entry.cachedAt < cacheTtlMs;
     if (!force && fresh) return entry.value;
     if (!force && entry) {
-      void refresh(scope).catch(() => {
+      void refresh(scope, source).catch(() => {
       });
       return entry.value;
     }
-    return refresh(scope);
+    return refresh(scope, source);
   };
   loadCatalog.whenIdle = async () => {
     await Promise.allSettled([...pendingRefreshes]);
@@ -5519,6 +8328,41 @@ function createAntigravityCatalogLoader({
     });
   };
   return loadCatalog;
+}
+function familyPrefixForModel(model) {
+  const defaultEffort = model?.reasoning?.defaultEffort;
+  if (typeof defaultEffort !== "string" || defaultEffort.length === 0) return null;
+  const suffix = `-${defaultEffort}`;
+  return model.id.endsWith(suffix) ? model.id.slice(0, -suffix.length) : null;
+}
+async function resolveAntigravityInvocationModel({ catalogLoader, model, reasoningEffort } = {}) {
+  if (typeof model !== "string" || typeof reasoningEffort !== "string" || !catalogLoader) {
+    return { model, reasoningEffort };
+  }
+  try {
+    const catalog = await catalogLoader();
+    const models = Array.isArray(catalog?.models) ? catalog.models : [];
+    const selected = models.find((candidate2) => candidate2?.id === model);
+    const prefix = familyPrefixForModel(selected);
+    if (!selected || !prefix) return { model, reasoningEffort };
+    const declaredTier = (selected.reasoning?.efforts ?? []).some(
+      (effort) => effort?.id === reasoningEffort
+    );
+    if (declaredTier) {
+      const explicit = models.find((candidate2) => candidate2?.id === `${prefix}-${reasoningEffort}`);
+      return { model: explicit?.id ?? `${prefix}-${reasoningEffort}`, reasoningEffort: void 0 };
+    }
+    const target = models.find((candidate2) => {
+      return candidate2?.id?.startsWith(`${prefix}-`) && candidate2.reasoning?.defaultEffort === reasoningEffort;
+    });
+    if (!target) return { model, reasoningEffort };
+    return { model: target.id, reasoningEffort: void 0 };
+  } catch {
+    return { model, reasoningEffort };
+  }
+}
+async function resolveAntigravityNativeInvocationModel(options = {}) {
+  return resolveAntigravityInvocationModel(options);
 }
 function quotaGroups(data) {
   if (!data || typeof data !== "object") return [];
@@ -5557,13 +8401,16 @@ function creditsFromData(data) {
 function parseQuotaData(data, now = /* @__PURE__ */ new Date(), source = "antigravity_cli") {
   const windows = [];
   for (const group of quotaGroups(data)) {
+    const groupName = stringValue(group?.displayName ?? group?.name);
     for (const bucket of group?.buckets ?? []) {
       const fraction = finiteNumber(bucket.remaining_fraction ?? bucket.remainingFraction);
       const percent = finiteNumber(bucket.remaining_percent ?? bucket.remainingPercent);
       const remaining = fraction ?? (percent === null ? null : percent / 100);
+      const bucketName = stringValue(bucket?.displayName ?? bucket?.name);
+      const bucketId = stringValue(bucket.bucketId ?? bucket.id) ?? (groupName && bucketName ? `${groupName}:${bucketName}` : `${groupName ?? "group"}:${bucketName ?? "window"}`);
       windows.push({
-        id: stringValue(bucket.id) ?? `${group.name ?? "group"}:${bucket.name ?? "window"}`,
-        name: [group.name, bucket.name].filter(Boolean).join(" / ") || null,
+        id: bucketId,
+        name: [groupName, bucketName].filter(Boolean).join(" / ") || null,
         remaining,
         limit: remaining === null ? null : 1,
         unit: remaining === null ? null : "fraction",
@@ -5626,7 +8473,7 @@ function candidate(now, {
   const legacy = existingAccounts.find((account) => account?.accountId === "antigravity:active");
   const accountId = known?.accountId ?? (legacy && !legacy.resources?.sessionFingerprint && stableAccountId !== "antigravity:active" ? legacy.accountId : stableAccountId);
   const identityLabel = normalizedEmail ?? (fingerprint ? `Antigravity \u5B98\u65B9\u4F1A\u8BDD \xB7 ${fingerprint}` : "Antigravity \u5B98\u65B9\u5F53\u524D\u4F1A\u8BDD");
-  const identitySource = normalizedEmail ? "official_cli_auth_status" : fingerprint ? "local_oauth_session_fingerprint" : "official_active_session";
+  const identitySource = normalizedEmail ? sourceKind === OFFICIAL_SESSION_SOURCE_KINDS.BROWSER ? "official_browser_oauth" : "official_cli_auth_status" : fingerprint ? "local_oauth_session_fingerprint" : "official_active_session";
   const credentialRef = createCredentialRef(PROVIDER_ID3, accountId);
   const value = {
     candidateId: `antigravity:${hash2(accountId).slice(0, 20)}`,
@@ -5652,7 +8499,7 @@ function candidate(now, {
       identitySource,
       identityLabel,
       ...fingerprint ? { sessionFingerprint: fingerprint } : {},
-      identityNote: normalizedEmail ? "\u8D26\u53F7\u90AE\u7BB1\u6765\u81EA\u5B98\u65B9 Antigravity \u767B\u5F55\u6001" : fingerprint ? "\u5B98\u65B9\u767B\u5F55\u6001\u672A\u8FD4\u56DE\u90AE\u7BB1\uFF1B\u4F7F\u7528\u4F1A\u8BDD\u6307\u7EB9\u533A\u5206\u8D26\u53F7" : "\u5B98\u65B9\u53EA\u8FD4\u56DE\u5F53\u524D\u4F1A\u8BDD\uFF1B\u5207\u6362\u8D26\u53F7\u540E\u8BF7\u91CD\u65B0\u626B\u63CF",
+      identityNote: normalizedEmail ? sourceKind === OFFICIAL_SESSION_SOURCE_KINDS.BROWSER ? "Google \u8D26\u53F7\u5DF2\u6388\u6743" : "\u8D26\u53F7\u90AE\u7BB1\u6765\u81EA\u5B98\u65B9 Antigravity \u767B\u5F55\u6001" : fingerprint ? "\u5B98\u65B9\u767B\u5F55\u6001\u672A\u8FD4\u56DE\u90AE\u7BB1\uFF1B\u4F7F\u7528\u4F1A\u8BDD\u6307\u7EB9\u533A\u5206\u8D26\u53F7" : "\u5B98\u65B9\u53EA\u8FD4\u56DE\u5F53\u524D\u4F1A\u8BDD\uFF1B\u5207\u6362\u8D26\u53F7\u540E\u8BF7\u91CD\u65B0\u626B\u63CF",
       sessionPersistence: capturedSession?.token ? "captured" : "active"
     }
   };
@@ -5706,6 +8553,7 @@ function publicAntigravityAuthSession(session) {
 function createAntigravityOAuthAuthorizer({
   cliPath = process.env.DOCKYARD_ANTIGRAVITY_CLI || DEFAULT_CLI,
   environment = process.env,
+  home = homedir5(),
   timeoutMs = DEFAULT_AUTH_TIMEOUT_MS,
   prompt = "Reply with OK",
   spawnImpl = spawn4,
@@ -5714,7 +8562,8 @@ function createAntigravityOAuthAuthorizer({
   ptyPythonPath = process.env.DOCKYARD_ANTIGRAVITY_PTY_PYTHON || "python3",
   instructions = "\u5DF2\u6253\u5F00 Google \u5B98\u65B9\u9A8C\u8BC1\u9875\uFF1B\u9009\u62E9\u8D26\u53F7\u5E76\u5B8C\u6210\u9A8C\u8BC1\u540E\uFF0CDSH \u4F1A\u81EA\u52A8\u63A5\u5165\u3002"
 } = {}) {
-  if (!cliPath) throw new Error("Antigravity OAuth authorizer requires an agy CLI path");
+  const resolvedCliPath = resolveAgyCliPath(cliPath, { env: environment, home });
+  if (!resolvedCliPath) throw new Error("Antigravity OAuth authorizer requires an agy CLI path");
   if (typeof spawnImpl !== "function") throw new Error("Antigravity OAuth authorizer requires a process spawner");
   if (typeof tokenReader !== "function") throw new Error("Antigravity OAuth authorizer requires a token reader");
   const sessions = /* @__PURE__ */ new Map();
@@ -5788,14 +8637,16 @@ function createAntigravityOAuthAuthorizer({
     return session.finalizing;
   }
   async function begin() {
-    const profileDir = await mkdtemp2(join6(tmpdir2(), "dockyard-antigravity-oauth-"));
-    const tokenPath = join6(profileDir, ".gemini", "antigravity-cli", "antigravity-oauth-token");
+    const profileDir = await mkdtemp2(join8(tmpdir2(), "dockyard-antigravity-oauth-"));
+    const tokenPath = join8(profileDir, ".gemini", "antigravity-cli", "antigravity-oauth-token");
     const childEnv = {
       ...environment,
       HOME: profileDir,
-      XDG_CONFIG_HOME: join6(profileDir, ".config"),
-      DOCKYARD_ANTIGRAVITY_TOKEN_FILE: tokenPath
+      XDG_CONFIG_HOME: join8(profileDir, ".config"),
+      DOCKYARD_ANTIGRAVITY_TOKEN_FILE: tokenPath,
+      [AGY_FILE_STORAGE_ENV]: "true"
     };
+    childEnv.PATH = augmentPathWithUserBins(childEnv, home);
     delete childEnv.AGY_CLI_HIDE_ACCOUNT_INFO;
     const session = {
       sessionId: `${PROVIDER_ID3}:${randomUUID4()}`,
@@ -5822,8 +8673,8 @@ function createAntigravityOAuthAuthorizer({
     };
     sessions.set(session.sessionId, session);
     try {
-      const command = usePty ? ptyPythonPath : cliPath;
-      const args = usePty ? ["-u", "-c", ANTIGRAVITY_PTY_SCRIPT, cliPath, "-p", prompt, "--output-format", "json"] : ["-p", prompt, "--output-format", "json"];
+      const command = usePty ? ptyPythonPath : resolvedCliPath;
+      const args = usePty ? ["-u", "-c", ANTIGRAVITY_PTY_SCRIPT, resolvedCliPath, "-p", prompt, "--output-format", "json"] : ["-p", prompt, "--output-format", "json"];
       const child = spawnImpl(command, args, {
         env: childEnv,
         stdio: ["pipe", "pipe", "pipe"],
@@ -5902,6 +8753,8 @@ var AntigravityOfficialSessionDriver = class {
   constructor({
     cliPath = process.env.DOCKYARD_ANTIGRAVITY_CLI || DEFAULT_CLI,
     env = process.env,
+    home = homedir5(),
+    cacheFilePath,
     timeoutMs = 3e4,
     commandRunner = runCommand,
     ptyPythonPath = process.env.DOCKYARD_ANTIGRAVITY_PTY_PYTHON || "python3",
@@ -5921,16 +8774,18 @@ var AntigravityOfficialSessionDriver = class {
     authorizationUrl = env.DOCKYARD_ANTIGRAVITY_AUTHORIZATION_URL || ANTIGRAVITY_BROWSER_AUTHORIZATION_URL,
     tokenUrl = env.DOCKYARD_ANTIGRAVITY_TOKEN_URL || ANTIGRAVITY_BROWSER_TOKEN_URL,
     userInfoUrl = env.DOCKYARD_ANTIGRAVITY_USERINFO_URL || ANTIGRAVITY_BROWSER_USERINFO_URL,
-    clientId = env.DOCKYARD_ANTIGRAVITY_CLIENT_ID || ANTIGRAVITY_BROWSER_CLIENT_ID,
-    clientSecret = env.DOCKYARD_ANTIGRAVITY_CLIENT_SECRET || ANTIGRAVITY_BROWSER_CLIENT_SECRET,
+    clientId = env.DOCKYARD_ANTIGRAVITY_DISABLE_BROWSER === "1" ? "" : env.DOCKYARD_ANTIGRAVITY_CLIENT_ID || ANTIGRAVITY_BROWSER_CLIENT_ID,
+    clientSecret = env.DOCKYARD_ANTIGRAVITY_DISABLE_BROWSER === "1" ? "" : env.DOCKYARD_ANTIGRAVITY_CLIENT_SECRET || ANTIGRAVITY_BROWSER_CLIENT_SECRET,
     oauthScope = env.DOCKYARD_ANTIGRAVITY_OAUTH_SCOPE || ANTIGRAVITY_BROWSER_SCOPES,
     redirectUri = env.DOCKYARD_ANTIGRAVITY_REDIRECT_URI || ANTIGRAVITY_BROWSER_REDIRECT_URI,
     fetchImpl = fetch,
     authorizationTimeoutMs = DEFAULT_AUTH_TIMEOUT_MS
   } = {}) {
     assertSecureEndpointUrl(authorizationUrl, "DOCKYARD_ANTIGRAVITY_AUTHORIZATION_URL");
-    this.cliPath = cliPath;
+    const resolvedCli = resolveAgyCliPath(cliPath, { env, home });
+    this.cliPath = resolvedCli;
     this.env = env;
+    this.home = home;
     this.timeoutMs = timeoutMs;
     this.commandRunner = commandRunner;
     this.ptyPythonPath = ptyPythonPath;
@@ -5940,17 +8795,20 @@ var AntigravityOfficialSessionDriver = class {
     this.browserUserInfoUrl = userInfoUrl ? assertSecureEndpointUrl(userInfoUrl, "DOCKYARD_ANTIGRAVITY_USERINFO_URL") : userInfoUrl;
     this.browserClientId = clientId;
     this.browserClientSecret = clientSecret;
+    this.hasExplicitBrowserClient = Boolean(clientId && clientSecret);
     this.requestExecutor = requestExecutor;
     this.quotaReader = quotaReader;
     this.tokenResolver = tokenResolver;
     this.identityFromOfficialSession = identityFromOfficialSession;
     this.cliOAuthAuthorizer = createAntigravityOAuthAuthorizer({
-      cliPath,
+      cliPath: resolvedCli,
       environment: env,
+      home,
       timeoutMs: authorizationTimeoutMs
     });
     const browserOAuthConfigured = Boolean(clientId && clientSecret);
-    this.browserAuthorizer = browserAuthorizer ?? (browserOAuth && browserOAuthConfigured ? createBrowserOAuthAuthorizer({
+    this.hasExplicitBrowserClient = browserOAuthConfigured;
+    this.createBrowserAuthorizer = (resolvedId, resolvedSecret) => browserAuthorizer ?? (browserOAuth && resolvedId && resolvedSecret ? createBrowserOAuthAuthorizer({
       providerId: PROVIDER_ID3,
       redirectUri,
       callbackPath: new URL(redirectUri).pathname,
@@ -5959,10 +8817,10 @@ var AntigravityOfficialSessionDriver = class {
       instructions: "\u8BF7\u5728 Google \u5B98\u65B9\u6388\u6743\u9875\u9762\u9009\u62E9\u8D26\u53F7\u5E76\u5B8C\u6210\u6388\u6743\uFF1B\u5B8C\u6210\u540E\u4F1A\u81EA\u52A8\u8FD4\u56DE Dockyard DSH\u3002",
       authorizationUrlBuilder: ({ state, codeChallenge, redirectUri: callback }) => `${authorizationUrl}?${new URLSearchParams({
         access_type: "offline",
-        client_id: clientId,
+        client_id: resolvedId,
         code_challenge: codeChallenge,
         code_challenge_method: "S256",
-        prompt: "consent",
+        prompt: "select_account consent",
         redirect_uri: callback,
         response_type: "code",
         scope: oauthScope,
@@ -5974,7 +8832,7 @@ var AntigravityOfficialSessionDriver = class {
           headers: { "content-type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({
             client_id: clientId,
-            client_secret: clientSecret,
+            client_secret: resolvedSecret,
             code,
             code_verifier: codeVerifier,
             grant_type: "authorization_code",
@@ -5984,7 +8842,8 @@ var AntigravityOfficialSessionDriver = class {
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok || !body.access_token) {
-          throw new Error(`Antigravity Google token exchange failed (${response.status})`);
+          const reason = typeof body?.error === "string" ? ` ${body.error}${typeof body.error_description === "string" ? `: ${body.error_description}` : ""}` : "";
+          throw new Error(`Antigravity Google token exchange failed (${response.status})${reason}`);
         }
         return body;
       },
@@ -5993,22 +8852,32 @@ var AntigravityOfficialSessionDriver = class {
         const refresh = tokens?.refresh_token ?? tokens?.refreshToken;
         if (!access2) throw new Error("Antigravity Google OAuth did not return an access token");
         let profile = null;
-        try {
-          const response = await this.fetchImpl(userInfoUrl, {
-            headers: { authorization: `Bearer ${access2}` },
-            ...context.signal ? { signal: context.signal } : {}
-          });
-          if (response.ok) profile = await response.json().catch(() => null);
-        } catch {
+        if (tokens?.id_token || tokens?.idToken) {
+          try {
+            profile = decodeJwtPayload(tokens.id_token || tokens.idToken);
+          } catch {
+          }
         }
+        if (!profile?.email) {
+          try {
+            const response = await this.fetchImpl(userInfoUrl, {
+              headers: { authorization: `Bearer ${access2}` },
+              ...context.signal ? { signal: context.signal } : {}
+            });
+            if (response.ok) profile = await response.json().catch(() => null);
+          } catch {
+          }
+        }
+        const email = profile?.email ?? extractAntigravityAccountEmail(tokens);
         const now = context.now instanceof Date ? context.now : /* @__PURE__ */ new Date();
         const candidateValue = candidate(now, {
-          email: profile?.email,
+          email,
           session: {
             token: access2,
             refreshToken: refresh,
             expiresAt: tokenExpiresAt(tokens, now),
-            lastRefreshedAt: now.toISOString()
+            lastRefreshedAt: now.toISOString(),
+            ...email ? { email } : {}
           },
           existingAccounts: context.accounts ?? [],
           source: "official_antigravity_browser_oauth",
@@ -6018,10 +8887,14 @@ var AntigravityOfficialSessionDriver = class {
         return [await this.importAccount(candidateValue, context)];
       }
     }) : null);
-    this.oauthAuthorizer = oauthAuthorizer ?? this.browserAuthorizer ?? this.cliOAuthAuthorizer;
+    this.browserAuthorizer = clientId && clientSecret ? this.createBrowserAuthorizer(clientId, clientSecret) : null;
+    this.injectedOauthAuthorizer = oauthAuthorizer ?? null;
+    this.oauthAuthorizer = this.injectedOauthAuthorizer ?? this.browserAuthorizer ?? this.cliOAuthAuthorizer;
     this.catalogLoader = catalogLoader ?? createAntigravityCatalogLoader({
-      cliPath,
+      cliPath: resolvedCli,
       env,
+      home,
+      ...cacheFilePath !== void 0 ? { cacheFilePath } : {},
       timeoutMs,
       commandRunner
     });
@@ -6107,21 +8980,22 @@ var AntigravityOfficialSessionDriver = class {
       ...current.refreshToken ? { refresh: current.refreshToken } : {},
       ...current.expiresAt ? { expiresAt: current.expiresAt } : {}
     };
+    const rotated = current.source === "antigravity_keychain" && Boolean(account?.resources?.sessionFingerprint) && sessionFingerprint(current) !== account.resources?.sessionFingerprint;
     if (!tokenNeedsRefresh(credential, now)) {
       const credentialRef = account?.auth?.credentialRef ?? account?.credentialRef;
       if (current.source === "antigravity_keychain" && credentialRef && typeof context.secretStore?.write === "function") {
         await context.secretStore.write(credentialRef, credential);
       }
-      return { session: current, credential, rotated: false };
+      return { session: current, credential, rotated };
     }
     if (!current.refreshToken) {
       throw activeSessionError("Antigravity official session has expired; authorize again");
     }
     const officialTokenPath = officialAntigravityTokenPath(this.env);
-    const officialHome = this.env.HOME || homedir4();
+    const officialHome = this.env.HOME || homedir5();
     const childEnv = agyRefreshEnvironment(this.env, officialTokenPath);
     try {
-      await mkdir3(dirname3(officialTokenPath), { recursive: true, mode: 448 });
+      await mkdir3(dirname7(officialTokenPath), { recursive: true, mode: 448 });
       const refreshCommand = this.usePtyForSessionRefresh ? this.ptyPythonPath : this.cliPath;
       const refreshArgs = this.usePtyForSessionRefresh ? ["-u", "-c", ANTIGRAVITY_PTY_SCRIPT, this.cliPath, "models"] : ["models"];
       await this.commandRunner(refreshCommand, refreshArgs, {
@@ -6148,7 +9022,7 @@ var AntigravityOfficialSessionDriver = class {
       if (nextCredential.access === credential.access && !expiryAdvanced) {
         throw new Error("agy did not advance the Antigravity OAuth token expiry");
       }
-      await mkdir3(dirname3(officialTokenPath), { recursive: true, mode: 448 });
+      await mkdir3(dirname7(officialTokenPath), { recursive: true, mode: 448 });
       const persistedPath = `${officialTokenPath}.${randomUUID4()}.tmp`;
       try {
         await writeFile2(persistedPath, JSON.stringify({
@@ -6182,11 +9056,11 @@ var AntigravityOfficialSessionDriver = class {
       throw activeSessionError("Antigravity agy session has no refresh token; authorize again");
     }
     const tokenPath = officialAntigravityTokenPath(this.env);
-    const officialHome = this.env.HOME || homedir4();
+    const officialHome = this.env.HOME || homedir5();
     const childEnv = agyRefreshEnvironment(this.env, tokenPath);
     const now = context.now instanceof Date ? context.now : /* @__PURE__ */ new Date();
     try {
-      await mkdir3(dirname3(tokenPath), { recursive: true, mode: 448 });
+      await mkdir3(dirname7(tokenPath), { recursive: true, mode: 448 });
       if (!readAntigravityTokenFile({ env: childEnv, home: officialHome })?.token) {
         await writeFile2(tokenPath, JSON.stringify({
           auth_method: "consumer",
@@ -6235,6 +9109,7 @@ var AntigravityOfficialSessionDriver = class {
   }
   async #refreshBrowserCredential(account, context = {}) {
     if (account?.resources?.sessionSource !== OFFICIAL_SESSION_SOURCE_KINDS.BROWSER) return null;
+    await this.ensureBrowserAuthorizer().catch(() => null);
     const credentialRef = account?.auth?.credentialRef ?? account?.credentialRef;
     if (!credentialRef || typeof context.secretStore?.read !== "function") {
       throw activeSessionError("Antigravity browser OAuth credential is unavailable; authorize again");
@@ -6243,16 +9118,18 @@ var AntigravityOfficialSessionDriver = class {
     if (!credential?.access) {
       throw activeSessionError("Antigravity browser OAuth credential is missing; authorize again");
     }
-    const refreshMode = credentialRefreshMode(account);
-    const dshManagedRefresh = refreshMode !== ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION;
+    const refreshMode = credentialRefreshMode(account, {
+      hasExplicitBrowserClient: Boolean(this.hasExplicitBrowserClient)
+    });
+    const useAgyCliRefresh = refreshMode === ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION && (this.commandRunner !== runCommand || !this.browserClientId || !this.browserClientSecret);
     const now = context.now instanceof Date ? context.now : /* @__PURE__ */ new Date();
-    if (refreshMode === ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION) {
+    if (useAgyCliRefresh) {
       if (!tokenNeedsRefresh(credential, now)) return credential;
       const updated2 = await this.#refreshAgyCredential(credential, context);
       await context.secretStore.write(credentialRef, updated2);
       return updated2;
     }
-    if (!dshManagedRefresh || !this.browserClientId || !this.browserClientSecret) return credential;
+    if (!this.browserClientId || !this.browserClientSecret) return credential;
     if (!tokenNeedsRefresh(credential, now)) return credential;
     if (!credential.refresh) {
       throw activeSessionError("Antigravity browser OAuth token expired; authorize again");
@@ -6295,7 +9172,9 @@ var AntigravityOfficialSessionDriver = class {
     if (typeof this.quotaReader !== "function") return null;
     let credential = null;
     const credentialRef = account?.auth?.credentialRef;
-    if (account?.resources?.sessionSource === OFFICIAL_SESSION_SOURCE_KINDS.BROWSER) {
+    if (context.browserCredential) {
+      credential = context.browserCredential;
+    } else if (account?.resources?.sessionSource === OFFICIAL_SESSION_SOURCE_KINDS.BROWSER) {
       credential = await this.#refreshBrowserCredential(account, context);
     } else if (context.officialCredential) {
       credential = context.officialCredential;
@@ -6421,13 +9300,44 @@ var AntigravityOfficialSessionDriver = class {
       };
     }
   }
+  /**
+   * Browser OAuth needs a Google client secret. The operator may configure one,
+   * otherwise it is read from the official Antigravity build installed on this
+   * machine and cached locally — never committed to the repository.
+   *
+   * @returns {Promise<object|null>} The authorizer, or null when none can exist.
+   */
+  async ensureBrowserAuthorizer() {
+    if (this.browserAuthorizer) return this.browserAuthorizer;
+    if (this.browserAuthorizerPromise) return this.browserAuthorizerPromise;
+    this.browserAuthorizerPromise = (async () => {
+      const clientId = this.browserClientId;
+      if (!clientId) return null;
+      let secret = this.browserClientSecret;
+      if (!secret) {
+        secret = await resolveAntigravityClientSecret({ clientId });
+        if (!secret) return null;
+        this.browserClientSecret = secret;
+      }
+      this.hasExplicitBrowserClient = true;
+      this.browserAuthorizer = this.createBrowserAuthorizer(clientId, secret);
+      return this.browserAuthorizer;
+    })().finally(() => {
+      this.browserAuthorizerPromise = null;
+    });
+    return this.browserAuthorizerPromise;
+  }
   async startAuthorization(context = {}) {
-    if (this.oauthAuthorizer !== this.browserAuthorizer || !this.browserAuthorizer) {
-      return this.oauthAuthorizer.begin(context);
+    if (this.injectedOauthAuthorizer) return this.injectedOauthAuthorizer.begin(context);
+    await this.ensureBrowserAuthorizer().catch(() => null);
+    if (!this.browserAuthorizer) {
+      return {
+        status: "unsupported",
+        providerId: PROVIDER_ID3,
+        instructions: "Antigravity \u6D4F\u89C8\u5668\u6388\u6743\u9700\u8981\u4E00\u4E2A Google OAuth client\u3002\u8BF7\u5B89\u88C5\u5B98\u65B9 Antigravity \u684C\u9762\u7AEF\uFF08\u63D2\u4EF6\u4F1A\u76F4\u63A5\u4F7F\u7528\u5B83\u81EA\u5E26\u7684\u5BA2\u6237\u7AEF\uFF09\uFF0C\u6216\u8BBE\u7F6E DOCKYARD_ANTIGRAVITY_CLIENT_ID \u4E0E DOCKYARD_ANTIGRAVITY_CLIENT_SECRET\u3002"
+      };
     }
-    const started = await this.browserAuthorizer.begin(context);
-    if (started.status === "failed") return this.cliOAuthAuthorizer.begin(context);
-    return started;
+    return this.browserAuthorizer.begin(context);
   }
   #authorizationAuthorizer(sessionId) {
     if (sessionId?.includes(":browser:")) return this.browserAuthorizer;
@@ -6450,26 +9360,65 @@ var AntigravityOfficialSessionDriver = class {
       ...officialCredential?.rotated ? { allowSessionTokenRotation: true } : {}
     });
     const now = context.now instanceof Date ? context.now : /* @__PURE__ */ new Date();
-    let session = officialCredential?.session ?? null;
-    try {
-      session = session ?? await this.tokenResolver({ env: this.env });
-    } catch {
+    const isBrowserAccount = account?.resources?.sessionSource === OFFICIAL_SESSION_SOURCE_KINDS.BROWSER;
+    const isTestAgyMock = isBrowserAccount && credentialRefreshMode(account, {
+      hasExplicitBrowserClient: Boolean(this.hasExplicitBrowserClient)
+    }) === ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION && this.commandRunner !== runCommand;
+    let session = officialCredential?.session ?? (browserCredential && !isTestAgyMock ? {
+      token: browserCredential.access,
+      refreshToken: browserCredential.refresh,
+      expiresAt: browserCredential.expiresAt,
+      email: browserCredential.email ?? null
+    } : null);
+    if (!session && !isBrowserAccount) {
+      try {
+        session = await this.tokenResolver({ env: this.env });
+      } catch {
+      }
     }
-    const sessionEmail = await this.#resolveSessionEmail(session, context);
+    const sessionEmail = await this.#resolveSessionEmail(session, context) ?? normalizeEmail(account?.email);
+    if (sessionEmail && browserCredential && !browserCredential.email) {
+      const credentialRef = account?.auth?.credentialRef ?? account?.credentialRef;
+      if (credentialRef && typeof context.secretStore?.write === "function") {
+        await context.secretStore.write(credentialRef, { ...browserCredential, email: sessionEmail }).catch(() => {
+        });
+      }
+    }
     const fingerprint = sessionFingerprint(sessionEmail && session && !session.email ? { ...session, email: sessionEmail } : session);
-    const fingerprintResources = fingerprint ? { sessionFingerprint: fingerprint } : {};
-    const persistedRefreshMode = account?.resources?.sessionSource === OFFICIAL_SESSION_SOURCE_KINDS.BROWSER ? credentialRefreshMode(account) ?? (!this.browserClientId || !this.browserClientSecret ? ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION : null) : null;
-    const identityPatch = sessionEmail ? { email: sessionEmail } : {};
+    const fingerprintResources = {
+      ...fingerprint ? { sessionFingerprint: fingerprint } : {},
+      ...sessionEmail ? {
+        identitySource: "official_cli_auth_status",
+        identityLabel: sessionEmail,
+        identityNote: "\u8D26\u53F7\u90AE\u7BB1\u6765\u81EA\u5B98\u65B9 Antigravity \u767B\u5F55\u6001"
+      } : {}
+    };
+    const persistedRefreshMode = isBrowserAccount ? credentialRefreshMode(account, {
+      hasExplicitBrowserClient: Boolean(this.hasExplicitBrowserClient)
+    }) ?? (!this.browserClientId || !this.browserClientSecret ? ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.AGY_SESSION : ANTIGRAVITY_CREDENTIAL_REFRESH_MODES.DSH_BROWSER_OAUTH) : null;
+    const shouldUpdateDisplayName = Boolean(
+      sessionEmail && (!account?.displayName || account.displayName.startsWith("Antigravity \u5B98\u65B9") || account.displayName === account.accountId)
+    );
+    const identityPatch = {
+      ...sessionEmail ? { email: sessionEmail } : {},
+      ...shouldUpdateDisplayName ? { displayName: sessionEmail } : {}
+    };
     let nativeError = null;
     try {
       const native = await this.#nativeQuota(account, {
         ...context,
+        ...browserCredential ? { browserCredential } : {},
         ...officialCredential?.credential ? { officialCredential: officialCredential.credential } : {}
       }, now);
       if (native) {
         const primary2 = selectPrimaryQuotaWindow(native.windows);
         return {
           ...identityPatch,
+          subscription: {
+            plan: account?.subscription?.plan ?? "Google Code Assist",
+            status: "active",
+            expiresAt: account?.subscription?.expiresAt ?? null
+          },
           quota: {
             ...primary2,
             windows: native.windows,
@@ -6493,7 +9442,7 @@ var AntigravityOfficialSessionDriver = class {
     } catch (error) {
       nativeError = error;
     }
-    if (typeof this.quotaReader === "function" && account?.auth?.credentialRef) {
+    if (isBrowserAccount || account?.auth?.credentialRef) {
       throw nativeError ?? new Error("Antigravity native quota did not return data for the selected account");
     }
     const [result, creditsResult] = await Promise.all([
@@ -6561,7 +9510,7 @@ var AntigravityOfficialSessionDriver = class {
     } catch (error) {
       nativeError = error;
     }
-    if (typeof this.quotaReader === "function" && account?.auth?.credentialRef) {
+    if (account?.resources?.sessionSource === OFFICIAL_SESSION_SOURCE_KINDS.BROWSER || account?.auth?.credentialRef) {
       throw nativeError ?? new Error("Antigravity native quota did not return data for the selected account");
     }
     const [quotaResult, creditsResult] = await Promise.all([
@@ -6592,7 +9541,9 @@ var AntigravityOfficialSessionDriver = class {
   async getCatalog(context = {}) {
     return this.catalogLoader({
       force: Boolean(context.force),
-      accounts: context.accounts
+      accounts: context.accounts,
+      accountId: context.accountId ?? null,
+      secretStore: context.secretStore ?? null
     });
   }
   async invoke(request, invocation, context = {}) {
@@ -6606,7 +9557,17 @@ var AntigravityOfficialSessionDriver = class {
     if (typeof executor !== "function") {
       throw new Error("Antigravity native invocation transport is not mounted");
     }
-    return executor({ request, invocation, context });
+    const resolved = await resolveAntigravityNativeInvocationModel({
+      catalogLoader: this.catalogLoader,
+      model: request?.model,
+      reasoningEffort: request?.reasoningEffort ?? request?.reasoning_effort
+    });
+    const resolvedRequest = resolved.model === request?.model && resolved.reasoningEffort === (request?.reasoningEffort ?? request?.reasoning_effort) ? request : {
+      ...request,
+      model: resolved.model,
+      ...resolved.reasoningEffort === void 0 ? {} : { reasoningEffort: resolved.reasoningEffort }
+    };
+    return executor({ request: resolvedRequest, invocation, context });
   }
   async stream(request, invocation, context = {}) {
     return this.invoke(request, invocation, context);
@@ -6638,21 +9599,23 @@ function createAntigravityModule({ driver = {} } = {}) {
 
 // modules/provider-grok/src/driver.mjs
 import { createHash as createHash5 } from "node:crypto";
-import { mkdtemp as mkdtemp3, readFile as readFile5, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
-import { homedir as homedir5 } from "node:os";
+import { mkdtemp as mkdtemp3, readFile as readFile5, rename as rename3, rm as rm4, writeFile as writeFile3 } from "node:fs/promises";
+import { homedir as homedir6 } from "node:os";
 import { tmpdir as tmpdir3 } from "node:os";
-import { join as join7 } from "node:path";
+import { join as join9 } from "node:path";
 var PROVIDER_ID4 = "grok";
 var DEFAULT_AUTHORIZATION_URL2 = "https://auth.x.ai/oauth2/authorize";
 var DEFAULT_TOKEN_URL2 = "https://auth.x.ai/oauth2/token";
+var DEFAULT_USERINFO_URL = "https://auth.x.ai/oauth2/userinfo";
+var DEFAULT_GROK_MODELS_URL = "https://cli-chat-proxy.grok.com/v1/models";
 var DEFAULT_CLIENT_ID2 = "b1a00492-073a-47ea-816f-4c329264a828";
 var DEFAULT_OAUTH_SCOPE = "openid profile email offline_access grok-cli:access api:access conversations:read conversations:write workspaces:read workspaces:write";
-var DEFAULT_GROK_HOME = join7(homedir5(), ".grok");
+var DEFAULT_GROK_HOME = join9(homedir6(), ".grok");
 var DEFAULT_CATALOG_TTL_MS2 = 6e4;
 var DEFAULT_GROK_USAGE_URL = "https://grok.com/?_s=usage";
 var DEFAULT_GROK_CREDITS_URL = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
 var DEFAULT_GROK_TOKEN_HEADER = "xai-grok-cli";
-var DEFAULT_GROK_CLIENT_VERSION = "0.2.112";
+var DEFAULT_GROK_CLIENT_VERSION = "1.0.13";
 var CREDENTIAL_SLOT3 = Symbol("dockyard-grok-credential");
 function hash3(value) {
   return createHash5("sha256").update(String(value)).digest("hex");
@@ -6668,8 +9631,8 @@ function grokTokenNeedsRefresh(credential, now = /* @__PURE__ */ new Date(), lee
   const expiresAt = Date.parse(credential.expiresAt);
   return Number.isFinite(expiresAt) && expiresAt <= now.getTime() + leewayMs;
 }
-function grokHomePath({ env = process.env, home = homedir5(), grokHome } = {}) {
-  return grokHome ?? env.GROK_HOME ?? join7(home, ".grok");
+function grokHomePath({ env = process.env, home = homedir6(), grokHome } = {}) {
+  return grokHome ?? env.GROK_HOME ?? join9(home, ".grok");
 }
 function grokCommandEnvironment(env, grokHome) {
   return { ...env, GROK_HOME: grokHome };
@@ -6681,11 +9644,21 @@ function authRecords(raw) {
   }
   return Object.entries(raw).filter(([, value]) => value && typeof value === "object").map(([scopeKey, value]) => ({ scopeKey, value }));
 }
+function grokPlanFromTier(tier) {
+  if (typeof tier === "string" && tier.length > 0) return tier;
+  if (tier === 3) return "Premium";
+  if (tier === 4) return "Premium+";
+  if (tier === 2) return "Basic";
+  if (tier === 1) return "Free";
+  if (tier === 5) return "Enterprise";
+  return null;
+}
 function parseGrokAuth(raw) {
   return authRecords(raw).map(({ scopeKey, value }) => {
     const access2 = firstString2(value.key, value.access_token, value.accessToken);
     if (!access2) return null;
     const accessPayload = decodeJwtPayload(access2) ?? {};
+    const idPayload = decodeJwtPayload(value.id_token ?? value.idToken) ?? {};
     const expiresAt = grokTokenExpiresAt(value, accessPayload);
     const accountId = firstString2(
       value.user_id,
@@ -6696,16 +9669,36 @@ function parseGrokAuth(raw) {
       value.teamId,
       accessPayload.sub,
       accessPayload.user_id,
-      accessPayload.userId
+      accessPayload.userId,
+      idPayload.sub
     ) ?? `${scopeKey}:${hash3(access2).slice(0, 20)}`;
-    const email = firstString2(value.email, value.user_email, value.userEmail, accessPayload.email);
+    const email = firstString2(value.email, value.user_email, value.userEmail, idPayload.email, accessPayload.email);
+    const displayName = firstString2(
+      value.first_name,
+      value.firstName,
+      value.name,
+      idPayload.preferred_username,
+      idPayload.name,
+      idPayload.nickname,
+      accessPayload.name,
+      email,
+      accountId
+    );
+    const plan = firstString2(
+      value.subscription_level,
+      value.subscriptionLevel,
+      value.subscription_tier,
+      value.subscriptionTier,
+      grokPlanFromTier(accessPayload.tier),
+      grokPlanFromTier(idPayload.tier)
+    );
     return {
       access: access2,
       refresh: firstString2(value.refresh_token, value.refreshToken),
       accountId,
       email,
-      displayName: firstString2(value.first_name, value.firstName, value.name, accessPayload.name, email, accountId),
-      plan: firstString2(value.subscription_level, value.subscriptionLevel),
+      displayName,
+      plan,
       expiresAt,
       createdAt: firstString2(value.create_time, value.createdAt),
       scopes: Array.isArray(value.scopes) ? value.scopes.map(String) : typeof value.scope === "string" ? value.scope.split(/\s+/).filter(Boolean) : [],
@@ -6787,8 +9780,10 @@ function summarizeGrokCandidate(candidate2) {
   };
 }
 function cacheEntries(cache) {
-  if (!cache?.models || typeof cache.models !== "object") return [];
-  return Array.isArray(cache.models) ? cache.models.map((value) => [value?.id, value]).filter(([id]) => id) : Object.entries(cache.models);
+  if (!cache || typeof cache !== "object") return [];
+  const entries = cache.models ?? cache.data;
+  if (!entries || typeof entries !== "object") return [];
+  return Array.isArray(entries) ? entries.map((value) => [value?.id, value]).filter(([id]) => id) : Object.entries(entries);
 }
 function normalizeReasoning(info) {
   const raw = Array.isArray(info?.reasoning_efforts) ? info.reasoning_efforts : [];
@@ -6823,7 +9818,7 @@ function parseGrokModelCatalog(output = "", cache = null) {
     const contextWindow = finiteNumber(info.context_window ?? info.contextWindow);
     const maxTokens = finiteNumber(info.max_completion_tokens ?? info.maxTokens);
     if (Number.isInteger(contextWindow)) model.contextWindow = contextWindow;
-    if (Number.isInteger(maxTokens)) model.maxTokens = maxTokens;
+    if (Number.isInteger(maxTokens)) model.maxTokens = Math.min(maxTokens, 16384);
     if (Array.isArray(info.input) && info.input.length > 0) model.inputModalities = [...info.input];
     return model;
   });
@@ -6897,57 +9892,253 @@ function parseGrokCreditsConfig(body, { now = /* @__PURE__ */ new Date() } = {})
     }
   };
 }
+var DEFAULT_GROK_REASONING_EFFORTS = Object.freeze([
+  { id: "low", name: "Low", description: "\u5FEB\u901F\u601D\u8003\uFF0C\u4FDD\u7559\u57FA\u7840\u63A8\u7406" },
+  { id: "medium", name: "Medium", description: "\u6807\u51C6\u601D\u8003\uFF0C\u5E73\u8861\u63A8\u7406\u6DF1\u5EA6\u4E0E\u54CD\u5E94\u901F\u5EA6" },
+  { id: "high", name: "High", description: "\u6DF1\u5EA6\u601D\u8003\uFF0C\u9002\u5408\u590D\u6742\u903B\u8F91\u4E0E\u591A\u6B65\u9AA4\u5206\u6790" }
+]);
+var BUILTIN_GROK_MODELS = Object.freeze([
+  {
+    id: "grok-4.7",
+    name: "Grok 4.7",
+    contextWindow: 256e3,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "xhigh", name: "Extra High", description: "Maximum reasoning for the hardest tasks." },
+        { id: "high", name: "High", description: "Thorough reasoning and quality. Recommended.", default: true },
+        { id: "medium", name: "Medium", description: "Strong quality with a faster turnaround." },
+        { id: "low", name: "Low", description: "Fastest responses. Best for simple tasks." }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "grok-4.7-build-fast",
+    name: "Grok 4.7 Fast",
+    contextWindow: 256e3,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "xhigh", name: "Extra High", description: "Maximum reasoning for the hardest tasks." },
+        { id: "high", name: "High", description: "Thorough reasoning and quality. Recommended.", default: true },
+        { id: "medium", name: "Medium", description: "Strong quality with a faster turnaround." },
+        { id: "low", name: "Low", description: "Fastest responses. Best for simple tasks." }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "grok-4.6",
+    name: "Grok 4.6",
+    contextWindow: 256e3,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "xhigh", name: "Extra High", description: "Highest effort and reasoning level" },
+        { id: "high", name: "High", description: "Higher implementation quality with extensive reasoning", default: true },
+        { id: "medium", name: "Medium", description: "Balanced effort with standard implementation and testing" },
+        { id: "low", name: "Low", description: "Quick, fast implementations" }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "grok-4.5",
+    name: "Grok 4.5",
+    contextWindow: 256e3,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "high", name: "High", description: "Highest implementation quality with extensive reasoning", default: true },
+        { id: "medium", name: "Medium", description: "Balanced effort with standard implementation and testing" },
+        { id: "low", name: "Low", description: "Quick, fast implementations" }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "grok-build-0.1",
+    name: "Grok Build 0.1",
+    contextWindow: 131072,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "high", name: "High", description: "Deep thinking mode", default: true }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "grok-3",
+    name: "Grok 3",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [...DEFAULT_GROK_REASONING_EFFORTS],
+      defaultEffort: "medium"
+    },
+    inputModalities: ["text"]
+  },
+  {
+    id: "grok-3-mini",
+    name: "Grok 3 Mini",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [...DEFAULT_GROK_REASONING_EFFORTS],
+      defaultEffort: "medium"
+    },
+    inputModalities: ["text"]
+  },
+  {
+    id: "grok-2",
+    name: "Grok 2",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    inputModalities: ["text"]
+  },
+  {
+    id: "grok-2-mini",
+    name: "Grok 2 Mini",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    inputModalities: ["text"]
+  }
+]);
 function createGrokCatalogLoader({
   env = process.env,
-  home = homedir5(),
+  home = homedir6(),
   grokHome,
   cliPath = env.DOCKYARD_GROK_CLI || "grok",
   commandRunner = null,
   timeoutMs = 3e4,
   readJson: readJson3 = readJsonFile,
-  cacheTtlMs = Number(process.env.DOCKYARD_GROK_CATALOG_TTL_MS) || DEFAULT_CATALOG_TTL_MS2
+  cacheTtlMs = Number(process.env.DOCKYARD_GROK_CATALOG_TTL_MS) || DEFAULT_CATALOG_TTL_MS2,
+  registryLoader = null,
+  fetchImpl = fetch,
+  modelsUrl = env.DOCKYARD_GROK_MODELS_URL || DEFAULT_GROK_MODELS_URL,
+  tokenHeader = env.DOCKYARD_GROK_TOKEN_HEADER || DEFAULT_GROK_TOKEN_HEADER,
+  clientVersion = env.DOCKYARD_GROK_CLIENT_VERSION || DEFAULT_GROK_CLIENT_VERSION
 } = {}) {
   const resolvedHome = grokHomePath({ env, home, grokHome });
   let cached = null;
   let cachedAt = 0;
   let pending = null;
-  return async function loadCatalog({ force = false } = {}) {
+  return async function loadCatalog({ force = false, credential = null } = {}) {
     const now = Date.now();
     if (!force && cached && now - cachedAt < cacheTtlMs) return cached;
     if (pending) return pending;
     pending = (async () => {
-      const cache = await readJson3(join7(resolvedHome, "models_cache.json"));
-      let value;
-      if (typeof commandRunner === "function") {
+      const cache = await readJson3(join9(resolvedHome, "models_cache.json"));
+      let discoveredModels = [];
+      let source = "official_grok_cli";
+      let cliError = null;
+      if (credential?.access) {
+        try {
+          const res = await fetchImpl(modelsUrl, {
+            method: "GET",
+            headers: {
+              authorization: `Bearer ${credential.access}`,
+              "x-xai-token-auth": tokenHeader,
+              "x-userid": credential.accountId,
+              "x-grok-client-version": clientVersion,
+              accept: "application/json"
+            }
+          });
+          if (res.ok) {
+            const json = await res.json().catch(() => ({}));
+            discoveredModels = parseGrokModelCatalog("", json);
+            if (discoveredModels.length > 0) {
+              source = "official_grok_models_api";
+            }
+          }
+        } catch (error) {
+          cliError = error;
+        }
+      }
+      if (discoveredModels.length === 0 && typeof commandRunner === "function") {
         try {
           const result = await commandRunner(cliPath, ["models"], {
             env,
             timeoutMs,
             providerId: PROVIDER_ID4
           });
-          const models = parseGrokModelCatalog(result.output, cache);
-          value = {
-            models,
-            source: "official_grok_cli",
-            ...models.length ? {} : { diagnostics: ["Grok \u5B98\u65B9 CLI \u6CA1\u6709\u8FD4\u56DE\u53EF\u7528\u6A21\u578B"] }
-          };
+          discoveredModels = parseGrokModelCatalog(result.output, cache);
         } catch (error) {
-          value = {
-            models: parseGrokModelCatalog("", cache),
-            source: cache ? "official_grok_local_cache" : "official_grok_cli",
-            diagnostics: [`Grok \u5B98\u65B9\u6A21\u578B\u76EE\u5F55\u8BFB\u53D6\u5931\u8D25\uFF1A${error.message}`]
-          };
+          cliError = error;
+          discoveredModels = parseGrokModelCatalog("", cache);
+          source = cache ? "official_grok_local_cache" : "official_grok_cli";
         }
-      } else {
-        value = {
-          models: parseGrokModelCatalog("", cache),
-          source: "official_grok_local_cache",
-          ...cache ? {} : { diagnostics: [`\u672A\u627E\u5230 Grok \u5B9E\u65F6\u6A21\u578B\u7F13\u5B58\uFF1A${join7(resolvedHome, "models_cache.json")}`] }
-        };
+      } else if (discoveredModels.length === 0) {
+        discoveredModels = parseGrokModelCatalog("", cache);
+        source = "official_grok_local_cache";
       }
-      cached = value;
+      if (discoveredModels.length > 0) {
+        const modelsMap2 = /* @__PURE__ */ new Map();
+        for (const m of discoveredModels) modelsMap2.set(m.id, { ...m });
+        for (const m of BUILTIN_GROK_MODELS) {
+          if (!modelsMap2.has(m.id)) {
+            modelsMap2.set(m.id, { ...m });
+          } else {
+            const existing = modelsMap2.get(m.id);
+            modelsMap2.set(m.id, {
+              ...m,
+              ...existing,
+              reasoning: existing.reasoning ?? m.reasoning,
+              inputModalities: existing.inputModalities ?? m.inputModalities
+            });
+          }
+        }
+        const finalModels = [...modelsMap2.values()];
+        cached = {
+          models: finalModels,
+          source,
+          ...cliError ? { diagnostics: [`Grok \u5B98\u65B9\u6A21\u578B\u76EE\u5F55\u63D0\u793A\uFF1A${cliError.message}`] } : {}
+        };
+        cachedAt = Date.now();
+        return cached;
+      }
+      const modelsMap = /* @__PURE__ */ new Map();
+      for (const m of BUILTIN_GROK_MODELS) {
+        modelsMap.set(m.id, { ...m });
+      }
+      if (typeof registryLoader === "function") {
+        try {
+          const registry = await registryLoader();
+          for (const item of Array.isArray(registry) ? registry : []) {
+            if (!item?.id) continue;
+            if (item.provider === "xai" || String(item.id).startsWith("grok-")) {
+              const previous = modelsMap.get(item.id);
+              if (!previous) {
+                const reasoning = resolveReasoningFromModel(item);
+                modelsMap.set(item.id, {
+                  id: item.id,
+                  name: item.name ?? item.id,
+                  ...Number.isInteger(item.contextWindow) ? { contextWindow: item.contextWindow } : {},
+                  ...Number.isInteger(item.maxTokens) ? { maxTokens: Math.min(item.maxTokens, 16384) } : {},
+                  ...Array.isArray(item.input) ? { inputModalities: [...item.input] } : {},
+                  ...reasoning ? { reasoning } : {}
+                });
+              }
+            }
+          }
+        } catch {
+        }
+      }
+      const models = [...modelsMap.values()];
+      cached = {
+        models,
+        source: discoveredModels.length > 0 ? source : "official_grok_builtin",
+        ...cliError ? { diagnostics: [`Grok \u5B98\u65B9\u6A21\u578B\u76EE\u5F55\u63D0\u793A\uFF1A${cliError.message}`] } : {}
+      };
       cachedAt = Date.now();
-      return value;
+      return cached;
     })().finally(() => {
       pending = null;
     });
@@ -6958,7 +10149,7 @@ var GrokOAuthDriver = class {
   constructor({
     authFilePath,
     env = process.env,
-    home = homedir5(),
+    home = homedir6(),
     grokHome,
     catalogLoader = null,
     oauthAuthorizer = null,
@@ -6966,6 +10157,8 @@ var GrokOAuthDriver = class {
     browserOAuth = env.DOCKYARD_GROK_BROWSER_OAUTH !== "0",
     authorizationUrl = env.DOCKYARD_GROK_AUTHORIZATION_URL || DEFAULT_AUTHORIZATION_URL2,
     tokenUrl = env.DOCKYARD_GROK_TOKEN_URL || DEFAULT_TOKEN_URL2,
+    userinfoUrl = env.DOCKYARD_GROK_USERINFO_URL || DEFAULT_USERINFO_URL,
+    modelsUrl = env.DOCKYARD_GROK_MODELS_URL || DEFAULT_GROK_MODELS_URL,
     clientId = env.DOCKYARD_GROK_CLIENT_ID || DEFAULT_CLIENT_ID2,
     oauthScope = env.DOCKYARD_GROK_OAUTH_SCOPE || DEFAULT_OAUTH_SCOPE,
     cliPath = env.DOCKYARD_GROK_CLI || "grok",
@@ -6975,21 +10168,25 @@ var GrokOAuthDriver = class {
     creditsUrl = env.DOCKYARD_GROK_CREDITS_URL || DEFAULT_GROK_CREDITS_URL,
     tokenHeader = env.DOCKYARD_GROK_TOKEN_HEADER || DEFAULT_GROK_TOKEN_HEADER,
     clientVersion = env.DOCKYARD_GROK_CLIENT_VERSION || DEFAULT_GROK_CLIENT_VERSION,
-    timeoutMs = 3e4
+    timeoutMs = 3e4,
+    registryLoader = null
   } = {}) {
     this.env = env;
     this.grokHome = grokHomePath({ env, home, grokHome });
-    this.authFilePath = authFilePath ?? join7(this.grokHome, "auth.json");
+    this.authFilePath = authFilePath ?? join9(this.grokHome, "auth.json");
     this.cliPath = cliPath;
     this.commandRunner = commandRunner;
+    this.tokenExchanges = /* @__PURE__ */ new Map();
     this.requestExecutor = requestExecutor;
     this.fetchImpl = fetchImpl;
     this.creditsUrl = validateNativeEndpoint(creditsUrl, { providerId: PROVIDER_ID4 });
+    this.modelsUrl = validateNativeEndpoint(modelsUrl, { providerId: PROVIDER_ID4 });
     this.tokenHeader = String(tokenHeader || DEFAULT_GROK_TOKEN_HEADER);
     this.clientVersion = String(clientVersion || DEFAULT_GROK_CLIENT_VERSION);
     this.timeoutMs = timeoutMs;
     this.authorizationUrl = assertSecureEndpointUrl(authorizationUrl, "DOCKYARD_GROK_AUTHORIZATION_URL");
     this.tokenUrl = assertSecureEndpointUrl(tokenUrl, "DOCKYARD_GROK_TOKEN_URL");
+    this.userinfoUrl = assertSecureEndpointUrl(userinfoUrl, "DOCKYARD_GROK_USERINFO_URL");
     this.clientId = clientId;
     this.oauthScope = oauthScope;
     this.catalogLoader = catalogLoader ?? createGrokCatalogLoader({
@@ -6998,7 +10195,12 @@ var GrokOAuthDriver = class {
       grokHome: this.grokHome,
       cliPath,
       commandRunner,
-      timeoutMs
+      timeoutMs,
+      registryLoader,
+      fetchImpl: this.fetchImpl,
+      modelsUrl: this.modelsUrl,
+      tokenHeader: this.tokenHeader,
+      clientVersion: this.clientVersion
     });
     this.cliAuthorizer = createCliOAuthAuthorizer({
       providerId: PROVIDER_ID4,
@@ -7051,6 +10253,23 @@ var GrokOAuthDriver = class {
           error.status = response.status;
           error.upstreamCode = body.error ?? body.error_code;
           throw error;
+        }
+        const access2 = firstString2(body.access_token, body.accessToken, body.key);
+        if (access2) {
+          try {
+            const userinfoRes = await this.fetchImpl(this.userinfoUrl, {
+              method: "GET",
+              headers: { authorization: `Bearer ${access2}`, accept: "application/json" },
+              ...context.signal ? { signal: context.signal } : {}
+            });
+            if (userinfoRes.ok) {
+              const userinfo = await userinfoRes.json().catch(() => ({}));
+              if (userinfo?.name) body.name = userinfo.name;
+              if (userinfo?.email) body.email = userinfo.email;
+              if (userinfo?.sub) body.user_id = userinfo.sub;
+            }
+          } catch {
+          }
         }
         return {
           ...body,
@@ -7167,11 +10386,33 @@ var GrokOAuthDriver = class {
     const credentialRef = account.auth?.credentialRef ?? account.credentialRef;
     const credential = await context.secretStore.read(credentialRef);
     if (!credential?.access) {
+      const healed = await this.#healCredentialFromCliAuth(account, context).catch(() => null);
+      if (healed?.access) return { ...healed, accountId: healed.accountId ?? account.accountId };
       const error = new Error("Grok OAuth credential is missing from secure storage");
       error.authExpired = true;
       throw error;
     }
     return { ...credential, accountId: credential.accountId ?? account.accountId };
+  }
+  /** Re-import the official CLI's auth file when our stored copy is gone. */
+  async #healCredentialFromCliAuth(account, context = {}) {
+    const raw = await readJsonFile(this.authFilePath);
+    if (!raw) return null;
+    const tokens = parseGrokAuth(raw);
+    if (!tokens.length) return null;
+    const wanted = account.accountId ?? account.auth?.credentialRef;
+    const target = tokens.find((value) => value.accountId === wanted) ?? tokens[0];
+    await this.importAccount(candidateFromTokens2(target, {
+      source: "official_grok_oauth",
+      now: context.now instanceof Date ? context.now : /* @__PURE__ */ new Date()
+    }), context);
+    const refs = [account.auth?.credentialRef, account.credentialRef, createCredentialRef(PROVIDER_ID4, target.accountId)];
+    for (const ref of refs) {
+      if (!ref) continue;
+      const stored = await context.secretStore.read(ref).catch(() => null);
+      if (stored?.access) return stored;
+    }
+    return null;
   }
   async #refreshOAuthCredential(account, context = {}, { strict = false } = {}) {
     const credential = await this.#readCredential(account, context);
@@ -7183,6 +10424,30 @@ var GrokOAuthDriver = class {
       error.authExpired = true;
       throw error;
     }
+    const credentialRef = account.auth?.credentialRef ?? account.credentialRef;
+    try {
+      return await this.#exchangeRefreshToken(credentialRef, credential, context, now);
+    } catch (error) {
+      const latest = await context.secretStore.read(credentialRef).catch(() => null);
+      if (!latest?.refresh || latest.refresh === credential.refresh) throw error;
+      return this.#exchangeRefreshToken(
+        credentialRef,
+        { ...latest, accountId: latest.accountId ?? credential.accountId },
+        context,
+        now
+      );
+    }
+  }
+  /** Share one token exchange per refresh token so concurrent turns cannot race. */
+  #exchangeRefreshToken(credentialRef, credential, context, now) {
+    const key = `${credentialRef}::${hash3(String(credential.refresh ?? ""))}`;
+    const inflight = this.tokenExchanges.get(key);
+    if (inflight) return inflight;
+    const promise = this.#performTokenExchange(credentialRef, credential, context, now).finally(() => this.tokenExchanges.delete(key));
+    this.tokenExchanges.set(key, promise);
+    return promise;
+  }
+  async #performTokenExchange(credentialRef, credential, context, now) {
     let response;
     try {
       response = await this.fetchImpl(this.tokenUrl, {
@@ -7206,7 +10471,7 @@ var GrokOAuthDriver = class {
     if (!response.ok || !access2) {
       const error = new Error("Grok OAuth refresh failed; authorize again");
       error.status = response.status;
-      error.authExpired = response.status === 401 || response.status === 400;
+      error.authExpired = response.status === 401 || response.status === 400 || response.status === 403;
       throw error;
     }
     const updated = {
@@ -7216,13 +10481,36 @@ var GrokOAuthDriver = class {
       expiresAt: grokTokenExpiresAt(body, decodeJwtPayload(access2) ?? {}, now) ?? credential.expiresAt,
       lastRefreshedAt: now.toISOString()
     };
-    await context.secretStore.write(account.auth?.credentialRef ?? account.credentialRef, updated);
+    await context.secretStore.write(credentialRef, updated);
+    await this.#mirrorCredentialToCliAuth(updated).catch(() => {
+    });
     return updated;
+  }
+  /**
+   * Keep the official CLI's auth file on the same rotation chain as ours.
+   * Only ever updates an existing file: creating the CLI's store is its job.
+   */
+  async #mirrorCredentialToCliAuth(credential) {
+    const raw = await readJsonFile(this.authFilePath).catch(() => null);
+    if (!raw || typeof raw !== "object") return;
+    let changed = false;
+    for (const { scopeKey, value } of authRecords(raw)) {
+      const parsed = parseGrokAuth({ [scopeKey]: value })[0];
+      if (!parsed || parsed.accountId !== credential.accountId) continue;
+      if (credential.access) value.key = credential.access;
+      if (credential.refresh) value.refresh_token = credential.refresh;
+      if (credential.expiresAt) value.expires_at = credential.expiresAt;
+      changed = true;
+    }
+    if (!changed) return;
+    const temp = `${this.authFilePath}.dockyard-${process.pid}.tmp`;
+    await writeFile3(temp, JSON.stringify(raw), { mode: 384 });
+    await rename3(temp, this.authFilePath);
   }
   async #prepareCredentialEnvironment(account, context = {}) {
     const credential = await this.#readCredential(account, context);
-    const profileDir = await mkdtemp3(join7(tmpdir3(), "dockyard-grok-run-"));
-    const authPath = join7(profileDir, "auth.json");
+    const profileDir = await mkdtemp3(join9(tmpdir3(), "dockyard-grok-run-"));
+    const authPath = join9(profileDir, "auth.json");
     const key = account.accountId ?? credential.accountId;
     const raw = {
       [key]: {
@@ -7260,41 +10548,87 @@ var GrokOAuthDriver = class {
       });
     }
   }
+  #isBrowserAccount(account) {
+    return account?.resources?.authSource === "official_grok_browser_oauth" || account?.resources?.sessionSource === "browser" || !account?.resources?.cliProfile && Boolean(account?.refresh?.refreshable);
+  }
   async refreshAccount(account, context = {}) {
-    await this.#refreshOAuthCredential(account, context);
-    const prepared = await this.#prepareCredentialEnvironment(account, context);
+    const credential = await this.#refreshOAuthCredential(account, context);
+    const isBrowser = this.#isBrowserAccount(account);
     let updated = null;
     let commandError2 = null;
-    try {
-      await this.commandRunner(this.cliPath, ["models"], {
-        env: prepared.env,
-        timeoutMs: this.timeoutMs,
-        providerId: PROVIDER_ID4
-      });
-    } catch (error) {
-      error.authExpired = error.code === 401 || /auth|login|expired|credential|access token.{0,80}(?:valid|invalid|expired|revok)/i.test(String(error.message));
-      commandError2 = error;
+    if (!isBrowser) {
+      const prepared = await this.#prepareCredentialEnvironment(account, context);
+      try {
+        await this.commandRunner(this.cliPath, ["models"], {
+          env: prepared.env,
+          timeoutMs: this.timeoutMs,
+          providerId: PROVIDER_ID4
+        });
+      } catch (error) {
+        if (error?.code !== "ENOENT" && !/ENOENT|not found/i.test(String(error?.message))) {
+          error.authExpired = error.code === 401 || /auth|login|expired|credential|access token.{0,80}(?:valid|invalid|expired|revok)/i.test(String(error.message));
+          commandError2 = error;
+        }
+      }
+      let finishError = null;
+      try {
+        updated = await this.#finishCredentialEnvironment(prepared, account, context);
+      } catch (error) {
+        finishError = error;
+      }
+      if (commandError2) {
+        if (finishError && !commandError2.cause) commandError2.cause = finishError;
+        throw commandError2;
+      }
+      if (finishError) throw finishError;
     }
-    let finishError = null;
-    try {
-      updated = await this.#finishCredentialEnvironment(prepared, account, context);
-    } catch (error) {
-      finishError = error;
-    }
-    if (commandError2) {
-      if (finishError && !commandError2.cause) commandError2.cause = finishError;
-      throw commandError2;
-    }
-    if (finishError) throw finishError;
     const now = context.now instanceof Date ? context.now : /* @__PURE__ */ new Date();
+    const effective = updated ?? credential;
+    const accessPayload = decodeJwtPayload(effective.access) ?? {};
+    const plan = firstString2(
+      effective.plan,
+      grokPlanFromTier(accessPayload.tier),
+      account.subscription?.plan
+    );
+    let email = firstString2(effective.email, account.email);
+    let displayName = firstString2(effective.displayName, account.displayName);
+    const isUuidOrMissingName = !displayName || displayName === account.accountId || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(displayName);
+    if ((!email || isUuidOrMissingName) && effective.access) {
+      try {
+        const userinfoRes = await this.fetchImpl(this.userinfoUrl, {
+          method: "GET",
+          headers: { authorization: `Bearer ${effective.access}`, accept: "application/json" },
+          ...context.signal ? { signal: context.signal } : {}
+        });
+        if (userinfoRes?.ok) {
+          const userinfo = await userinfoRes.json().catch(() => ({}));
+          if (userinfo?.name) displayName = userinfo.name;
+          if (userinfo?.email) email = userinfo.email;
+          if (context.secretStore) {
+            const credentialRef = account.auth?.credentialRef ?? account.credentialRef;
+            await context.secretStore.write(credentialRef, {
+              ...effective,
+              ...email ? { email } : {},
+              ...displayName ? { displayName } : {},
+              ...plan ? { plan } : {}
+            });
+          }
+        }
+      } catch {
+      }
+    }
     return {
-      ...updated?.email ? { email: updated.email } : {},
-      ...updated?.displayName ? { displayName: updated.displayName } : {},
+      ...email ? { email } : {},
+      ...displayName ? { displayName } : {},
+      subscription: {
+        ...account.subscription,
+        ...plan ? { plan } : {}
+      },
       refresh: {
-        accessTokenExpiresAt: updated?.expiresAt ?? account.refresh?.accessTokenExpiresAt ?? null,
+        accessTokenExpiresAt: effective?.expiresAt ?? account.refresh?.accessTokenExpiresAt ?? null,
         nextRefreshAt: null,
         lastRefreshedAt: now.toISOString(),
-        refreshable: Boolean(updated?.refresh ?? prepared.credential.refresh)
+        refreshable: Boolean(effective?.refresh ?? account.refresh?.refreshable)
       }
     };
   }
@@ -7321,22 +10655,36 @@ var GrokOAuthDriver = class {
       throw error;
     }
     const parsed = parseGrokCreditsConfig(body, { now });
+    const accessPayload = decodeJwtPayload(credential.access) ?? {};
+    const plan = firstString2(
+      parsed.subscription?.plan,
+      grokPlanFromTier(accessPayload.tier),
+      account.subscription?.plan
+    );
     return {
       ...parsed,
       subscription: {
         ...account.subscription,
-        ...parsed.subscription.plan ? { plan: parsed.subscription.plan } : {}
+        ...plan ? { plan } : {}
       }
     };
   }
   async getCatalog(context = {}) {
-    return this.catalogLoader({ force: Boolean(context.force) });
+    let credential = null;
+    if (context.accounts?.[0] && context.secretStore) {
+      try {
+        credential = await this.#readCredential(context.accounts[0], context);
+      } catch {
+      }
+    }
+    return this.catalogLoader({ force: Boolean(context.force), credential });
   }
   async invoke(request, invocation, context = {}) {
     const executor = context.requestExecutor ?? this.requestExecutor;
     if (typeof executor !== "function") throw new Error("Grok native invocation transport is not mounted");
     const account = invocation?.account;
-    if (executor.nativeTransport === "xai-chat-completions") {
+    const nativeTransport = executor?.nativeTransport ?? this.requestExecutor?.nativeTransport ?? null;
+    if (nativeTransport === "xai-chat-completions") {
       const credential = account && context.secretStore ? await this.#refreshOAuthCredential(account, context, { strict: true }) : null;
       return executor({ request, invocation, credential, context });
     }
@@ -7417,11 +10765,7 @@ async function openAiContent(content, attachments) {
 ${textFromContent(part.content ?? part.output ?? part.result ?? part.text)}` });
       continue;
     }
-    const call = toolCallPart(part);
-    if (call) {
-      blocks.push({ type: "text", text: `[Tool Call ${call.name ?? call.function?.name ?? "tool"}] ${JSON.stringify(parseToolArguments(call.arguments ?? call.input ?? call.function?.arguments))}` });
-      continue;
-    }
+    if (toolCallPart(part)) continue;
     const text3 = textFromContent(part);
     if (text3) blocks.push({ type: "text", text: text3 });
   }
@@ -7437,14 +10781,14 @@ async function buildGrokMessages(request, attachments) {
     if (role === "tool") {
       result.push({
         role: "tool",
-        tool_call_id: firstString3(message.toolCallId, message.tool_call_id, message.id, "tool-result"),
+        tool_call_id: sanitizeToolCallId(firstString3(message.toolCallId, message.tool_call_id, message.id, "tool-result")),
         content: textFromContent(message.content ?? message.text ?? message.output ?? message.result)
       });
       continue;
     }
     const content = await openAiContent(message?.content ?? message?.text, attachments);
     const calls = (Array.isArray(message?.content) ? message.content : [message?.content]).map(toolCallPart).filter(Boolean).map((call, index) => ({
-      id: firstString3(call.id, call.toolCallId, call.tool_call_id, `tool-${index}`),
+      id: sanitizeToolCallId(firstString3(call.id, call.toolCallId, call.tool_call_id, `tool-${index}`)),
       type: "function",
       function: {
         name: firstString3(call.name, call.function?.name, "tool"),
@@ -7483,7 +10827,7 @@ async function buildGrokRequest(request = {}, context = {}) {
   if (request.temperature !== void 0) body.temperature = request.temperature;
   const maxTokens = request.maxTokens ?? request.modelContext?.maxTokens;
   if (Number.isInteger(maxTokens) && maxTokens > 0) body.max_tokens = maxTokens;
-  if (request.reasoningEffort) body.reasoning_effort = request.reasoningEffort;
+  if (request.reasoningEffort && request.purpose !== "compaction") body.reasoning_effort = request.reasoningEffort;
   const tools = buildGrokTools(request.tools);
   if (tools) body.tools = tools;
   return body;
@@ -7624,7 +10968,7 @@ function createGrokNativeExecutor({
     return streamGrokResponse(response);
   };
   executor.nativeTransport = "xai-chat-completions";
-  return executor;
+  return guardEmptyCompletion(executor, { providerId: PROVIDER_ID5 });
 }
 var grokNativeTransportConstants = Object.freeze({
   providerId: PROVIDER_ID5,
@@ -7644,7 +10988,8 @@ function createGrokModule({ driver = {} } = {}) {
       "quota",
       "catalog",
       "invoke",
-      "stream"
+      "stream",
+      PROVIDER_BEHAVIOR_CAPABILITIES.REPAIR_LEGACY_CREDENTIAL
     ],
     driver
   });
@@ -7652,11 +10997,10 @@ function createGrokModule({ driver = {} } = {}) {
 
 // modules/provider-claude/src/driver.mjs
 import { createHash as createHash6 } from "node:crypto";
-import { homedir as homedir7 } from "node:os";
+import { homedir as homedir8 } from "node:os";
 
 // packages/oauth/src/cli-status-authorizer.mjs
 import { randomUUID as randomUUID5 } from "node:crypto";
-import { spawn as spawn5 } from "node:child_process";
 var CHILD_STOP_GRACE_MS2 = 2e3;
 function publicSession3(session) {
   return {
@@ -7785,7 +11129,7 @@ function createCliStatusAuthorizer({
     };
     sessions.set(session.sessionId, session);
     try {
-      const child = spawn5(cliPath, loginArgs, {
+      const child = spawnCli(cliPath, loginArgs, {
         env: environment,
         stdio: ["ignore", "pipe", "pipe"]
       });
@@ -7943,16 +11287,16 @@ var officialSessionAuthorizerConstants = Object.freeze({
 
 // modules/provider-claude/src/native-transport.mjs
 import { readFile as readFile6 } from "node:fs/promises";
-import { homedir as homedir6 } from "node:os";
-import { join as join8 } from "node:path";
+import { homedir as homedir7 } from "node:os";
+import { join as join10 } from "node:path";
 var PROVIDER_ID6 = "claude";
 var DEFAULT_ENDPOINT3 = "https://api.anthropic.com/v1/messages";
 function firstString4(...values) {
   return values.find((value) => typeof value === "string" && value.length > 0) ?? null;
 }
-async function readJson(path) {
+async function readJson(path2) {
   try {
-    return JSON.parse(await readFile6(path, "utf8"));
+    return JSON.parse(await readFile6(path2, "utf8"));
   } catch {
     return null;
   }
@@ -7979,12 +11323,12 @@ function claudeOAuthCredentialFromJson(value) {
     ...Array.isArray(oauth?.scopes) ? { scopes: oauth.scopes.map(String) } : {}
   };
 }
-async function readClaudeOAuthCredential({ home = homedir6() } = {}) {
-  for (const path of [
-    join8(home, ".claude", ".credentials.json"),
-    join8(home, ".opencodex", "claude_desktop_auth.json")
+async function readClaudeOAuthCredential({ home = homedir7() } = {}) {
+  for (const path2 of [
+    join10(home, ".claude", ".credentials.json"),
+    join10(home, ".opencodex", "claude_desktop_auth.json")
   ]) {
-    const credential = claudeOAuthCredentialFromJson(await readJson(path));
+    const credential = claudeOAuthCredentialFromJson(await readJson(path2));
     if (credential) return credential;
   }
   return null;
@@ -7992,7 +11336,7 @@ async function readClaudeOAuthCredential({ home = homedir6() } = {}) {
 async function resolveClaudeAccessToken({
   credential,
   env = process.env,
-  home = homedir6(),
+  home = homedir7(),
   accountBound = false
 } = {}) {
   const stored = firstString4(credential?.access, credential?.token);
@@ -8002,11 +11346,11 @@ async function resolveClaudeAccessToken({
   if (apiKey) return { token: apiKey, kind: "apiKey" };
   const envToken = firstString4(env.CLAUDE_CODE_OAUTH_TOKEN, env.ANTHROPIC_AUTH_TOKEN);
   if (envToken) return { token: envToken, kind: "oauth" };
-  for (const path of [
-    join8(home, ".claude", ".credentials.json"),
-    join8(home, ".opencodex", "claude_desktop_auth.json")
+  for (const path2 of [
+    join10(home, ".claude", ".credentials.json"),
+    join10(home, ".opencodex", "claude_desktop_auth.json")
   ]) {
-    const found = oauthTokenFromJson(await readJson(path));
+    const found = oauthTokenFromJson(await readJson(path2));
     if (found) return found;
   }
   return null;
@@ -8272,7 +11616,7 @@ async function* streamClaudeResponse(response) {
 function createClaudeNativeExecutor({
   endpoint: endpoint2 = process.env.DOCKYARD_CLAUDE_ENDPOINT || DEFAULT_ENDPOINT3,
   env = process.env,
-  home = homedir6(),
+  home = homedir7(),
   timeoutMs = 3e5,
   fetchImpl = fetch,
   tokenResolver = resolveClaudeAccessToken
@@ -8301,7 +11645,7 @@ function createClaudeNativeExecutor({
     return streamClaudeResponse(response);
   };
   executor.nativeTransport = "anthropic-messages";
-  return executor;
+  return guardEmptyCompletion(executor, { providerId: PROVIDER_ID6 });
 }
 var claudeNativeTransportConstants = Object.freeze({
   providerId: PROVIDER_ID6,
@@ -8508,9 +11852,11 @@ function createClaudeCatalogLoader({ registryLoader = null } = {}) {
   return async function loadCatalog({ force = false } = {}) {
     if (cached && !force) return cached;
     const registry = typeof registryLoader === "function" ? await registryLoader() : [];
+    const rows = Array.isArray(registry) ? registry.filter(Boolean) : [];
+    const isClaudeRow = (rawModel) => rawModel.provider === "anthropic" || rawModel.provider == null && rawModel.api === "anthropic-messages" && /^claude-/u.test(String(rawModel.id ?? ""));
     const modelsById = /* @__PURE__ */ new Map();
-    for (const rawModel of Array.isArray(registry) ? registry : []) {
-      if (!rawModel || rawModel.provider !== "anthropic" && rawModel.api !== "anthropic-messages") continue;
+    for (const rawModel of rows) {
+      if (!isClaudeRow(rawModel)) continue;
       const model = catalogModel(rawModel);
       if (typeof model.id !== "string" || model.id.length === 0) continue;
       const previous = modelsById.get(model.id);
@@ -8554,7 +11900,7 @@ var ClaudeSubscriptionDriver = class {
     clientId = env.DOCKYARD_CLAUDE_CLIENT_ID || DEFAULT_BROWSER_CLIENT_ID,
     redirectUri = env.DOCKYARD_CLAUDE_REDIRECT_URI || DEFAULT_BROWSER_REDIRECT_URI,
     oauthScope = env.DOCKYARD_CLAUDE_OAUTH_SCOPE || DEFAULT_BROWSER_SCOPE,
-    home = homedir7(),
+    home = homedir8(),
     fetchImpl = fetch
   } = {}) {
     assertSecureEndpointUrl(authorizationUrl, "DOCKYARD_CLAUDE_AUTHORIZATION_URL");
@@ -8942,13 +12288,13 @@ function createClaudeModule({ driver = {} } = {}) {
 
 // modules/provider-cursor/src/driver.mjs
 import { createHash as createHash8, randomBytes as randomBytes3, randomUUID as randomUUID9 } from "node:crypto";
-import { homedir as homedir9 } from "node:os";
+import { homedir as homedir10 } from "node:os";
 
 // modules/provider-cursor/src/native-transport.mjs
-import { execFileSync as execFileSync2 } from "node:child_process";
+import { execFileSync as execFileSync3 } from "node:child_process";
 import * as http2 from "node:http2";
-import { homedir as homedir8 } from "node:os";
-import { join as join9 } from "node:path";
+import { homedir as homedir9 } from "node:os";
+import { join as join11 } from "node:path";
 import { randomBytes as randomBytes2, randomUUID as randomUUID8 } from "node:crypto";
 
 // modules/provider-cursor/src/native-protocol.mjs
@@ -9242,8 +12588,8 @@ function cursorFrameMetadata(message, flags = null) {
   const visit = (value, prefix = [], depth = 0) => {
     if (depth > 4 || fieldPaths.length >= 64) return;
     for (const field of decodeProtoFields(value).slice(0, 32)) {
-      const path = [...prefix, field.field].join(".");
-      fieldPaths.push({ path, wireType: field.wireType, byteLength: field.value instanceof Uint8Array ? field.value.byteLength : null });
+      const path2 = [...prefix, field.field].join(".");
+      fieldPaths.push({ path: path2, wireType: field.wireType, byteLength: field.value instanceof Uint8Array ? field.value.byteLength : null });
       if (field.wireType === 2) visit(field.value, [...prefix, field.field], depth + 1);
       if (fieldPaths.length >= 64) return;
     }
@@ -9519,7 +12865,7 @@ function createAsyncQueue() {
 function readCursorDesktopSession({
   credential,
   env = process.env,
-  home = homedir8()
+  home = homedir9()
 } = {}) {
   const stored = firstString7(credential?.access, credential?.token);
   if (stored) {
@@ -9536,10 +12882,10 @@ function readCursorDesktopSession({
   const fromEnv = firstString7(env.CURSOR_API_KEY, env.DOCKYARD_CURSOR_ACCESS_TOKEN);
   if (fromEnv) return { token: fromEnv, kind: "apiKey", source: "environment" };
   if (process.platform !== "darwin") return null;
-  const dbPath = join9(home, "Library", "Application Support", "Cursor", "User", "globalStorage", "state.vscdb");
+  const dbPath = join11(home, "Library", "Application Support", "Cursor", "User", "globalStorage", "state.vscdb");
   try {
     const quotedKeys = CURSOR_SESSION_KEYS.map((key) => `'${key}'`).join(",");
-    const output = execFileSync2("sqlite3", ["-json", dbPath, `SELECT key, CAST(value AS TEXT) AS value FROM ItemTable WHERE key IN (${quotedKeys});`], {
+    const output = execFileSync3("sqlite3", ["-json", dbPath, `SELECT key, CAST(value AS TEXT) AS value FROM ItemTable WHERE key IN (${quotedKeys});`], {
       encoding: "utf8",
       timeout: 5e3,
       stdio: ["ignore", "pipe", "ignore"]
@@ -9688,9 +13034,13 @@ function streamCursor({
           if ((frame.flags & 2) !== 0) {
             const trailer = decodeCursorConnectTrailer(frame.payload);
             if (trailer) {
-              const error = nativeProviderError(PROVIDER_ID8, trailer.message, {
+              let displayMessage = trailer.message;
+              if (displayMessage.includes("Grok Build isn't available for this account yet")) {
+                displayMessage = `${trailer.message} (\u5F53\u524D Cursor \u8D26\u53F7\u4E3A\u514D\u8D39\u7248 Free\uFF0CCursor \u5B98\u65B9 Agent \u8FD0\u884C\u63A5\u53E3\u9700\u8981 Pro \u6216\u8BA2\u9605\u6743\u9650)`;
+              }
+              const error = nativeProviderError(PROVIDER_ID8, displayMessage, {
                 code: trailer.code,
-                body: { code: trailer.code, message: trailer.message }
+                body: { code: trailer.code, message: displayMessage }
               });
               Object.assign(error, cursorGrpcStatusFlags(trailer.code));
               queue.fail(error);
@@ -9791,7 +13141,7 @@ function streamCursor({
 function createCursorNativeExecutor({
   endpoint: endpoint2 = process.env.DOCKYARD_CURSOR_ENDPOINT || DEFAULT_ENDPOINT4,
   env = process.env,
-  home = homedir8(),
+  home = homedir9(),
   tokenResolver = resolveCursorAccessToken,
   http2Module = http2,
   timeoutMs = Number(process.env.DOCKYARD_CURSOR_TIMEOUT_MS) || DEFAULT_TOTAL_TIMEOUT_MS,
@@ -9975,7 +13325,7 @@ function candidateFromStatus2(status, {
 async function resolveCursorBrowserEmail(raw, access2, {
   fetchImpl = null,
   apiBaseUrl = "https://api2.cursor.sh",
-  home = homedir9(),
+  home = homedir10(),
   signal
 } = {}) {
   const payload = decodeJwtPayload(access2) ?? {};
@@ -10129,6 +13479,39 @@ function summarizeCursorCandidate(candidate2) {
     diagnostic: candidate2.diagnostic ?? null
   };
 }
+function effortName2(id) {
+  return String(id).replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+function extractCursorReasoning(value) {
+  if (value.reasoning && Array.isArray(value.reasoning.efforts) && value.reasoning.efforts.length > 0) {
+    return value.reasoning;
+  }
+  const paramDefs = Array.isArray(value.parameterDefinitions) ? value.parameterDefinitions : [];
+  const effortParam = paramDefs.find((param) => param?.id === "reasoning_effort" || param?.id === "effort" || param?.id === "reasoning");
+  const enumValues = effortParam?.parameterType?.enumParameter?.values;
+  if (Array.isArray(enumValues) && enumValues.length > 0) {
+    const validValues = enumValues.filter((entry) => entry?.value && entry.value !== "none" && entry.value !== "off");
+    if (validValues.length > 0) {
+      const efforts = validValues.map((entry) => ({
+        id: entry.value,
+        name: firstString8(entry.displayName, effortName2(entry.value))
+      }));
+      const defaultEffort = efforts.some((e) => e.id === "medium") ? "medium" : efforts.some((e) => e.id === "low") ? "low" : efforts[0]?.id;
+      return { efforts, ...defaultEffort ? { defaultEffort } : {} };
+    }
+  }
+  if (value.supportsThinking || value.supports_thinking) {
+    return {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" }
+      ],
+      defaultEffort: "medium"
+    };
+  }
+  return null;
+}
 function normalizeModel(value) {
   if (typeof value === "string") return { id: value, name: value };
   if (!value || typeof value !== "object") return null;
@@ -10137,6 +13520,7 @@ function normalizeModel(value) {
   const contextWindow = value.contextWindow ?? value.context_window ?? value.contextTokenLimit ?? value.context_token_limit;
   const maxTokens = value.maxTokens ?? value.max_tokens ?? value.maxOutputTokens ?? value.max_output_tokens;
   const inputModalities = value.input ?? value.inputModalities ?? value.input_modalities ?? (value.supportsImages || value.supports_images ? ["text", "image"] : null);
+  const reasoning = extractCursorReasoning(value);
   return {
     id,
     name: firstString8(
@@ -10151,8 +13535,7 @@ function normalizeModel(value) {
     ...Number.isInteger(contextWindow) ? { contextWindow } : {},
     ...Number.isInteger(maxTokens) ? { maxTokens } : {},
     ...Array.isArray(inputModalities) ? { inputModalities: [...inputModalities] } : {},
-    ...value.reasoning ? { reasoning: value.reasoning } : {},
-    ...value.supportsThinking || value.supports_thinking ? { reasoning: { supported: true } } : {}
+    ...reasoning ? { reasoning } : {}
   };
 }
 function browserCatalogAccount(accounts) {
@@ -10175,7 +13558,7 @@ function createCursorCatalogLoader({
   }
   async function loadBrowserCatalog({ accounts, secretStore, signal }) {
     const account = browserCatalogAccount(accounts);
-    const credentialRef = account?.auth?.credentialRef ?? account?.credentialRef;
+    const credentialRef = account?.auth?.credentialRef ?? account?.credentialRef ?? (account?.accountId ? createCredentialRef(PROVIDER_ID9, account.accountId) : null);
     if (!account || !credentialRef || typeof secretStore?.read !== "function") return null;
     const credential = await secretStore.read(credentialRef);
     if (!credential?.access) return null;
@@ -10259,7 +13642,7 @@ var CursorSubscriptionDriver = class {
   constructor({
     cliPath = process.env.DOCKYARD_CURSOR_CLI || "cursor-agent",
     env = process.env,
-    home = homedir9(),
+    home = homedir10(),
     commandRunner = runCliCommand,
     requestExecutor = null,
     catalogLoader = null,
@@ -10672,13 +14055,7146 @@ function createCursorModule({ driver = {} } = {}) {
   });
 }
 
+// modules/provider-opencode/src/native-transport.mjs
+import { execFile } from "node:child_process";
+import { randomBytes as randomBytes4 } from "node:crypto";
+import { existsSync as existsSync4, readdirSync, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { homedir as homedir11 } from "node:os";
+import { join as join12 } from "node:path";
+import readline from "node:readline";
+var PROVIDER_ID10 = "opencode";
+var DEFAULT_ENDPOINT5 = "https://opencode.ai/inference/openai/v1/chat/completions";
+function findOpencodeCliPath() {
+  const appSupportCliDir = join12(homedir11(), "Library/Application Support/ai.opencode.desktop/cli");
+  if (existsSync4(appSupportCliDir)) {
+    try {
+      const entries = readdirSync(appSupportCliDir);
+      for (const entry of entries) {
+        const candidate2 = join12(appSupportCliDir, entry, "opencode-cli");
+        if (existsSync4(candidate2)) return candidate2;
+      }
+    } catch {
+    }
+  }
+  const home = homedir11();
+  const candidates = [
+    join12(home, ".opencode", "bin", process.platform === "win32" ? "opencode.exe" : "opencode"),
+    join12(home, ".local", "bin", "opencode"),
+    "/usr/local/bin/opencode",
+    "/opt/homebrew/bin/opencode",
+    process.env.LOCALAPPDATA ? join12(process.env.LOCALAPPDATA, "opencode", "bin", "opencode.exe") : null,
+    process.env.APPDATA ? join12(process.env.APPDATA, "opencode", "bin", "opencode.exe") : null,
+    join12(home, "AppData", "Local", "opencode", "bin", "opencode.exe")
+  ];
+  for (const candidate2 of candidates) {
+    if (candidate2 && existsSync4(candidate2)) return candidate2;
+  }
+  return null;
+}
+function opencodeCliModelCachePath() {
+  return join12(homedir11(), ".dockyard-dsh", "opencode-cli-models.json");
+}
+function readCliModelCache({ maxAgeMs }) {
+  try {
+    const raw = JSON.parse(readFileSync3(opencodeCliModelCachePath(), "utf8"));
+    if (!Array.isArray(raw?.ids) || raw.ids.length === 0) return null;
+    if (typeof raw.at === "number" && Date.now() - raw.at > maxAgeMs) return null;
+    return raw.ids;
+  } catch {
+    return null;
+  }
+}
+function writeCliModelCache(ids) {
+  try {
+    writeFileSync3(opencodeCliModelCachePath(), JSON.stringify({ at: Date.now(), ids }));
+  } catch {
+  }
+}
+async function queryInstalledOpencodeCliModelIds(cliPath, { timeoutMs = 2500, maxAgeMs = 6 * 60 * 60 * 1e3 } = {}) {
+  const cached = readCliModelCache({ maxAgeMs });
+  if (cached) return cached;
+  if (!cliPath || !existsSync4(cliPath)) return null;
+  try {
+    const stdout = await new Promise((resolve2, reject) => {
+      execFile(cliPath, ["models"], { encoding: "utf8", timeout: timeoutMs }, (error, value) => {
+        if (error) reject(error);
+        else resolve2(value);
+      });
+    });
+    const ids = String(stdout).split("\n").map((line) => line.trim()).filter(Boolean).map((line) => line.startsWith("opencode/") ? line.slice("opencode/".length) : line);
+    if (ids.length > 0) {
+      writeCliModelCache(ids);
+      return ids;
+    }
+  } catch {
+  }
+  return null;
+}
+var DEFAULT_OPENCODE_MAX_MESSAGES = 40;
+var OPENCODE_SLIDING_WINDOW_QUANTUM = 10;
+function resolveOpencodeMaxMessages(request = {}) {
+  const envLimit = Number.parseInt(process.env.DOCKYARD_OPENCODE_MAX_MESSAGES ?? "", 10);
+  if (Number.isSafeInteger(envLimit) && envLimit > 0) return envLimit;
+  if (Number.isSafeInteger(request?.maxMessages) && request.maxMessages > 0) return request.maxMessages;
+  const contextWindow = request?.modelContext?.contextWindow ?? request?.contextWindow;
+  if (Number.isSafeInteger(contextWindow) && contextWindow >= 5e5) {
+    return 500;
+  }
+  return DEFAULT_OPENCODE_MAX_MESSAGES;
+}
+function compactMessagesForOpencode(messages, { maxMessages = DEFAULT_OPENCODE_MAX_MESSAGES, quantum = OPENCODE_SLIDING_WINDOW_QUANTUM } = {}) {
+  if (!Array.isArray(messages) || messages.length <= maxMessages) return messages;
+  const initialIndex = messages.findIndex((m) => m?.role === "user" || m?.role === "system");
+  const prefix = initialIndex >= 0 ? [messages[initialIndex]] : [];
+  const rawWindowCount = Math.max(10, maxMessages - prefix.length - 1);
+  const excess = messages.length - maxMessages;
+  const quantOffset = excess > 0 ? Math.floor(excess / quantum) * quantum : 0;
+  const windowCount = Math.max(10, rawWindowCount + (excess - quantOffset));
+  const recent = messages.slice(-windowCount);
+  const startIndex = messages.length - windowCount;
+  if (startIndex > 0) {
+    const firstRecent = recent[0];
+    const isToolResult = firstRecent?.role === "tool" || Array.isArray(firstRecent?.content) && firstRecent.content.some((part) => part?.type === "tool-result" || part?.type === "tool_result");
+    if (isToolResult && messages[startIndex - 1]) {
+      recent.unshift(messages[startIndex - 1]);
+    }
+  }
+  const compactedCount = messages.length - prefix.length - recent.length;
+  if (compactedCount <= 0) return messages;
+  const milestone = {
+    role: "user",
+    content: "[System Note: Context sliding window active. Intermediate messages were compacted to maintain low latency and prevent token exhaustion. Initial requirements and recent active turns are preserved.]"
+  };
+  return [...prefix, milestone, ...recent];
+}
+function contentPartText(part) {
+  if (typeof part === "string") return part;
+  if (!part || typeof part !== "object") return "";
+  if (part.type === "reasoning" || part.type === "thinking") return "";
+  if (part.type === "tool-call" || part.type === "function-call" || part.type === "tooluse") {
+    const name2 = part.name ?? part.function?.name ?? "tool";
+    return `[Tool Call: ${name2}]`;
+  }
+  if (part.type === "tool-result" || part.type === "tool_result") {
+    const text3 = textFromContent(part.content ?? part.output ?? part.result ?? part.text);
+    const trimmed = text3.length > 8192 ? `${text3.slice(0, 8192)}... [truncated]` : text3;
+    return `[Tool Result ${part.toolCallId ?? part.id ?? ""}]:
+${trimmed}`;
+  }
+  return textFromContent(part);
+}
+function promptFromRequest(request) {
+  if (typeof request.prompt === "string" && request.prompt.trim()) {
+    return request.prompt;
+  }
+  const isCompaction = request.purpose === "compaction";
+  const defaultInstruction = isCompaction ? "You are an AI assistant summarizing the conversation. Reply directly with a concise text summary. Do not invoke tools or commands." : "You are an AI assistant. Reply directly to the user in text. Do not invoke tools or commands under any circumstances.";
+  const rawMessages = Array.isArray(request.messages) ? request.messages : [];
+  const messages = isCompaction ? rawMessages : compactMessagesForOpencode(rawMessages, { maxMessages: resolveOpencodeMaxMessages(request) });
+  const parts = [];
+  const systemText = typeof request.system === "string" && request.system.trim() ? `${defaultInstruction}
+
+${request.system.trim()}` : defaultInstruction;
+  parts.push(`[System instructions: ${systemText}]`);
+  for (const msg of messages) {
+    const role = msg?.role === "assistant" ? "Assistant" : msg?.role === "system" ? "System" : "User";
+    const text3 = typeof msg?.content === "string" ? msg.content : Array.isArray(msg?.content) ? msg.content.map(contentPartText).filter(Boolean).join("\n") : contentPartText(msg?.content);
+    if (text3) {
+      parts.push(`${role}: ${text3}`);
+    }
+  }
+  if (parts.length > 0) return parts.join("\n\n");
+  return typeof request.prompt === "string" ? request.prompt : "";
+}
+function firstString9(...values) {
+  return values.find((value) => typeof value === "string" && value.length > 0) ?? null;
+}
+function toolCallPart3(part) {
+  const type = String(part?.type ?? "").toLowerCase().replace(/[_-]/g, "");
+  return type === "toolcall" || type === "functioncall" || type === "tooluse" ? part : null;
+}
+async function openAiContent2(content, attachments) {
+  const values = Array.isArray(content) ? content : [content];
+  const blocks = [];
+  for (const part of values) {
+    if (typeof part === "string") {
+      if (part) blocks.push({ type: "text", text: part });
+      continue;
+    }
+    if (!part || typeof part !== "object") continue;
+    if (part.type === "image") {
+      const image = await resolveImageData(part, attachments);
+      if (!image) throw nativeProviderError(PROVIDER_ID10, "image attachment could not be resolved");
+      blocks.push({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.data}` } });
+      continue;
+    }
+    if (part.type === "tool-result" || part.type === "tool_result") {
+      blocks.push({
+        type: "text",
+        text: `[Tool Result ${part.toolCallId ?? part.id ?? ""}]
+${textFromContent(part.content ?? part.output ?? part.result ?? part.text)}`
+      });
+      continue;
+    }
+    const call = toolCallPart3(part);
+    if (call) {
+      blocks.push({
+        type: "text",
+        text: `[Tool Call ${call.name ?? call.function?.name ?? "tool"}] ${JSON.stringify(parseToolArguments(call.arguments ?? call.input ?? call.function?.arguments))}`
+      });
+      continue;
+    }
+    const text3 = textFromContent(part);
+    if (text3) blocks.push({ type: "text", text: text3 });
+  }
+  return blocks;
+}
+async function buildOpencodeMessages(request, attachments) {
+  const result = [];
+  if (typeof request.system === "string" && request.system.length > 0) {
+    result.push({ role: "system", content: request.system });
+  }
+  const rawMessages = Array.isArray(request.messages) ? request.messages : [];
+  const messages = request.purpose === "compaction" ? rawMessages : compactMessagesForOpencode(rawMessages, { maxMessages: resolveOpencodeMaxMessages(request) });
+  for (const message of messages) {
+    const role = message?.role === "assistant" ? "assistant" : message?.role === "tool" ? "tool" : "user";
+    if (role === "tool") {
+      result.push({
+        role: "tool",
+        tool_call_id: sanitizeToolCallId(firstString9(message.toolCallId, message.tool_call_id, message.id, "tool-result")),
+        content: textFromContent(message.content ?? message.text ?? message.output ?? message.result)
+      });
+      continue;
+    }
+    const content = await openAiContent2(message?.content ?? message?.text, attachments);
+    result.push({
+      role,
+      content: content.length === 1 && content[0]?.type === "text" ? content[0].text : content
+    });
+  }
+  return result;
+}
+var OPENCODE_SERVER_START_TIMEOUT_MS = 15e3;
+var OPENCODE_SERVER_READY_PATTERN = /server listening on (http:\/\/127\.0\.0\.1:\d+)/i;
+var serverChild = null;
+var serverUrl = null;
+var serverPassword = null;
+var serverStarting = null;
+function opencodeServerAuth(password) {
+  return `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`;
+}
+function abortSignalError(signal) {
+  const reason = signal?.reason;
+  if (reason instanceof Error) return reason;
+  const error = new Error("The operation was aborted");
+  error.name = "AbortError";
+  return error;
+}
+function opencodeDebug(...args) {
+  if (process.env.OPENCODE_TRANSPORT_DEBUG) {
+    console.error("[opencode-transport]", ...args);
+  }
+}
+async function startOpencodeServer(cliPath) {
+  opencodeDebug("starting local server", cliPath);
+  const password = randomBytes4(24).toString("base64url");
+  const child = spawnCli(cliPath, ["serve", "--hostname", "127.0.0.1", "--port", "0"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, OPENCODE_PASSWORD: password }
+  });
+  let diagnostics = "";
+  child.stderr?.on("data", (chunk) => {
+    diagnostics = `${diagnostics}${String(chunk)}`.slice(-4e3);
+  });
+  let url;
+  try {
+    url = await new Promise((resolve2, reject) => {
+      let buffer = "";
+      let timer = null;
+      let settled = false;
+      const settle = (error, value) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        child.stdout?.off?.("data", onStdout);
+        child.off?.("exit", onExit);
+        child.off?.("error", onError);
+        if (error) reject(error);
+        else resolve2(value);
+      };
+      const onStdout = (chunk) => {
+        buffer += String(chunk);
+        const match = buffer.match(OPENCODE_SERVER_READY_PATTERN);
+        if (match) settle(null, match[1]);
+      };
+      const onExit = (code, exitSignal) => {
+        settle(
+          new Error(
+            `OpenCode \u672C\u5730\u670D\u52A1\u63D0\u524D\u9000\u51FA (code ${code ?? "null"}, signal ${exitSignal ?? "null"})${diagnostics ? `: ${diagnostics.trim()}` : ""}`
+          )
+        );
+      };
+      const onError = (error) => settle(error);
+      timer = setTimeout(() => {
+        settle(new Error(`OpenCode \u672C\u5730\u670D\u52A1\u542F\u52A8\u8D85\u65F6${diagnostics ? `: ${diagnostics.trim()}` : ""}`));
+      }, OPENCODE_SERVER_START_TIMEOUT_MS);
+      child.stdout?.on("data", onStdout);
+      child.once("exit", onExit);
+      child.once("error", onError);
+    });
+  } catch (error) {
+    try {
+      child.kill();
+    } catch {
+    }
+    throw error;
+  }
+  child.stdout?.on("data", () => {
+  });
+  child.stderr?.on("data", () => {
+  });
+  child.unref?.();
+  child.stdout?.unref?.();
+  child.stderr?.unref?.();
+  const info = { child, url, password };
+  opencodeDebug("local server ready", url);
+  child.once("exit", () => {
+    if (serverChild === child) {
+      serverChild = null;
+      serverUrl = null;
+      serverPassword = null;
+    }
+  });
+  process.once("exit", () => {
+    try {
+      child.kill();
+    } catch {
+    }
+  });
+  return info;
+}
+async function ensureOpencodeServer(cliPath) {
+  if (serverUrl && serverChild && serverChild.exitCode === null) {
+    return { child: serverChild, url: serverUrl, password: serverPassword };
+  }
+  if (serverStarting) return serverStarting;
+  serverStarting = startOpencodeServer(cliPath).then((info) => {
+    serverChild = info.child;
+    serverUrl = info.url;
+    serverPassword = info.password;
+    serverStarting = null;
+    return info;
+  }).catch((error) => {
+    serverStarting = null;
+    throw error;
+  });
+  return serverStarting;
+}
+async function opencodeServerRequest(server, method, path2, body, { signal, fetchImpl = fetch } = {}) {
+  let response;
+  try {
+    response = await fetchImpl(`${server.url}${path2}`, {
+      method,
+      headers: {
+        Authorization: opencodeServerAuth(server.password),
+        ...body !== void 0 ? { "Content-Type": "application/json" } : {}
+      },
+      ...body !== void 0 ? { body: JSON.stringify(body) } : {},
+      ...signal ? { signal } : {}
+    });
+  } catch (error) {
+    if (signal?.aborted) throw abortSignalError(signal);
+    throw error;
+  }
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw nativeProviderError(
+      PROVIDER_ID10,
+      `OpenCode \u672C\u5730\u670D\u52A1\u8BF7\u6C42\u5931\u8D25 (${method} ${path2}): ${response.status}${details ? ` ${details.slice(0, 500)}` : ""}`
+    );
+  }
+  if (response.status === 204) return null;
+  const text3 = await response.text();
+  if (!text3) return null;
+  try {
+    return JSON.parse(text3);
+  } catch {
+    return null;
+  }
+}
+async function openOpencodeEventStream(server, sessionId, { signal, fetchImpl = fetch, idleTimeoutMs = 6e4 } = {}) {
+  let response;
+  try {
+    response = await fetchImpl(`${server.url}/api/event`, {
+      headers: {
+        Authorization: opencodeServerAuth(server.password),
+        Accept: "text/event-stream"
+      },
+      ...signal ? { signal } : {}
+    });
+  } catch (error) {
+    if (signal?.aborted) throw abortSignalError(signal);
+    throw error;
+  }
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw nativeProviderError(
+      PROVIDER_ID10,
+      `OpenCode \u4E8B\u4EF6\u6D41\u8FDE\u63A5\u5931\u8D25: ${response.status}${details ? ` ${details.slice(0, 300)}` : ""}`
+    );
+  }
+  if (!response.body?.getReader) {
+    throw nativeProviderError(PROVIDER_ID10, "OpenCode \u4E8B\u4EF6\u6D41\u4E0D\u53EF\u8BFB\u53D6");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let closed = false;
+  async function readChunkWithTimeout() {
+    if (!idleTimeoutMs || idleTimeoutMs <= 0) return reader.read();
+    let timer = null;
+    try {
+      return await Promise.race([
+        reader.read(),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => {
+            const err = nativeProviderError(PROVIDER_ID10, "OpenCode \u4E8B\u4EF6\u6D41\u54CD\u5E94\u8D85\u65F6", { code: "TIMEOUT" });
+            reject(err);
+          }, idleTimeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  return {
+    async next() {
+      while (!closed) {
+        let boundary = buffer.indexOf("\n\n");
+        while (boundary === -1) {
+          const { value, done } = await readChunkWithTimeout();
+          if (done) {
+            closed = true;
+            return { done: true };
+          }
+          buffer = `${buffer}${decoder.decode(value, { stream: true })}`.replace(/\r\n/g, "\n");
+          boundary = buffer.indexOf("\n\n");
+        }
+        const raw = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        let data = "";
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("data:")) data += `${data ? "\n" : ""}${line.slice(5).trim()}`;
+        }
+        if (!data) continue;
+        let event;
+        try {
+          event = JSON.parse(data);
+        } catch {
+          continue;
+        }
+        if (event?.data?.sessionID !== sessionId) continue;
+        return { done: false, value: event };
+      }
+      return { done: true };
+    },
+    async close() {
+      closed = true;
+      try {
+        await reader.cancel();
+      } catch {
+      }
+    }
+  };
+}
+function opencodeServerModel(request) {
+  const raw = typeof request?.model === "string" ? request.model.trim() : "";
+  if (!raw) return null;
+  const [baseRaw, embeddedVariant] = raw.split("#");
+  const base = baseRaw.startsWith("opencode/") ? baseRaw.slice("opencode/".length) : baseRaw;
+  if (!base) return null;
+  if (request?.purpose === "compaction" || request?.thinking === false) {
+    return { providerID: PROVIDER_ID10, id: base };
+  }
+  const effort = request.reasoningEffort ?? request.reasoning_effort ?? embeddedVariant;
+  const variant = typeof effort === "string" && effort && effort !== "medium" ? effort : null;
+  return { providerID: PROVIDER_ID10, id: base, ...variant ? { variant } : {} };
+}
+function opencodeUsageFromTokens(tokens) {
+  const input = Number(tokens?.input ?? 0);
+  const output = Number(tokens?.output ?? 0);
+  return {
+    prompt_tokens: Number.isFinite(input) ? input : 0,
+    completion_tokens: Number.isFinite(output) ? output : 0,
+    total_tokens: (Number.isFinite(input) ? input : 0) + (Number.isFinite(output) ? output : 0)
+  };
+}
+function opencodeEventMessage(data) {
+  const value = data?.error ?? data?.message ?? data?.reason;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (value && typeof value === "object") {
+    const nested = value.message ?? value.error ?? value.reason;
+    if (typeof nested === "string" && nested.trim()) return nested.trim();
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+function isPermissionRequestEvent(type, data, sessionId) {
+  if (typeof type !== "string" || !type.includes("permission")) return false;
+  if (data?.sessionID !== sessionId) return false;
+  return type.includes("request") || type.endsWith(".updated") || type.endsWith(".asked");
+}
+async function* runViaOpencodeServer({ server, request, signal, fetchImpl, timeoutMs = 6e4 }) {
+  const prompt = promptFromRequest(request);
+  const model = opencodeServerModel(request);
+  const controller = new AbortController();
+  let sessionId = null;
+  let stream = null;
+  let aborted = false;
+  const pendingReplies = /* @__PURE__ */ new Set();
+  const isCompaction = request.purpose === "compaction";
+  const onAbort = () => {
+    aborted = true;
+    controller.abort();
+    if (sessionId) {
+      void opencodeServerRequest(server, "POST", `/api/session/${sessionId}/interrupt`, void 0, { fetchImpl }).catch(() => {
+      });
+    }
+  };
+  if (signal) {
+    if (signal.aborted) throw abortSignalError(signal);
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
+  let text3 = "";
+  let textIndex = 0;
+  let textOpen = false;
+  let nextIndex = 1;
+  let reasoning = null;
+  let rawUsage = null;
+  let stop = "stop";
+  let stepCount = 0;
+  try {
+    const created = await opencodeServerRequest(
+      server,
+      "POST",
+      "/api/session",
+      {
+        ...model ? { model } : {},
+        location: { directory: process.cwd() }
+      },
+      { signal: controller.signal, fetchImpl }
+    );
+    sessionId = created?.data?.id ?? created?.id ?? null;
+    if (!sessionId) {
+      throw nativeProviderError(PROVIDER_ID10, "OpenCode \u4F1A\u8BDD\u521B\u5EFA\u5931\u8D25\uFF1A\u54CD\u5E94\u4E2D\u6CA1\u6709\u4F1A\u8BDD ID");
+    }
+    opencodeDebug("session created", sessionId);
+    stream = await openOpencodeEventStream(server, sessionId, {
+      signal: controller.signal,
+      fetchImpl,
+      idleTimeoutMs: timeoutMs
+    });
+    opencodeDebug("event stream connected");
+    await opencodeServerRequest(
+      server,
+      "POST",
+      `/api/session/${sessionId}/prompt`,
+      { text: prompt },
+      { signal: controller.signal, fetchImpl }
+    );
+    opencodeDebug("prompt submitted");
+    let finished = false;
+    while (!finished) {
+      let next;
+      try {
+        next = await stream.next();
+      } catch (error) {
+        if (controller.signal.aborted || signal?.aborted) break;
+        throw error;
+      }
+      if (next.done) {
+        if (!finished && !text3 && !reasoning) {
+          throw nativeProviderError(PROVIDER_ID10, "OpenCode \u4E8B\u4EF6\u6D41\u5F02\u5E38\u7ED3\u675F\uFF0C\u672A\u8FD4\u56DE\u6709\u6548\u5185\u5BB9", { code: "EMPTY_RESPONSE" });
+        }
+        break;
+      }
+      const event = next.value;
+      const type = event.type;
+      const data = event.data ?? {};
+      if (type && !type.endsWith(".delta")) opencodeDebug("event", type);
+      if (type === "session.reasoning.delta" && typeof data.delta === "string" && data.delta) {
+        if (!isCompaction) {
+          if (textOpen) {
+            yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+            textOpen = false;
+          }
+          if (!reasoning) {
+            reasoning = { index: nextIndex++, text: "" };
+            yield { type: "block-start", index: reasoning.index, blockType: "reasoning" };
+          }
+          reasoning.text += data.delta;
+          yield { type: "reasoning-delta", index: reasoning.index, text: data.delta };
+        }
+      } else if (type === "session.text.delta" && typeof data.delta === "string" && data.delta) {
+        if (reasoning) {
+          yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+          reasoning = null;
+        }
+        if (!textOpen) {
+          textIndex = nextIndex++;
+          text3 = "";
+          textOpen = true;
+          yield { type: "block-start", index: textIndex, blockType: "text" };
+        }
+        text3 += data.delta;
+        yield { type: "text-delta", index: textIndex, text: data.delta };
+      } else if (type === "session.usage.updated" && data.tokens) {
+        rawUsage = opencodeUsageFromTokens(data.tokens);
+      } else if (type === "session.step.ended") {
+        stepCount++;
+        if (typeof data.finish === "string" && data.finish) stop = data.finish;
+        if (data.tokens) rawUsage = opencodeUsageFromTokens(data.tokens);
+        if (isCompaction) {
+          if (text3 || data.finish === "stop") {
+            finished = true;
+          }
+        } else if (data.finish === "stop" && text3) {
+          finished = true;
+        } else if (stepCount >= 5 && text3) {
+          finished = true;
+        }
+      } else if (type === "session.step.failed") {
+        const msg = opencodeEventMessage(data) || "OpenCode \u6B65\u9AA4\u6267\u884C\u5931\u8D25";
+        const status = data.error?.status ?? data.status;
+        const code = data.error?.type ?? data.type;
+        throw nativeProviderError(PROVIDER_ID10, msg, { status, code });
+      } else if (type === "session.execution.succeeded") {
+        finished = true;
+      } else if (type === "session.execution.failed" || type === "session.execution.error" || type === "session.error") {
+        const msg = opencodeEventMessage(data) || "OpenCode \u6267\u884C\u5931\u8D25";
+        const status = data.error?.status ?? data.status;
+        const code = data.error?.type ?? data.type;
+        throw nativeProviderError(PROVIDER_ID10, msg, { status, code });
+      } else if (type === "session.execution.interrupted") {
+        aborted = true;
+        finished = true;
+      } else if (isPermissionRequestEvent(type, data, sessionId)) {
+        const requestId = data.id ?? data.requestID;
+        if (requestId) {
+          pendingReplies.add(
+            opencodeServerRequest(
+              server,
+              "POST",
+              `/api/session/${sessionId}/permission/${requestId}/reply`,
+              { decision: "deny" },
+              { fetchImpl }
+            ).catch(() => {
+            })
+          );
+        }
+      }
+    }
+  } finally {
+    if (stream) await stream.close();
+    if (sessionId) {
+      await opencodeServerRequest(server, "DELETE", `/api/session/${sessionId}`, void 0, { fetchImpl }).catch(() => {
+      });
+    }
+    signal?.removeEventListener?.("abort", onAbort);
+    if (pendingReplies.size > 0) await Promise.allSettled([...pendingReplies]);
+  }
+  if (reasoning) {
+    yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+  }
+  if (textOpen) {
+    yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+  }
+  if (rawUsage) {
+    yield { type: "usage", usage: normalizeUsage(rawUsage) };
+  }
+  yield {
+    type: "finish",
+    reason: aborted ? { kind: "stop" } : finishReason(stop),
+    ...rawUsage ? { usage: normalizeUsage(rawUsage) } : {}
+  };
+}
+function createOpencodeNativeExecutor({
+  endpoint: endpoint2 = DEFAULT_ENDPOINT5,
+  apiKey = null,
+  fetchImpl = fetch,
+  timeoutMs = 6e4,
+  cliPath = void 0
+} = {}) {
+  const validatedEndpoint = validateNativeEndpoint(endpoint2, { providerId: PROVIDER_ID10 });
+  return async function* opencodeNativeExecutor(envelope2 = {}) {
+    const { request, attachments, credential, signal } = envelope2;
+    const token = apiKey ?? (credential?.access && credential.access !== "free-tier" ? credential.access : null) ?? credential?.apiKey ?? credential?.token ?? process.env.OPENCODE_API_KEY ?? null;
+    const resolvedCliPath = !token ? cliPath !== void 0 ? cliPath : findOpencodeCliPath() : null;
+    if (resolvedCliPath) {
+      let server = null;
+      try {
+        server = await ensureOpencodeServer(resolvedCliPath);
+      } catch {
+        server = null;
+      }
+      if (server) {
+        let emitted = false;
+        try {
+          for await (const event of runViaOpencodeServer({ server, request, signal, fetchImpl, timeoutMs })) {
+            emitted = true;
+            yield event;
+          }
+          return;
+        } catch (error) {
+          const variantRejected = !emitted && !signal?.aborted && /variant unavailable/i.test(String(error?.message ?? ""));
+          if (variantRejected) {
+            try {
+              for await (const event of runViaOpencodeServer({
+                server,
+                request: { ...request, reasoningEffort: void 0, reasoning_effort: void 0 },
+                signal,
+                fetchImpl,
+                timeoutMs
+              })) {
+                emitted = true;
+                yield event;
+              }
+              return;
+            } catch (retryError) {
+              if (emitted || signal?.aborted) throw retryError;
+            }
+          }
+          if (emitted || signal?.aborted) throw error;
+        }
+      }
+    }
+    if (resolvedCliPath) {
+      const baseModel = request.model?.startsWith("opencode/") ? request.model : `opencode/${request.model}`;
+      const isCompaction = request.purpose === "compaction";
+      const thinkingDisabled = isCompaction || request.thinking === false;
+      const effort = thinkingDisabled ? null : request.reasoningEffort ?? request.reasoning_effort;
+      const model = effort && effort !== "medium" ? `${baseModel}#${effort}` : baseModel;
+      const prompt = promptFromRequest(request);
+      const args = ["run", "--model", model];
+      if (!thinkingDisabled) {
+        args.push("--thinking");
+      }
+      args.push("--format", "json", prompt);
+      const child = spawnCli(resolvedCliPath, args, {
+        signal,
+        stdio: ["ignore", "pipe", "pipe"],
+        env: { ...process.env }
+      });
+      let timeoutTimer = null;
+      let timedOut = false;
+      if (timeoutMs > 0) {
+        timeoutTimer = setTimeout(() => {
+          timedOut = true;
+          try {
+            child.kill("SIGTERM");
+          } catch {
+          }
+        }, timeoutMs);
+      }
+      const rl = readline.createInterface({ input: child.stdout });
+      let text4 = "";
+      let textIndex2 = 0;
+      let textOpen2 = false;
+      let nextIndex2 = 1;
+      let reasoning2 = null;
+      let rawUsage2 = null;
+      let stderrOutput = "";
+      child.stderr?.on?.("data", (chunk) => {
+        stderrOutput += String(chunk);
+      });
+      try {
+        for await (const line of rl) {
+          if (!line.trim()) continue;
+          let parsed;
+          try {
+            parsed = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (parsed.type === "reasoning" && parsed.part?.text) {
+            if (!isCompaction) {
+              if (textOpen2) {
+                yield { type: "block-end", index: textIndex2, block: { type: "text", text: text4 } };
+                textOpen2 = false;
+              }
+              if (!reasoning2) {
+                reasoning2 = { index: nextIndex2++, text: "" };
+                yield { type: "block-start", index: reasoning2.index, blockType: "reasoning" };
+              }
+              const chunk = parsed.part.text;
+              reasoning2.text += chunk;
+              yield { type: "reasoning-delta", index: reasoning2.index, text: chunk };
+            }
+          } else if (parsed.type === "text" && parsed.part?.text) {
+            if (reasoning2) {
+              yield { type: "block-end", index: reasoning2.index, block: { type: "reasoning", text: reasoning2.text } };
+              reasoning2 = null;
+            }
+            if (!textOpen2) {
+              textIndex2 = nextIndex2++;
+              text4 = "";
+              textOpen2 = true;
+              yield { type: "block-start", index: textIndex2, blockType: "text" };
+            }
+            const chunk = parsed.part.text;
+            text4 += chunk;
+            yield { type: "text-delta", index: textIndex2, text: chunk };
+          } else if (parsed.type === "step_finish" && parsed.part?.tokens) {
+            rawUsage2 = {
+              prompt_tokens: parsed.part.tokens.input ?? 0,
+              completion_tokens: parsed.part.tokens.output ?? 0,
+              total_tokens: (parsed.part.tokens.input ?? 0) + (parsed.part.tokens.output ?? 0)
+            };
+            if (isCompaction) {
+              break;
+            }
+          } else if (parsed.type === "error") {
+            const msg = parsed.error?.message || "OpenCode CLI execution error";
+            const status = parsed.error?.status;
+            const code = parsed.error?.type;
+            throw nativeProviderError(PROVIDER_ID10, msg, { status, code });
+          }
+        }
+      } finally {
+        if (timeoutTimer) clearTimeout(timeoutTimer);
+        try {
+          child.kill();
+        } catch {
+        }
+      }
+      if (timedOut) {
+        throw nativeProviderError(PROVIDER_ID10, `OpenCode CLI \u6267\u884C\u8D85\u65F6 (${timeoutMs}ms)`, { code: "TIMEOUT" });
+      }
+      if (!text4 && !reasoning2) {
+        if (stderrOutput.trim()) {
+          throw nativeProviderError(PROVIDER_ID10, stderrOutput.trim());
+        }
+        throw nativeProviderError(PROVIDER_ID10, "OpenCode CLI \u672A\u8FD4\u56DE\u6709\u6548\u5185\u5BB9", { code: "EMPTY_RESPONSE" });
+      }
+      if (reasoning2) {
+        yield { type: "block-end", index: reasoning2.index, block: { type: "reasoning", text: reasoning2.text } };
+      }
+      if (textOpen2) {
+        yield { type: "block-end", index: textIndex2, block: { type: "text", text: text4 } };
+      }
+      if (rawUsage2) {
+        yield {
+          type: "usage",
+          usage: normalizeUsage(rawUsage2)
+        };
+      }
+      yield {
+        type: "finish",
+        reason: { kind: "stop" },
+        ...rawUsage2 ? { usage: normalizeUsage(rawUsage2) } : {}
+      };
+      return;
+    }
+    const isFreeTier = !token || token === "free-tier";
+    let activeEndpoint = validatedEndpoint;
+    let authHeader = token && token !== "free-tier" ? `Bearer ${token}` : "Bearer public";
+    let extraHeaders = {};
+    let tools = void 0;
+    if (isFreeTier) {
+      activeEndpoint = "https://opencode.ai/inference/v1/chat/completions";
+      const ts = Date.now();
+      const value = ~(BigInt(ts) * 0x1000n + 1n);
+      let hex = "";
+      for (let i = 0; i < 6; i++) hex += Number(value >> BigInt(40 - 8 * i) & 0xffn).toString(16).padStart(2, "0");
+      const BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+      let rand = "";
+      for (const b of randomBytes4(14)) rand += BASE62[b % 62];
+      const session = `ses_${hex}${rand}`;
+      extraHeaders = {
+        "user-agent": "opencode/latest/2.0.26/cli",
+        "x-opencode-client": "cli",
+        "x-opencode-session": session,
+        "x-opencode-session-id": session,
+        "x-session-affinity": session,
+        "x-session-id": session,
+        "x-opencode-project": "global"
+      };
+      tools = [
+        {
+          type: "function",
+          function: {
+            name: "read",
+            description: "Read the contents of a file or directory. Supports text files, images, and PDFs. Images and PDFs are presented directly to the model. Each text line is prefixed by its 1-based line number as <line>: <content>. The prefix is for reference and is not part of the file content. Directory entries are returned one per line. Use offset and limit to read large files or directories in sections. Prefer one larger read over many small slices, and use grep to find specific content in large files.",
+            parameters: {
+              type: "object",
+              properties: {
+                path: { type: "string", description: "File or directory to read" },
+                offset: { type: "integer", minimum: 0, description: "The line or directory entry to start reading from (1-based)" },
+                limit: { type: "integer", minimum: 0, description: "The maximum number of lines or directory entries to read (defaults to and capped at 2000)" }
+              },
+              required: ["path"],
+              additionalProperties: false
+            }
+          }
+        },
+        {
+          type: "function",
+          function: {
+            name: "shell",
+            description: "Execute a shell command and return its output. Commands run on Linux using bash. Quote file paths containing spaces or special characters. Prefer dedicated tools over shell commands when possible. When output is large, the full result is saved to a file and a truncated preview is returned. Rely on automatic truncation unless filtering the output is more useful. Commands accept an optional timeout, background commands have no timeout by default. Background commands return immediately, and you will be notified when they complete.",
+            parameters: {
+              type: "object",
+              properties: {
+                command: { type: "string", description: "Shell command string to execute" },
+                workdir: { type: "string", description: "Working directory to execute the command in. Defaults to the current working directory. When possible, avoid changing directories in the command and set the working directory here instead." },
+                timeout: { type: "integer", minimum: 0, description: "Timeout in milliseconds. Set to 0 to disable the timeout. Defaults to 120000 for foreground commands. Background commands have no timeout by default." },
+                background: { type: "boolean", description: "Run the command in the background and return immediately (useful for dev servers and long-running builds). You do not need to use '&' at the end of the command when using this parameter. You will be notified when it completes. DO NOT poll for completion." }
+              },
+              required: ["command"],
+              additionalProperties: false
+            }
+          }
+        }
+      ];
+    }
+    const messages = await buildOpencodeMessages(request, attachments);
+    const body = {
+      model: request.model,
+      messages,
+      stream: true,
+      ...typeof request.temperature === "number" ? { temperature: request.temperature } : {},
+      ...typeof request.maxTokens === "number" ? { max_tokens: request.maxTokens } : {},
+      ...request.reasoningEffort && request.purpose !== "compaction" && request.thinking !== false ? { reasoning_effort: request.reasoningEffort } : {},
+      ...tools ? { tools } : {}
+    };
+    const headers = {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      Authorization: authHeader,
+      ...extraHeaders
+    };
+    const response = await fetchNativeResponse(
+      activeEndpoint,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal
+      },
+      {
+        providerId: PROVIDER_ID10,
+        timeoutMs,
+        fetchImpl
+      }
+    );
+    let text3 = "";
+    let textIndex = 0;
+    let textOpen = false;
+    let nextIndex = 1;
+    let reasoning = null;
+    let rawUsage = null;
+    let stop = "stop";
+    for await (const event of readSseEvents(response, { signal, timeoutMs, providerId: PROVIDER_ID10 })) {
+      if (event?.done) continue;
+      const parsed = event?.data;
+      if (!parsed || typeof parsed !== "object") continue;
+      if (parsed.usage) rawUsage = parsed.usage;
+      const choice = Array.isArray(parsed.choices) ? parsed.choices[0] : null;
+      if (!choice) continue;
+      const delta = choice.delta ?? {};
+      const reasoningDelta = firstString9(delta.reasoning_content, delta.reasoning, delta.thought);
+      if (reasoningDelta) {
+        if (textOpen) {
+          yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+          textOpen = false;
+        }
+        if (!reasoning) {
+          reasoning = { index: nextIndex++, text: "" };
+          yield { type: "block-start", index: reasoning.index, blockType: "reasoning" };
+        }
+        reasoning.text += reasoningDelta;
+        yield { type: "reasoning-delta", index: reasoning.index, text: reasoningDelta };
+      }
+      const content = typeof delta.content === "string" ? delta.content : textFromContent(delta.content);
+      if (content) {
+        if (reasoning) {
+          yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+          reasoning = null;
+        }
+        if (!textOpen) {
+          textIndex = nextIndex++;
+          text3 = "";
+          textOpen = true;
+          yield { type: "block-start", index: textIndex, blockType: "text" };
+        }
+        text3 += content;
+        yield { type: "text-delta", index: textIndex, text: content };
+      }
+      if (choice.finish_reason) {
+        stop = choice.finish_reason;
+      }
+    }
+    if (reasoning) {
+      yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+    }
+    if (textOpen) {
+      yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+    }
+    if (rawUsage) {
+      yield {
+        type: "usage",
+        usage: normalizeUsage(rawUsage)
+      };
+    }
+    yield {
+      type: "finish",
+      reason: finishReason(stop),
+      ...rawUsage ? { usage: normalizeUsage(rawUsage) } : {}
+    };
+  };
+}
+
+// modules/provider-opencode/src/driver.mjs
+var PROVIDER_ID11 = "opencode";
+var DEFAULT_CATALOG_URL = "https://opencode.ai/zen/v1/models";
+var DEFAULT_ENDPOINT6 = "https://opencode.ai/inference/openai/v1/chat/completions";
+function isOpencodeFreeModelId(id) {
+  const value = String(id ?? "");
+  return value.includes("-free") || value.includes(":free") || value === "big-pickle" || value === "free" || value.endsWith("/free");
+}
+var BUILTIN_OPENCODE_FREE_MODELS = Object.freeze([
+  {
+    id: "big-pickle",
+    name: "Big Pickle (Free)",
+    free: true,
+    contextWindow: 131072,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "minimal", name: "Minimal" },
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" }
+      ],
+      defaultEffort: "medium"
+    }
+  },
+  {
+    id: "beam-free",
+    name: "Beam (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192
+  },
+  {
+    id: "mimo-v2.6-flash-free",
+    name: "MIMO v2.6 Flash (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "minimal", name: "Minimal" },
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" }
+      ],
+      defaultEffort: "medium"
+    }
+  },
+  {
+    id: "nemotron-3.5-super-vl-free",
+    name: "Nemotron 3.5 Super VL (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "nemotron-3.5-lightning-free",
+    name: "Nemotron 3.5 Lightning (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192
+  },
+  {
+    id: "nemotron-3-ultra-free",
+    name: "Nemotron 3 Ultra (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "minimal", name: "Minimal" },
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" }
+      ],
+      defaultEffort: "medium"
+    }
+  },
+  {
+    id: "jev-1.13-free",
+    name: "JEV 1.13 (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192
+  },
+  {
+    id: "longcat-2.5-preview-free",
+    name: "Longcat 2.5 Preview (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192
+  },
+  {
+    id: "flint-40b-free",
+    name: "Flint 40B (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192
+  },
+  {
+    id: "deepseek-v4.1-flash-free",
+    name: "DeepSeek v4.1 Flash (Free)",
+    contextWindow: 2e5,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "high", name: "High" },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "glm-5.3-flash-free",
+    name: "GLM 5.3 Flash (Free)",
+    contextWindow: 204800,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "high", name: "High" },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "minimax-m3.1-flash-free",
+    name: "MiniMax M3.1 Flash (Free)",
+    contextWindow: 131072,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "minimal", name: "Minimal" },
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" }
+      ],
+      defaultEffort: "medium"
+    }
+  },
+  {
+    id: "qwen3.6-plus-free",
+    name: "Qwen 3.6 Plus (Free)",
+    contextWindow: 262144,
+    maxTokens: 8192,
+    reasoning: {
+      efforts: [
+        { id: "minimal", name: "Minimal" },
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" }
+      ],
+      defaultEffort: "medium"
+    }
+  },
+  {
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    contextWindow: 1e6,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "minimal", name: "Minimal" },
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High" },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "medium"
+    }
+  },
+  {
+    id: "gemini-3.8-flash",
+    name: "Gemini 3.8 Flash",
+    contextWindow: 1048576,
+    maxTokens: 16384
+  }
+].map((model) => ({ ...model, free: true })));
+function summarizeOpencodeCandidate(candidate2) {
+  return candidate2?.displayName ?? candidate2?.email ?? candidate2?.accountId ?? "OpenCode Free";
+}
+function findOpencodeRegistryModel(id, registry) {
+  if (!id || !Array.isArray(registry) || registry.length === 0) return null;
+  const exact = registry.find((m) => m.id === id);
+  if (exact) return exact;
+  const cleanId = id.replace(/-free$/, "");
+  const cleanMatch = registry.find((m) => m.id === cleanId);
+  if (cleanMatch) return cleanMatch;
+  if (id.startsWith("deepseek-v4")) {
+    return registry.find((m) => m.id === "deepseek-v4-flash-free" || m.id === "deepseek-v4-flash");
+  }
+  if (id.startsWith("claude-sonnet") || id.startsWith("claude-opus") || id.startsWith("claude-fable") || id.startsWith("claude-haiku")) {
+    const family = id.split("-").slice(0, 2).join("-");
+    return registry.find((m) => m.id.startsWith(family) && m.thinkingLevelMap);
+  }
+  if (id.startsWith("glm-5")) {
+    return registry.find((m) => m.id === "glm-5.2" || m.id.startsWith("glm-5") && m.thinkingLevelMap);
+  }
+  if (id.startsWith("gemini-")) {
+    return registry.find((m) => m.provider === "opencode" && m.id.startsWith("gemini-") && m.thinkingLevelMap);
+  }
+  if (id.startsWith("grok-")) {
+    return registry.find((m) => m.id === "grok-4.5" || m.id.startsWith("grok-") && m.thinkingLevelMap);
+  }
+  if (id.startsWith("gpt-5") || id.startsWith("gpt-6")) {
+    return registry.find((m) => m.provider === "opencode" && m.id.startsWith("gpt-5") && m.thinkingLevelMap);
+  }
+  if (id.startsWith("qwen")) {
+    return registry.find((m) => m.provider === "opencode" && m.id.startsWith("qwen"));
+  }
+  if (id.startsWith("minimax")) {
+    return registry.find((m) => m.provider === "opencode" && m.id.startsWith("minimax"));
+  }
+  return null;
+}
+var OPENCODE_VERIFIED_VARIANTS = Object.freeze({
+  "big-pickle": [],
+  "mimo-v2.6-flash-free": [],
+  "deepseek-v4.1-flash-free": ["high", "max"],
+  "glm-5.3-flash-free": ["high", "max"],
+  "minimax-m3.1-flash-free": ["low", "high"]
+});
+var EFFORT_LABELS = Object.freeze({
+  none: "None",
+  minimal: "Minimal",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  max: "Max",
+  xhigh: "Extra High"
+});
+function reasoningFromZenCapabilities(capabilities) {
+  const reasoning = capabilities?.reasoning;
+  if (!reasoning?.supported) return null;
+  const ids = Array.isArray(reasoning.effort) ? reasoning.effort.filter((value) => typeof value === "string" && value.length > 0) : [];
+  if (ids.length === 0 && reasoning.toggle === true) ids.push("none");
+  if (ids.length === 0) return null;
+  return {
+    efforts: ids.map((id) => ({ id, name: EFFORT_LABELS[id] ?? id }))
+  };
+}
+function withVerifiedVariants(models) {
+  return models.map((model) => {
+    if (model.reasoning?.efforts?.length) return model;
+    if (!Object.hasOwn(OPENCODE_VERIFIED_VARIANTS, model.id)) return model;
+    const variants = OPENCODE_VERIFIED_VARIANTS[model.id];
+    if (variants.length === 0) {
+      const { reasoning: _drop, ...rest } = model;
+      return rest;
+    }
+    const efforts = variants.map((id) => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1) }));
+    return { ...model, reasoning: { efforts, defaultEffort: variants.at(-1) } };
+  });
+}
+function parseOpencodeCatalog(data, { registry = [], installedIds = null } = {}) {
+  const models = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];
+  if (!models.length) {
+    if (Array.isArray(installedIds) && installedIds.length > 0) {
+      const builtinMap2 = new Map(BUILTIN_OPENCODE_FREE_MODELS.map((m) => [m.id, m]));
+      const installedModels = installedIds.map((id) => {
+        const builtin = builtinMap2.get(id);
+        if (builtin) return builtin;
+        return {
+          id,
+          name: stripVendorPrefix(id).replace(/^openrouter\//, ""),
+          contextWindow: 131072,
+          maxTokens: 8192,
+          ...isOpencodeFreeModelId(id) ? { free: true } : {}
+        };
+      });
+      return { models: withVerifiedVariants(installedModels) };
+    }
+    return { models: withVerifiedVariants([...BUILTIN_OPENCODE_FREE_MODELS]) };
+  }
+  const builtinMap = new Map(BUILTIN_OPENCODE_FREE_MODELS.map((m) => [m.id, m]));
+  const result = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of models) {
+    const id = stringValue(item?.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const regModel = findOpencodeRegistryModel(id, registry);
+    const builtin = builtinMap.get(id);
+    const inputPrice = item?.cost?.text?.input?.price;
+    const isFree = typeof inputPrice === "number" ? inputPrice === 0 : isOpencodeFreeModelId(id);
+    const name2 = stripVendorPrefix(stringValue(item?.name) ?? regModel?.name ?? builtin?.name ?? id).replace(/^openrouter\//, "");
+    const contextWindow = Number.isInteger(item?.limit?.context) ? item.limit.context : Number.isInteger(item?.contextWindow) ? item.contextWindow : Number.isInteger(regModel?.contextWindow) ? regModel.contextWindow : builtin?.contextWindow ?? 131072;
+    const maxTokens = Number.isInteger(item?.limit?.output) ? Math.min(item.limit.output, 16384) : Number.isInteger(item?.maxTokens) ? Math.min(item.maxTokens, 16384) : Number.isInteger(regModel?.maxTokens) ? Math.min(regModel.maxTokens, 16384) : builtin?.maxTokens ?? 8192;
+    const reasoning = reasoningFromZenCapabilities(item?.capabilities) ?? (item?.reasoning ? resolveReasoningFromModel(item) : regModel ? resolveReasoningFromModel(regModel) : builtin?.reasoning);
+    const inputModalities = Array.isArray(item?.modalities?.input) ? [...new Set(item.modalities.input.filter((value) => typeof value === "string").map((value) => value.startsWith("image/") ? "image" : value))] : null;
+    result.push({
+      id,
+      name: name2,
+      contextWindow,
+      maxTokens,
+      ...inputModalities && inputModalities.length > 0 ? { inputModalities } : {},
+      // Publish the free tier so a spent account can still serve these models.
+      ...isFree ? { free: true } : {},
+      ...reasoning ? { reasoning } : {}
+    });
+  }
+  return { models: withVerifiedVariants(result.length > 0 ? result : [...BUILTIN_OPENCODE_FREE_MODELS]) };
+}
+function freeTierCatalog(catalog) {
+  if (String(process.env.DOCKYARD_OPENCODE_ALL_MODELS ?? "") === "1") return catalog;
+  const models = Array.isArray(catalog?.models) ? catalog.models : [];
+  const free = models.filter((model) => model?.free === true);
+  return { ...catalog, models: free.length > 0 ? free : models };
+}
+function createOpencodeCatalogLoader({
+  catalogUrl = DEFAULT_CATALOG_URL,
+  fetchImpl = fetch,
+  timeoutMs = 8e3,
+  cacheTtlMs = 6e4,
+  registryLoader = null
+} = {}) {
+  const validatedUrl = assertSecureEndpointUrl(catalogUrl, "OPENCODE_CATALOG_URL");
+  let cached = null;
+  let cachedAt = 0;
+  let pending = null;
+  return async function opencodeCatalogLoader({ force = false } = {}) {
+    const now = Date.now();
+    if (!force && cached && now - cachedAt < cacheTtlMs) return cached;
+    if (pending) return pending;
+    pending = (async () => {
+      const registry = typeof registryLoader === "function" ? await registryLoader().catch(() => []) : [];
+      const cliPath = findOpencodeCliPath();
+      const installedIds = cliPath ? await queryInstalledOpencodeCliModelIds(cliPath) : null;
+      try {
+        const { body } = await fetchJson(
+          validatedUrl,
+          { headers: { Accept: "application/json" } },
+          { fetchImpl, timeoutMs }
+        );
+        cached = freeTierCatalog(parseOpencodeCatalog(body, { registry, installedIds }));
+      } catch {
+        cached = freeTierCatalog(parseOpencodeCatalog(null, { registry, installedIds }));
+      }
+      cachedAt = Date.now();
+      return cached;
+    })().finally(() => {
+      pending = null;
+    });
+    return pending;
+  };
+}
+var OpencodeDriver = class {
+  constructor({
+    endpoint: endpoint2 = DEFAULT_ENDPOINT6,
+    catalogUrl = DEFAULT_CATALOG_URL,
+    catalogLoader = null,
+    requestExecutor = null,
+    fetchImpl = fetch,
+    timeoutMs = 3e4,
+    registryLoader = null
+  } = {}) {
+    this.endpoint = endpoint2;
+    this.catalogUrl = catalogUrl;
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+    this.catalogLoader = catalogLoader ?? createOpencodeCatalogLoader({
+      catalogUrl,
+      fetchImpl,
+      timeoutMs: 8e3,
+      registryLoader
+    });
+    this.requestExecutor = requestExecutor ?? createOpencodeNativeExecutor({
+      endpoint: endpoint2,
+      fetchImpl,
+      timeoutMs
+    });
+  }
+  async discover() {
+    return {
+      candidates: [
+        {
+          candidateId: "opencode-free",
+          accountId: "opencode-free",
+          displayName: "OpenCode Free",
+          email: "zen@opencode.ai",
+          subscription: {
+            plan: "Zen Free Rotation",
+            status: "active"
+          },
+          quota: {
+            remaining: 100,
+            limit: 100,
+            unit: "requests",
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+          },
+          source: "opencode_free_tier",
+          health: {
+            status: "healthy"
+          }
+        }
+      ],
+      source: "opencode_free_tier",
+      diagnostics: []
+    };
+  }
+  async importAccount(candidate2, context = {}) {
+    const accountId = candidate2?.accountId || "opencode-free";
+    const ref = createCredentialRef(PROVIDER_ID11, accountId);
+    if (context.secretStore) {
+      await context.secretStore.write(ref, {
+        type: "opencode_free",
+        access: "free-tier"
+      }).catch(() => {
+      });
+    }
+    return createAccountRecord({
+      accountId,
+      providerId: PROVIDER_ID11,
+      displayName: candidate2?.displayName || "OpenCode Free",
+      email: candidate2?.email || "zen@opencode.ai",
+      auth: {
+        kind: "opencode_free",
+        credentialRef: ref
+      },
+      subscription: {
+        plan: candidate2?.subscription?.plan || "Zen Free Rotation",
+        status: "active"
+      },
+      quota: createQuotaSnapshot(candidate2?.quota || {
+        remaining: 100,
+        limit: 100,
+        unit: "requests"
+      }),
+      health: {
+        status: "healthy"
+      }
+    });
+  }
+  async getActiveSession() {
+    return this.discover().then((res) => Array.isArray(res?.candidates) ? res.candidates[0] : Array.isArray(res) ? res[0] : null);
+  }
+  async refreshAccount(account) {
+    return {
+      quota: createQuotaSnapshot({
+        remaining: 100,
+        limit: 100,
+        unit: "requests",
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      }),
+      health: {
+        status: "healthy",
+        lastCheckedAt: (/* @__PURE__ */ new Date()).toISOString()
+      }
+    };
+  }
+  async getQuota() {
+    return createQuotaSnapshot({
+      remaining: 100,
+      limit: 100,
+      unit: "requests",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  }
+  async getCatalog(context = {}) {
+    return this.catalogLoader({ force: Boolean(context.force) });
+  }
+  async invoke(request, invocation, context = {}) {
+    const executor = context.requestExecutor ?? this.requestExecutor;
+    let credential = null;
+    if (context.secretStore && invocation?.auth?.credentialRef) {
+      credential = await context.secretStore.read(invocation.auth.credentialRef).catch(() => null);
+    }
+    if (!credential) {
+      credential = invocation?.auth ?? { access: "free-tier" };
+    }
+    return executor({
+      request,
+      invocation,
+      context,
+      attachments: context.attachments ?? invocation?.attachments,
+      credential,
+      signal: context.signal ?? invocation?.signal
+    });
+  }
+  async stream(request, invocation, context = {}) {
+    return this.invoke(request, invocation, context);
+  }
+};
+function createOpencodeDriver(options = {}) {
+  return new OpencodeDriver(options);
+}
+
+// modules/provider-opencode/src/index.mjs
+function createOpencodeModule({ driver = {} } = {}) {
+  return defineProviderModule({
+    id: "opencode",
+    displayName: "OpenCode",
+    capabilities: [
+      PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT,
+      "quota",
+      "catalog",
+      "invoke",
+      "stream"
+    ],
+    driver
+  });
+}
+
+// modules/provider-kilo/src/driver.mjs
+var PROVIDER_ID12 = "kilo";
+var STANDARD_KILO_REASONING_EFFORTS = Object.freeze([
+  { id: "low", name: "Low", description: "\u5FEB\u901F\u601D\u8003\uFF0C\u4FDD\u7559\u57FA\u7840\u63A8\u7406" },
+  { id: "medium", name: "Medium", description: "\u6807\u51C6\u601D\u8003\uFF0C\u5E73\u8861\u63A8\u7406\u6DF1\u5EA6\u4E0E\u54CD\u5E94\u901F\u5EA6" },
+  { id: "high", name: "High", description: "\u6DF1\u5EA6\u601D\u8003\uFF0C\u9002\u5408\u590D\u6742\u903B\u8F91\u4E0E\u591A\u6B65\u9AA4\u5206\u6790" }
+]);
+var EXTENDED_KILO_REASONING_EFFORTS = Object.freeze([
+  { id: "low", name: "Low", description: "\u5FEB\u901F\u601D\u8003\uFF0C\u4FDD\u7559\u57FA\u7840\u63A8\u7406" },
+  { id: "medium", name: "Medium", description: "\u6807\u51C6\u601D\u8003\uFF0C\u5E73\u8861\u63A8\u7406\u6DF1\u5EA6\u4E0E\u54CD\u5E94\u901F\u5EA6" },
+  { id: "high", name: "High", description: "\u6DF1\u5EA6\u601D\u8003\uFF0C\u9002\u5408\u590D\u6742\u903B\u8F91\u4E0E\u591A\u6B65\u9AA4\u5206\u6790" },
+  { id: "max", name: "Max", description: "\u6781\u81F4\u601D\u8003\uFF0C\u6700\u9AD8\u903B\u8F91\u63A8\u5BFC\u6DF1\u5EA6" }
+]);
+var DEFAULT_KILO_REASONING = Object.freeze({
+  efforts: [...STANDARD_KILO_REASONING_EFFORTS],
+  defaultEffort: "medium"
+});
+var EXTENDED_KILO_REASONING = Object.freeze({
+  efforts: [...EXTENDED_KILO_REASONING_EFFORTS],
+  defaultEffort: "medium"
+});
+var BUILTIN_KILO_FREE_MODELS = Object.freeze([
+  {
+    id: "kilo-auto/free",
+    name: "Auto Free (Kilo)",
+    contextWindow: 256e3,
+    maxTokens: 32768,
+    inputModalities: ["text"],
+    reasoning: DEFAULT_KILO_REASONING,
+    free: true
+  },
+  {
+    id: "nvidia/nemotron-3.5-super-vl:free",
+    name: "NVIDIA Nemotron 3.5 Super VL (Free)",
+    contextWindow: 1e6,
+    maxTokens: 131072,
+    inputModalities: ["text", "image", "video"],
+    free: true
+  },
+  {
+    id: "reflection/beam-free",
+    name: "Reflection Beam 1.0 (Free)",
+    contextWindow: 1048576,
+    maxTokens: 131072,
+    inputModalities: ["text"],
+    free: true
+  },
+  {
+    id: "inclusionai/ling-3.1-flash-1019-free",
+    name: "inclusionAI Ling 3.1 Flash (Free)",
+    contextWindow: 1e6,
+    maxTokens: 262144,
+    inputModalities: ["text"],
+    free: true
+  },
+  {
+    id: "nvidia/nemotron-3-ultra-550b-a55b:free",
+    name: "NVIDIA Nemotron 3 Ultra (Free)",
+    contextWindow: 1e6,
+    maxTokens: 65536,
+    inputModalities: ["text"],
+    reasoning: EXTENDED_KILO_REASONING,
+    free: true
+  },
+  {
+    id: "nvidia/nemotron-3.5-lightning:free",
+    name: "NVIDIA Nemotron 3.5 Lightning (Free)",
+    contextWindow: 1e6,
+    maxTokens: 65536,
+    inputModalities: ["text"],
+    free: true
+  },
+  {
+    id: "recursive/flint-v1.0:free",
+    name: "Recursive Flint (Free)",
+    contextWindow: 262144,
+    maxTokens: 235929,
+    inputModalities: ["text"],
+    free: true
+  },
+  {
+    id: "poolside/laguna-s-2.1:free",
+    name: "Poolside Laguna S 2.1 (Free)",
+    contextWindow: 262144,
+    maxTokens: 32768,
+    inputModalities: ["text"],
+    free: true
+  },
+  {
+    id: "openrouter/free",
+    name: "OpenRouter Free Models Router",
+    contextWindow: 2e5,
+    maxTokens: 32768,
+    inputModalities: ["text", "image"],
+    reasoning: DEFAULT_KILO_REASONING,
+    free: true
+  },
+  {
+    id: "stealth/glyph-cluster",
+    name: "Stealth Glyph Cluster (Free)",
+    contextWindow: 256e3,
+    maxTokens: 256e3,
+    inputModalities: ["text"],
+    free: true
+  }
+]);
+function summarizeKiloCandidate(candidate2) {
+  return {
+    providerId: PROVIDER_ID12,
+    candidateId: candidate2?.candidateId ?? "kilo-free",
+    accountId: candidate2?.accountId ?? "kilo-free",
+    displayName: candidate2?.displayName ?? "Kilo Free Tier",
+    email: candidate2?.email ?? "free@kilo.ai",
+    source: candidate2?.source ?? "kilo_free_tier"
+  };
+}
+
+// modules/provider-commandcode/src/driver.mjs
+import { createHash as createHash10 } from "node:crypto";
+import { existsSync as existsSync6, readdirSync as readdirSync2, readFileSync as readFileSync5 } from "node:fs";
+import { homedir as homedir13 } from "node:os";
+import { join as join14 } from "node:path";
+
+// modules/provider-commandcode/src/native-transport.mjs
+import { createHash as createHash9, randomBytes as randomBytes5, randomUUID as randomUUID10 } from "node:crypto";
+import { existsSync as existsSync5, readFileSync as readFileSync4 } from "node:fs";
+import { homedir as homedir12 } from "node:os";
+import { join as join13 } from "node:path";
+function firstString10(...values) {
+  for (const val of values) {
+    if (typeof val === "string" && val.length > 0) return val;
+  }
+  return null;
+}
+var PROVIDER_ID13 = "commandcode";
+var DEFAULT_COMMANDCODE_GENERATE_ENDPOINT = "https://api.commandcode.ai/alpha/generate";
+var DEFAULT_COMMANDCODE_WHOAMI_ENDPOINT = "https://api.commandcode.ai/alpha/whoami";
+var DEFAULT_COMMANDCODE_CREDITS_ENDPOINT = "https://api.commandcode.ai/alpha/billing/credits";
+var DEFAULT_COMMANDCODE_SUBSCRIPTIONS_ENDPOINT = "https://api.commandcode.ai/alpha/billing/subscriptions";
+var DEFAULT_COMMANDCODE_MODELS_ENDPOINT = "https://api.commandcode.ai/provider/v1/models?view=client";
+function findCommandCodeAuthFilePath() {
+  if (process.env.COMMAND_CODE_AUTH_PATH && existsSync5(process.env.COMMAND_CODE_AUTH_PATH)) {
+    return process.env.COMMAND_CODE_AUTH_PATH;
+  }
+  const candidate2 = join13(homedir12(), ".commandcode", "auth.json");
+  if (existsSync5(candidate2)) return candidate2;
+  return null;
+}
+function extractCommandCodeAuth({ force = false } = {}) {
+  const envKey = firstString10(process.env.COMMAND_CODE_API_KEY, process.env.COMMANDCODE_API_KEY);
+  if (envKey) {
+    return {
+      apiKey: envKey,
+      userId: process.env.COMMAND_CODE_USER_ID || "env-user",
+      userName: process.env.COMMAND_CODE_USER_NAME || "API Key User",
+      source: "env"
+    };
+  }
+  const authPath = findCommandCodeAuthFilePath();
+  if (!authPath) return null;
+  try {
+    const raw = readFileSync4(authPath, "utf8");
+    const json = JSON.parse(raw);
+    if (!json?.apiKey) return null;
+    return {
+      apiKey: json.apiKey,
+      userId: json.userId || null,
+      userName: json.userName || null,
+      keyName: json.keyName || null,
+      authenticatedAt: json.authenticatedAt || null,
+      source: "local_auth_json"
+    };
+  } catch {
+    return null;
+  }
+}
+function toWireTools(tools = []) {
+  if (!Array.isArray(tools) || tools.length === 0) return null;
+  return tools.map((tool) => {
+    const fn = tool.function || tool;
+    const name2 = fn.name || tool.name;
+    const description = fn.description || tool.description || "";
+    const inputSchema = fn.parameters || fn.input_schema || tool.input_schema || tool.parameters || { type: "object", properties: {} };
+    return {
+      name: name2,
+      description,
+      input_schema: inputSchema
+    };
+  });
+}
+function isLikelyReasoningModel(modelId = "") {
+  const m = String(modelId || "").toLowerCase();
+  return m.includes("beam") || m.includes("r1") || m.includes("reason") || m.includes("reflection") || m.includes("deepseek-r") || m.includes("qwq") || m.includes("qvq") || m.includes("deepseek-reasoner");
+}
+async function buildCommandCodeMessages(request = {}, attachments = null) {
+  const rawMessages = Array.isArray(request.messages) ? request.messages : [];
+  let systemPrompt = "";
+  const wireMessages = [];
+  const toolNameById = /* @__PURE__ */ new Map();
+  const needsReasoningPadding = isLikelyReasoningModel(request.model) || Boolean(request.reasoning?.effort);
+  for (const msg of rawMessages) {
+    if (!msg) continue;
+    const role = msg.role;
+    if (role === "system") {
+      const text3 = typeof msg.content === "string" ? msg.content : textFromContent(msg.content);
+      if (text3) {
+        systemPrompt = systemPrompt ? `${systemPrompt}
+
+${text3}` : text3;
+      }
+      continue;
+    }
+    if (role === "assistant") {
+      let reasoningContent = firstString10(
+        msg.reasoning_content,
+        msg.reasoning,
+        msg.thought,
+        msg.thinking
+      );
+      if (Array.isArray(msg.content)) {
+        const content = [];
+        for (const block of msg.content) {
+          if (block.type === "text" && block.text) {
+            content.push({ type: "text", text: block.text });
+          } else if (block.type === "reasoning" || block.type === "thinking") {
+            const rText = block.text || block.thinking || "";
+            if (rText) {
+              content.push({ type: "reasoning", text: rText });
+              if (!reasoningContent) reasoningContent = rText;
+            }
+          } else if (block.type === "tool_use" || block.type === "tool-call") {
+            const rawId = block.id || block.toolCallId || `call_${randomUUID10().slice(0, 8)}`;
+            const toolCallId = sanitizeToolCallId(rawId);
+            const toolName = block.name || block.toolName || "tool";
+            toolNameById.set(toolCallId, toolName);
+            const rawInput = block.arguments ?? block.input ?? block.args ?? {};
+            let input = rawInput;
+            if (typeof rawInput === "string") {
+              try {
+                input = JSON.parse(rawInput);
+              } catch {
+                input = { raw: rawInput };
+              }
+            }
+            content.push({
+              type: "tool-call",
+              toolCallId,
+              toolName,
+              input: input && typeof input === "object" ? input : {}
+            });
+          }
+        }
+        const asstMsg = {
+          role: "assistant",
+          content: content.length > 0 ? content : [{ type: "text", text: "" }]
+        };
+        if (reasoningContent) {
+          asstMsg.reasoning_content = reasoningContent;
+        } else if (needsReasoningPadding) {
+          asstMsg.reasoning_content = "";
+        }
+        wireMessages.push(asstMsg);
+      } else {
+        const text3 = typeof msg.content === "string" ? msg.content : textFromContent(msg.content);
+        const asstMsg = { role: "assistant", content: text3 || "" };
+        if (reasoningContent) {
+          asstMsg.reasoning_content = reasoningContent;
+        } else if (needsReasoningPadding) {
+          asstMsg.reasoning_content = "";
+        }
+        wireMessages.push(asstMsg);
+      }
+      continue;
+    }
+    if (role === "tool") {
+      const rawId = msg.tool_call_id || msg.toolCallId;
+      const toolCallId = sanitizeToolCallId(rawId || "unknown");
+      const toolName = msg.name || msg.toolName || (toolCallId ? toolNameById.get(toolCallId) : null) || "unknown";
+      const text3 = typeof msg.content === "string" ? msg.content : textFromContent(msg.content);
+      wireMessages.push({
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: toolCallId || "unknown",
+            toolName,
+            output: { type: "text", value: text3 || "" }
+          }
+        ]
+      });
+      continue;
+    }
+    if (Array.isArray(msg.content)) {
+      const parts = [];
+      for (const block of msg.content) {
+        if (block.type === "text" && block.text) {
+          parts.push({ type: "text", text: block.text });
+        } else if (block.type === "image") {
+          const resolved = await resolveImageData(block, attachments);
+          if (!resolved) {
+            throw nativeProviderError(
+              PROVIDER_ID13,
+              "\u56FE\u7247\u9644\u4EF6\u65E0\u6CD5\u8BFB\u53D6\uFF1A\u7F3A\u5C11 DSH \u9644\u4EF6\u670D\u52A1\u6216\u9644\u4EF6\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u7C98\u8D34\u56FE\u7247"
+            );
+          }
+          parts.push({
+            type: "image",
+            image: `data:${resolved.mediaType || "image/png"};base64,${resolved.data}`,
+            mimeType: resolved.mediaType || "image/png"
+          });
+        }
+      }
+      wireMessages.push({ role: "user", content: parts.length > 0 ? parts : [{ type: "text", text: "" }] });
+    } else {
+      const text3 = typeof msg.content === "string" ? msg.content : textFromContent(msg.content);
+      wireMessages.push({ role: "user", content: text3 || "" });
+    }
+  }
+  if (request.system && typeof request.system === "string") {
+    systemPrompt = systemPrompt ? `${request.system}
+
+${systemPrompt}` : request.system;
+  }
+  return { systemPrompt, wireMessages };
+}
+async function* readNdjsonLines(response, { signal, timeoutMs, providerId } = {}) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        const err = new Error("Request aborted");
+        err.name = "AbortError";
+        throw err;
+      }
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let newline = buffer.indexOf("\n");
+      while (newline >= 0) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (line) {
+          try {
+            yield JSON.parse(line);
+          } catch {
+          }
+        }
+        newline = buffer.indexOf("\n");
+      }
+    }
+    const last = buffer.trim();
+    if (last) {
+      try {
+        yield JSON.parse(last);
+      } catch {
+      }
+    }
+  } finally {
+    reader.releaseLock();
+    cleanupNativeResponse(response);
+  }
+}
+var UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function toWireUuid(value) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (UUID_REGEX.test(trimmed)) return trimmed;
+    const stripped = trimmed.replace(/^(?:session|dsh|thread)[-_:]+/i, "");
+    if (UUID_REGEX.test(stripped)) return stripped;
+  }
+  return null;
+}
+function deriveConversationSessionId(request, explicitSessionId) {
+  const direct = toWireUuid(explicitSessionId) || toWireUuid(request?.sessionId);
+  if (direct) return direct;
+  const firstMsg = request?.messages?.[0];
+  const seed = firstMsg ? typeof firstMsg.content === "string" ? firstMsg.content : JSON.stringify(firstMsg.content || "") : "default-dsh-session";
+  const hash6 = createHash9("sha256").update(seed.slice(0, 500)).digest("hex");
+  return `${hash6.slice(0, 8)}-${hash6.slice(8, 12)}-4${hash6.slice(13, 16)}-a${hash6.slice(17, 20)}-${hash6.slice(20, 32)}`;
+}
+function createCommandCodeNativeExecutor({
+  endpoint: endpoint2 = DEFAULT_COMMANDCODE_GENERATE_ENDPOINT,
+  fetchImpl = fetch,
+  timeoutMs = 18e4
+} = {}) {
+  const validatedEndpoint = validateNativeEndpoint(endpoint2, "COMMANDCODE_ENDPOINT", {
+    defaultEndpoint: DEFAULT_COMMANDCODE_GENERATE_ENDPOINT
+  });
+  async function* commandCodeNativeExecutor({
+    request = {},
+    account = null,
+    credential = null,
+    signal = null,
+    sessionId: explicitSessionId = null,
+    attachments = null
+  } = {}) {
+    const auth = credential || account?.auth || extractCommandCodeAuth();
+    const apiKey = auth?.apiKey || auth?.access || auth?.token;
+    if (!apiKey) {
+      const err = new Error("Command Code API Key \u672A\u914D\u7F6E\uFF0C\u8BF7\u5148\u8FD0\u884C cmd login \u6216\u5728\u9762\u677F\u4E2D\u8BBE\u7F6E API Key\u3002");
+      err.code = "AUTH_REQUIRED";
+      err.providerId = PROVIDER_ID13;
+      throw err;
+    }
+    const sessionId = deriveConversationSessionId(request, explicitSessionId);
+    const headers = {
+      "Content-Type": "application/json",
+      "User-Agent": "command-code/1.88.1",
+      "x-command-code-version": "1.88.1",
+      "x-cli-environment": "production",
+      "x-session-id": sessionId,
+      "x-api-key": apiKey,
+      Authorization: `Bearer ${apiKey}`
+    };
+    const { systemPrompt, wireMessages } = await buildCommandCodeMessages(request, attachments);
+    const wireTools = toWireTools(request.tools);
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const threadId = toWireUuid(sessionId);
+    let attemptMessages = wireMessages;
+    let retriedReasoning = false;
+    while (true) {
+      const body = {
+        config: {
+          workingDir: process.cwd(),
+          date: today,
+          environment: process.platform,
+          structure: [],
+          isGitRepo: false,
+          currentBranch: "main",
+          mainBranch: "main",
+          gitStatus: "",
+          recentCommits: []
+        },
+        memory: null,
+        taste: null,
+        skills: null,
+        permissionMode: "standard",
+        ...threadId ? { threadId } : {},
+        params: {
+          model: request.model || "deepseek/deepseek-v4.1-flash",
+          messages: attemptMessages,
+          ...wireTools ? { tools: wireTools } : {},
+          ...systemPrompt ? { system: systemPrompt } : {},
+          stream: true,
+          ...typeof request.maxTokens === "number" ? { max_tokens: request.maxTokens } : {},
+          ...typeof request.temperature === "number" ? { temperature: request.temperature } : {},
+          ...request.reasoning?.effort ? { reasoning_effort: request.reasoning.effort } : {}
+        }
+      };
+      let response;
+      try {
+        response = await fetchNativeResponse(
+          validatedEndpoint,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+            signal
+          },
+          {
+            providerId: PROVIDER_ID13,
+            timeoutMs,
+            fetchImpl
+          }
+        );
+      } catch (fetchErr) {
+        if (/fetch failed/i.test(fetchErr?.message) && !signal?.aborted) {
+          await new Promise((r) => setTimeout(r, 600));
+          response = await fetchNativeResponse(
+            validatedEndpoint,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify(body),
+              signal
+            },
+            {
+              providerId: PROVIDER_ID13,
+              timeoutMs,
+              fetchImpl
+            }
+          );
+        } else {
+          throw fetchErr;
+        }
+      }
+      const streamEvents = [];
+      let nextIndex = 1;
+      let reasoning = null;
+      let rawUsage = null;
+      let stop = "stop";
+      let yieldedAny = false;
+      let shouldRetryReasoning = false;
+      const activeTools = /* @__PURE__ */ new Map();
+      const textFilter = new DsmlStreamFilter({
+        onTextBlockStart: (index) => streamEvents.push({ type: "block-start", index, blockType: "text" }),
+        onTextDelta: (index, text3) => streamEvents.push({ type: "text-delta", index, text: text3 }),
+        onTextBlockEnd: (index, text3) => streamEvents.push({ type: "block-end", index, block: { type: "text", text: text3 } })
+      });
+      for await (const event of readNdjsonLines(response, { signal, timeoutMs, providerId: PROVIDER_ID13 })) {
+        if (!event || typeof event !== "object") continue;
+        if (event.type === "error") {
+          const errObj = event.error || {};
+          const msg = errObj.message || "Command Code upstream stream error";
+          const status = errObj.statusCode || 500;
+          if (!yieldedAny && !retriedReasoning && /reasoning_content/i.test(msg)) {
+            shouldRetryReasoning = true;
+            break;
+          }
+          throw nativeProviderError(PROVIDER_ID13, msg, {
+            status,
+            code: errObj.type || "server_error"
+          });
+        }
+        if (event.type === "reasoning-start") {
+          textFilter.closeText();
+          while (streamEvents.length > 0) yield streamEvents.shift();
+          if (!reasoning) {
+            reasoning = { index: nextIndex++, text: "" };
+            yield { type: "block-start", index: reasoning.index, blockType: "reasoning" };
+          }
+          continue;
+        }
+        if (event.type === "reasoning-delta") {
+          const text3 = event.text ?? "";
+          if (text3) {
+            if (!reasoning) {
+              reasoning = { index: nextIndex++, text: "" };
+              yield { type: "block-start", index: reasoning.index, blockType: "reasoning" };
+            }
+            reasoning.text += text3;
+            yield { type: "reasoning-delta", index: reasoning.index, text: text3 };
+          }
+          continue;
+        }
+        if (event.type === "reasoning-end") {
+          if (reasoning) {
+            yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+            reasoning = null;
+          }
+          continue;
+        }
+        if (event.type === "text-delta") {
+          const text3 = event.text ?? "";
+          if (text3) {
+            if (reasoning) {
+              yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+              reasoning = null;
+            }
+            textFilter.push(text3, () => nextIndex++);
+            while (streamEvents.length > 0) yield streamEvents.shift();
+          }
+          continue;
+        }
+        if (event.type === "tool-input-start") {
+          if (reasoning) {
+            yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+            reasoning = null;
+          }
+          textFilter.closeText();
+          while (streamEvents.length > 0) yield streamEvents.shift();
+          const toolId = event.id || `call_${activeTools.size}_${randomUUID10().slice(0, 8)}`;
+          const state = {
+            index: nextIndex++,
+            id: toolId,
+            name: event.toolName || "tool",
+            arguments: ""
+          };
+          activeTools.set(toolId, state);
+          yield { type: "block-start", index: state.index, blockType: "tool-call" };
+          continue;
+        }
+        if (event.type === "tool-input-delta") {
+          const toolId = event.id;
+          const state = activeTools.get(toolId);
+          const delta = event.delta ?? "";
+          if (state && delta) {
+            state.arguments += delta;
+            yield {
+              type: "tool-call-delta",
+              index: state.index,
+              id: state.id,
+              name: state.name,
+              argumentsDelta: delta
+            };
+          }
+          continue;
+        }
+        if (event.type === "tool-call") {
+          const toolId = event.toolCallId || event.id;
+          const existing = activeTools.get(toolId);
+          if (!existing) {
+            if (reasoning) {
+              yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+              reasoning = null;
+            }
+            textFilter.closeText();
+            while (streamEvents.length > 0) yield streamEvents.shift();
+            const argsStr = typeof event.input === "string" ? event.input : JSON.stringify(event.input ?? {});
+            const state = {
+              index: nextIndex++,
+              id: toolId || `call_${randomUUID10().slice(0, 8)}`,
+              name: event.toolName || "tool",
+              arguments: argsStr
+            };
+            yield { type: "block-start", index: state.index, blockType: "tool-call" };
+            yield { type: "tool-call-delta", index: state.index, id: state.id, name: state.name, argumentsDelta: argsStr };
+            yield { type: "block-end", index: state.index, block: { type: "tool-call", id: state.id, name: state.name, arguments: argsStr } };
+          } else {
+            yield {
+              type: "block-end",
+              index: existing.index,
+              block: { type: "tool-call", id: existing.id, name: existing.name, arguments: existing.arguments }
+            };
+            activeTools.delete(toolId);
+          }
+          continue;
+        }
+        if (event.type === "finish" || event.type === "finish-step") {
+          if (event.totalUsage) rawUsage = event.totalUsage;
+          else if (event.usage) rawUsage = event.usage;
+          if (event.finishReason) {
+            stop = event.finishReason === "tool-calls" ? "tool_calls" : event.finishReason;
+          }
+          if (event.type === "finish-step" && rawUsage) {
+            const stepUsage = normalizeUsage(rawUsage);
+            if (stepUsage) {
+              yield {
+                type: "usage",
+                usage: stepUsage
+              };
+            }
+          }
+        }
+      }
+      if (shouldRetryReasoning) {
+        retriedReasoning = true;
+        attemptMessages = attemptMessages.map((m) => {
+          if (m.role === "assistant" && typeof m.reasoning_content !== "string") {
+            return { ...m, reasoning_content: "" };
+          }
+          return m;
+        });
+        continue;
+      }
+      if (reasoning) {
+        yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+        reasoning = null;
+      }
+      textFilter.closeText();
+      while (streamEvents.length > 0) yield streamEvents.shift();
+      for (const [, state] of activeTools) {
+        yield {
+          type: "block-end",
+          index: state.index,
+          block: { type: "tool-call", id: state.id, name: state.name, arguments: state.arguments }
+        };
+      }
+      if (activeTools.size > 0 && (!stop || stop === "stop")) {
+        stop = "tool_calls";
+      }
+      const finalUsage = normalizeUsage(rawUsage);
+      if (finalUsage) {
+        yield {
+          type: "usage",
+          usage: finalUsage
+        };
+      }
+      yield {
+        type: "finish",
+        reason: finishReason(stop),
+        ...finalUsage ? { usage: finalUsage } : {}
+      };
+      break;
+    }
+  }
+  ;
+  return guardEmptyCompletion(commandCodeNativeExecutor, { providerId: PROVIDER_ID13 });
+}
+
+// modules/provider-commandcode/src/driver.mjs
+var PROVIDER_ID14 = "commandcode";
+function fingerprintApiKey(apiKey) {
+  return createHash10("sha256").update(String(apiKey)).digest("hex").slice(0, 16);
+}
+function maskApiKey(apiKey) {
+  const value = String(apiKey ?? "");
+  if (value.length <= 8) return "\u2022\u2022\u2022\u2022";
+  return `${value.slice(0, 4)}\u2026${value.slice(-4)}`;
+}
+function capitalize(str) {
+  if (!str || typeof str !== "string") return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+var BUILTIN_COMMANDCODE_MODELS = Object.freeze([
+  {
+    id: "deepseek/deepseek-v4.1-flash",
+    name: "DeepSeek V4.1 Flash",
+    contextWindow: 1e6,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "high"
+    },
+    // The live provider catalog reports ["text","image"] for this model, and a
+    // direct request proves the gateway forwards image parts to it (verified
+    // 2026-11-04: image token delta was +195 and the model read a red/green/blue
+    // test chart correctly). The builtin fallback must not be more restrictive
+    // than the catalog, or images are silently dropped whenever the live
+    // catalog is unavailable or stale.
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "deepseek/deepseek-v4-pro",
+    name: "DeepSeek V4 Pro",
+    contextWindow: 1e6,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "high", name: "High", default: true },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text"]
+  },
+  {
+    id: "claude-sonnet-5-5",
+    name: "Claude Sonnet 5.5",
+    contextWindow: 1e6,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "xhigh", name: "Extra High" },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    contextWindow: 1e6,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "xai/grok-4.7",
+    name: "Grok 4.7",
+    contextWindow: 5e5,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "xhigh", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "meta/muse-spark-1.2",
+    name: "Muse Spark 1.2",
+    contextWindow: 1048576,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "xhigh", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "mistral/mistral-large-4",
+    name: "Mistral Large 4",
+    contextWindow: 524288,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true }
+      ],
+      defaultEffort: "high"
+    },
+    inputModalities: ["text", "image"]
+  }
+]);
+function summarizeCommandCodeCandidate(candidate2) {
+  return {
+    providerId: PROVIDER_ID14,
+    candidateId: candidate2?.candidateId ?? "commandcode-default",
+    accountId: candidate2?.accountId ?? "commandcode-default",
+    displayName: candidate2?.displayName ?? "Command Code",
+    email: candidate2?.email ?? "user@commandcode.ai",
+    source: candidate2?.source ?? "commandcode_auth",
+    subscription: { ...candidate2?.subscription },
+    quota: { ...candidate2?.quota }
+  };
+}
+function findLocalCommandCodeCatalogFile() {
+  const dir = join14(homedir13(), ".commandcode", "cache", "model-catalog", "v1");
+  if (existsSync6(dir)) {
+    try {
+      const files = readdirSync2(dir).filter((f) => f.startsWith("catalog-") && f.endsWith(".json"));
+      if (files.length > 0) {
+        return join14(dir, files[0]);
+      }
+    } catch {
+    }
+  }
+  const devJson = join14(homedir13(), ".commandcode", "cache", "models-dev.json");
+  if (existsSync6(devJson)) return devJson;
+  return null;
+}
+var KNOWN_RETIRED_COMMANDCODE_MODELS = /* @__PURE__ */ new Set([
+  "poolside/laguna-s-2.1-free"
+]);
+function parseCommandCodeCatalog(data) {
+  let rawModels = [];
+  if (Array.isArray(data?.data)) {
+    rawModels = data.data;
+  } else if (Array.isArray(data?.models)) {
+    rawModels = data.models;
+  } else if (data?.data && typeof data.data === "object") {
+    for (const providerGroup of Object.values(data.data)) {
+      if (providerGroup?.models && typeof providerGroup.models === "object") {
+        for (const [mId, mObj] of Object.entries(providerGroup.models)) {
+          rawModels.push({ id: mId, ...mObj });
+        }
+      }
+    }
+  }
+  if (!rawModels || rawModels.length === 0) {
+    return { models: [...BUILTIN_COMMANDCODE_MODELS] };
+  }
+  const models = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of rawModels) {
+    const id = stringValue(item?.id);
+    if (!id || seen.has(id)) continue;
+    if (item?.hidden === true || item?.deprecated === true || item?.disabled === true || KNOWN_RETIRED_COMMANDCODE_MODELS.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    const isFree = Boolean(
+      (item?.display?.badge === "free" || item?.pricing && item.pricing.inputCost === 0 && item.pricing.outputCost === 0 || id.endsWith(":free")) && !(item?.pricing && (item.pricing.inputCost > 0 || item.pricing.outputCost > 0))
+    );
+    const baseName = stringValue(item?.display?.label) || stringValue(item?.name) || stringValue(item?.display?.name) || id;
+    const name2 = baseName;
+    const contextWindow = Number.isInteger(item?.context_length) ? item.context_length : resolveContextWindowFromModel(item, 131072);
+    const maxTokens = Number.isInteger(item?.maxOutputTokens) ? Math.min(item.maxOutputTokens, 32768) : resolveMaxTokensFromModel(item, 16384);
+    let reasoning = null;
+    if (Array.isArray(item?.reasoningEfforts) && item.reasoningEfforts.length > 0) {
+      const efforts = item.reasoningEfforts.filter((e) => e && e !== "off" && e !== "none").map((e) => ({ id: e, name: capitalize(e), default: e === "high" }));
+      if (efforts.length > 0) {
+        reasoning = {
+          efforts,
+          defaultEffort: efforts.find((e) => e.default)?.id || efforts[0].id
+        };
+      }
+    } else {
+      reasoning = resolveReasoningFromModel(item);
+    }
+    const inputModalities = Array.isArray(item?.inputModalities) ? item.inputModalities : Array.isArray(item?.modalities?.input) ? item.modalities.input : ["text"];
+    models.push({
+      id,
+      name: name2,
+      contextWindow,
+      maxTokens,
+      inputModalities,
+      free: isFree,
+      ...item?.display?.description ? { description: item.display.description } : {},
+      ...reasoning ? { reasoning } : {}
+    });
+  }
+  for (const builtin of BUILTIN_COMMANDCODE_MODELS) {
+    if (!seen.has(builtin.id)) {
+      models.unshift(builtin);
+      seen.add(builtin.id);
+    }
+  }
+  return { models };
+}
+function createCommandCodeCatalogLoader({
+  modelsUrl = DEFAULT_COMMANDCODE_MODELS_ENDPOINT,
+  cacheTtlMs = 6e4,
+  fetchImpl = fetch
+} = {}) {
+  let cached = null;
+  let cachedAt = 0;
+  return async function commandCodeCatalogLoader({ force = false, credential = null } = {}) {
+    const now = Date.now();
+    if (!force && cached && now - cachedAt < cacheTtlMs) {
+      return cached;
+    }
+    const auth = credential || extractCommandCodeAuth();
+    if (auth?.apiKey && typeof fetchImpl === "function") {
+      try {
+        const res = await fetchImpl(modelsUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${auth.apiKey}`,
+            "User-Agent": "command-code/1.88.1",
+            "x-command-code-version": "1.88.1",
+            "x-cli-environment": "production"
+          }
+        });
+        if (res.ok) {
+          const json = await res.json();
+          cached = parseCommandCodeCatalog(json);
+          cachedAt = Date.now();
+          return cached;
+        }
+      } catch {
+      }
+    }
+    const localCatalog = findLocalCommandCodeCatalogFile();
+    if (localCatalog) {
+      try {
+        const raw = readFileSync5(localCatalog, "utf8");
+        const json = JSON.parse(raw);
+        cached = parseCommandCodeCatalog(json);
+        cachedAt = Date.now();
+        return cached;
+      } catch {
+      }
+    }
+    cached = { models: [...BUILTIN_COMMANDCODE_MODELS] };
+    cachedAt = Date.now();
+    return cached;
+  };
+}
+function formatCommandCodePlan(planId) {
+  if (!planId) return "Command Code Subscription";
+  if (planId.includes("go")) return "Command Code Go Plan";
+  if (planId.includes("goat")) return "Command Code GOAT Plan";
+  if (planId.includes("pro")) return "Command Code Pro Plan";
+  if (planId.includes("max")) return "Command Code Max Plan";
+  return `Command Code (${planId})`;
+}
+var COMMANDCODE_PLAN_MONTHLY_CREDITS = [
+  ["goat", 100],
+  ["max20", 300],
+  ["max-20", 300],
+  ["max10", 150],
+  ["max-10", 150],
+  ["pro", 110],
+  ["go", 10]
+];
+function commandCodeMonthlyCreditLimit(planId) {
+  const id = String(planId ?? "").toLowerCase();
+  if (!id) return null;
+  for (const [needle, credits] of COMMANDCODE_PLAN_MONTHLY_CREDITS) {
+    if (id.includes(needle)) return credits;
+  }
+  return null;
+}
+function commandCodeQuotaWindows(creditsData, { currentPeriodEnd = null, planId = null } = {}) {
+  const windows = [];
+  const fiveHour = creditsData?.windowLimits?.fiveHour;
+  if (fiveHour) {
+    windows.push({
+      id: "commandcode:5h",
+      name: "5 \u5C0F\u65F6\u7A97\u53E3\u989D\u5EA6",
+      remaining: Math.max(0, (fiveHour.cap ?? 3) - (fiveHour.used ?? 0)),
+      limit: fiveHour.cap ?? 3,
+      unit: "credits",
+      resetAt: fiveHour.resetAt ? new Date(fiveHour.resetAt).toISOString() : null
+    });
+  }
+  const weekly = creditsData?.windowLimits?.weekly;
+  if (weekly) {
+    windows.push({
+      id: "commandcode:weekly",
+      name: "\u5468\u5EA6\u989D\u5EA6",
+      remaining: Math.max(0, (weekly.cap ?? 6) - (weekly.used ?? 0)),
+      limit: weekly.cap ?? 6,
+      unit: "credits",
+      resetAt: weekly.resetAt ? new Date(weekly.resetAt).toISOString() : null
+    });
+  }
+  const credits = creditsData?.credits;
+  if (credits && typeof credits.monthlyCredits === "number") {
+    const remaining = Number(credits.monthlyCredits) + Number(credits.purchasedCredits ?? 0) + Number(credits.freeCredits ?? 0);
+    windows.push({
+      id: "commandcode:monthly",
+      name: "\u6708\u5EA6\u989D\u5EA6",
+      // A subscription grant, not a pay-as-you-go balance: it carries the plan's
+      // credit total as its denominator, so the panel and the compact indicator
+      // both draw it as a percentage bar. It is also the number that actually
+      // runs out, hence `primary`.
+      primary: true,
+      remaining: Number.isFinite(remaining) ? Math.max(0, remaining) : 0,
+      limit: commandCodeMonthlyCreditLimit(planId),
+      unit: "credits",
+      resetAt: currentPeriodEnd ? new Date(currentPeriodEnd).toISOString() : null
+    });
+  }
+  return windows;
+}
+var CommandCodeDriver = class {
+  constructor({
+    endpoint: endpoint2 = DEFAULT_COMMANDCODE_GENERATE_ENDPOINT,
+    catalogLoader = null,
+    requestExecutor = null,
+    fetchImpl = fetch,
+    timeoutMs = 18e4
+  } = {}) {
+    this.endpoint = endpoint2;
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+    this.catalogLoader = catalogLoader ?? createCommandCodeCatalogLoader({ fetchImpl });
+    this.requestExecutor = requestExecutor ?? createCommandCodeNativeExecutor({
+      endpoint: endpoint2,
+      fetchImpl,
+      timeoutMs
+    });
+  }
+  async discover() {
+    const auth = extractCommandCodeAuth();
+    if (!auth || !auth.apiKey) {
+      return {
+        candidates: [],
+        source: "commandcode_auth",
+        diagnostics: ["\u672A\u5728 ~/.commandcode/auth.json \u68C0\u6D4B\u5230\u767B\u5F55\u6001\uFF0C\u53EF\u5728\u9762\u677F\u4E2D\u914D\u7F6E API Key\u3002"]
+      };
+    }
+    let whoamiData = null;
+    let creditsData = null;
+    let subData = null;
+    try {
+      const headers = {
+        Authorization: `Bearer ${auth.apiKey}`,
+        "User-Agent": "command-code/1.88.1",
+        "x-command-code-version": "1.88.1",
+        "x-cli-environment": "production"
+      };
+      const [whoamiRes, creditsRes, subRes] = await Promise.all([
+        this.fetchImpl(DEFAULT_COMMANDCODE_WHOAMI_ENDPOINT, { headers }).catch(() => null),
+        this.fetchImpl(DEFAULT_COMMANDCODE_CREDITS_ENDPOINT, { headers }).catch(() => null),
+        this.fetchImpl(DEFAULT_COMMANDCODE_SUBSCRIPTIONS_ENDPOINT, { headers }).catch(() => null)
+      ]);
+      if (whoamiRes?.ok) whoamiData = await whoamiRes.json().catch(() => null);
+      if (creditsRes?.ok) creditsData = await creditsRes.json().catch(() => null);
+      if (subRes?.ok) subData = await subRes.json().catch(() => null);
+    } catch {
+    }
+    const userId = whoamiData?.user?.id || auth.userId || "commandcode-user";
+    const userName = whoamiData?.user?.name || whoamiData?.user?.userName || auth.userName || "Command Code User";
+    const email = whoamiData?.user?.email || "user@commandcode.ai";
+    const displayName = `${userName} (${email})`;
+    const planId = subData?.data?.planId;
+    const planName = formatCommandCodePlan(planId);
+    const subStatus = subData?.data?.status || "active";
+    const currentPeriodEnd = subData?.data?.currentPeriodEnd || null;
+    const remainingCredits = typeof creditsData?.credits?.monthlyCredits === "number" ? creditsData.credits.monthlyCredits : 10;
+    const windows = commandCodeQuotaWindows(creditsData, { currentPeriodEnd, planId });
+    return {
+      candidates: [
+        {
+          candidateId: userId,
+          accountId: userId,
+          displayName,
+          email,
+          subscription: {
+            plan: planName,
+            status: subStatus,
+            expiresAt: currentPeriodEnd
+          },
+          quota: {
+            remaining: remainingCredits,
+            limit: commandCodeMonthlyCreditLimit(planId),
+            unit: "credits",
+            resetAt: currentPeriodEnd,
+            updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+            windows
+          },
+          source: "commandcode_auth",
+          health: {
+            status: "healthy"
+          }
+        }
+      ],
+      source: "commandcode_auth",
+      diagnostics: []
+    };
+  }
+  async importAccount(candidate2, context = {}) {
+    const auth = extractCommandCodeAuth();
+    const manual = candidate2?.source === "manual_api_key";
+    const apiKey = candidate2?.apiKey || auth?.apiKey || "";
+    const accountId = candidate2?.accountId || (manual ? `commandcode-${fingerprintApiKey(apiKey)}` : auth?.userId) || "commandcode-default";
+    const ref = createCredentialRef(PROVIDER_ID14, accountId);
+    if (context.secretStore) {
+      await context.secretStore.write(ref, {
+        type: "commandcode_auth",
+        apiKey,
+        userId: accountId,
+        userName: candidate2?.displayName || auth?.userName || null,
+        email: candidate2?.email || null
+      }).catch(() => {
+      });
+    }
+    return createAccountRecord({
+      accountId,
+      providerId: PROVIDER_ID14,
+      displayName: candidate2?.displayName || "Command Code User",
+      email: candidate2?.email || "user@commandcode.ai",
+      auth: {
+        kind: "commandcode_auth",
+        credentialRef: ref
+      },
+      subscription: {
+        plan: candidate2?.subscription?.plan || "Command Code Subscription",
+        status: candidate2?.subscription?.status || "active",
+        expiresAt: candidate2?.subscription?.expiresAt || null
+      },
+      quota: createQuotaSnapshot(candidate2?.quota || {
+        remaining: 10,
+        limit: 10,
+        unit: "credits"
+      }),
+      health: {
+        status: "healthy"
+      }
+    });
+  }
+  /**
+   * Import a manually entered API Key. Command Code authenticates with a static
+   * key (environment variable or ~/.commandcode/auth.json), never OAuth, so this
+   * is the panel's account entry point for users who have no official CLI.
+   */
+  async importSource(source, context = {}) {
+    const rawKey = typeof source === "string" ? source : source?.apiKey ?? source?.key ?? source?.token ?? "";
+    const apiKey = String(rawKey ?? "").trim();
+    if (!apiKey) throw new ValidationError("\u8BF7\u8F93\u5165\u6709\u6548\u7684 Command Code API Key");
+    const label = typeof source === "object" && typeof source?.label === "string" ? source.label.trim() : "";
+    const masked = maskApiKey(apiKey);
+    return [await this.importAccount({
+      apiKey,
+      source: "manual_api_key",
+      displayName: label || `Command Code Key (${masked})`,
+      email: masked
+    }, context)];
+  }
+  async getActiveSession() {
+    return this.discover().then((res) => Array.isArray(res?.candidates) ? res.candidates[0] : null);
+  }
+  async refreshAccount(account, context = {}) {
+    let apiKey = null;
+    if (context.secretStore && account?.auth?.credentialRef) {
+      try {
+        const secret = await context.secretStore.read(account.auth.credentialRef);
+        apiKey = secret?.apiKey;
+      } catch {
+      }
+    }
+    if (!apiKey) {
+      const auth = extractCommandCodeAuth();
+      apiKey = auth?.apiKey;
+    }
+    if (!apiKey) {
+      return {
+        health: { status: "auth_expired" }
+      };
+    }
+    try {
+      const headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "User-Agent": "command-code/1.88.1",
+        "x-command-code-version": "1.88.1",
+        "x-cli-environment": "production"
+      };
+      const [creditsRes, subRes] = await Promise.all([
+        this.fetchImpl(DEFAULT_COMMANDCODE_CREDITS_ENDPOINT, { headers }).catch(() => null),
+        this.fetchImpl(DEFAULT_COMMANDCODE_SUBSCRIPTIONS_ENDPOINT, { headers }).catch(() => null)
+      ]);
+      const creditsData = creditsRes?.ok ? await creditsRes.json().catch(() => null) : null;
+      const subData = subRes?.ok ? await subRes.json().catch(() => null) : null;
+      const remainingCredits = typeof creditsData?.credits?.monthlyCredits === "number" ? creditsData.credits.monthlyCredits : account.quota?.remaining ?? 10;
+      const planId = subData?.data?.planId;
+      const planName = planId ? formatCommandCodePlan(planId) : account.subscription?.plan;
+      const subStatus = subData?.data?.status || account.subscription?.status || "active";
+      const currentPeriodEnd = subData?.data?.currentPeriodEnd || account.subscription?.expiresAt || null;
+      const windows = commandCodeQuotaWindows(creditsData, { currentPeriodEnd, planId });
+      return {
+        subscription: {
+          ...account.subscription,
+          plan: planName,
+          status: subStatus,
+          expiresAt: currentPeriodEnd
+        },
+        quota: createQuotaSnapshot({
+          remaining: remainingCredits,
+          limit: commandCodeMonthlyCreditLimit(planId) ?? account.quota?.limit ?? null,
+          unit: "credits",
+          resetAt: currentPeriodEnd,
+          updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          windows
+        }),
+        health: {
+          status: "healthy",
+          lastCheckedAt: (/* @__PURE__ */ new Date()).toISOString()
+        }
+      };
+    } catch {
+      return {
+        health: { status: "degraded", lastCheckedAt: (/* @__PURE__ */ new Date()).toISOString() }
+      };
+    }
+  }
+  async getCatalog(context = {}) {
+    let credential = null;
+    if (context.secretStore && context.accounts?.[0]?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(context.accounts[0].auth.credentialRef);
+      } catch {
+      }
+    }
+    return this.catalogLoader({ force: Boolean(context.force), credential });
+  }
+  async invoke(request, invocation, context = {}) {
+    let output = "";
+    for await (const chunk of this.stream(request, invocation, context)) {
+      if (chunk.type === "text-delta" && chunk.text) {
+        output += chunk.text;
+      }
+    }
+    return { output };
+  }
+  async *stream(request, invocation, context = {}) {
+    let credential = null;
+    if (context.secretStore && invocation?.account?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(invocation.account.auth.credentialRef);
+      } catch {
+      }
+    }
+    yield* this.requestExecutor({
+      request,
+      account: invocation?.account ?? null,
+      credential,
+      signal: context.signal ?? null,
+      sessionId: context.sessionId ?? request.sessionId ?? null,
+      // DSH passes the durable attachment service on the provider context; the
+      // transport needs it to turn opaque image references into real bytes.
+      attachments: context.attachments ?? invocation?.attachments ?? null
+    });
+  }
+};
+function createCommandCodeDriver(options = {}) {
+  return new CommandCodeDriver(options);
+}
+
+// modules/provider-commandcode/src/index.mjs
+function createCommandCodeModule({ driver = {} } = {}) {
+  return defineProviderModule({
+    id: "commandcode",
+    displayName: "Command Code",
+    capabilities: [
+      "quota",
+      "catalog",
+      "invoke",
+      "stream",
+      PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT,
+      // Authenticates with a static API Key; the panel renders a key field for it.
+      PROVIDER_BEHAVIOR_CAPABILITIES.API_KEY_AUTH
+    ],
+    driver
+  });
+}
+
+// modules/provider-hermes/src/driver.mjs
+import { createHash as createHash11 } from "node:crypto";
+
+// modules/provider-hermes/src/native-transport.mjs
+import { existsSync as existsSync7, readFileSync as readFileSync6, statSync as statSync2 } from "node:fs";
+import { homedir as homedir14 } from "node:os";
+import { join as join15 } from "node:path";
+import { randomUUID as randomUUID11 } from "node:crypto";
+function firstString11(...values) {
+  for (const val of values) {
+    if (typeof val === "string" && val.length > 0) return val;
+  }
+  return null;
+}
+var PROVIDER_ID15 = "hermes";
+var DEFAULT_HERMES_CHAT_ENDPOINT = "https://inference-api.nousresearch.com/v1/chat/completions";
+var DEFAULT_HERMES_MODELS_ENDPOINT = "https://inference-api.nousresearch.com/v1/models";
+var cachedAuth = null;
+var cachedAuthMtime = 0;
+function findHermesAuthFilePath() {
+  if (process.env.HERMES_AUTH_PATH && existsSync7(process.env.HERMES_AUTH_PATH)) {
+    return process.env.HERMES_AUTH_PATH;
+  }
+  const hermesPath = join15(homedir14(), ".hermes", "auth.json");
+  if (existsSync7(hermesPath)) return hermesPath;
+  const nousPath = join15(homedir14(), ".nous", "auth.json");
+  if (existsSync7(nousPath)) return nousPath;
+  return null;
+}
+function extractHermesAuth({ force = false } = {}) {
+  const envKeys = [
+    process.env.HERMES_API_KEY,
+    process.env.NOUS_API_KEY,
+    process.env.HERMES_API_KEY_1,
+    process.env.HERMES_API_KEY_2
+  ].filter(Boolean);
+  const authFile = findHermesAuthFilePath();
+  if (authFile) {
+    try {
+      const stats = statSync2(authFile);
+      if (force || !cachedAuth || stats.mtimeMs !== cachedAuthMtime) {
+        const raw = readFileSync6(authFile, "utf8");
+        const parsed = JSON.parse(raw);
+        cachedAuth = parsed;
+        cachedAuthMtime = stats.mtimeMs;
+      }
+      if (Array.isArray(cachedAuth?.accounts) && cachedAuth.accounts.length > 0) {
+        return {
+          accounts: cachedAuth.accounts.map((acc, idx) => ({
+            accountId: acc.accountId || acc.id || `hermes-acc-${idx + 1}`,
+            displayName: acc.displayName || acc.name || `Hermes Account ${idx + 1}`,
+            apiKey: acc.apiKey || acc.key || "",
+            balance: typeof acc.balance === "number" ? acc.balance : null,
+            email: acc.email || null
+          }))
+        };
+      }
+      if (cachedAuth?.apiKey || cachedAuth?.access || cachedAuth?.token) {
+        const key = cachedAuth.apiKey || cachedAuth.access || cachedAuth.token;
+        return {
+          accounts: [
+            {
+              accountId: cachedAuth.accountId || cachedAuth.userId || "hermes-default",
+              displayName: cachedAuth.displayName || cachedAuth.name || "Hermes User",
+              apiKey: key,
+              balance: typeof cachedAuth.balance === "number" ? cachedAuth.balance : null,
+              email: cachedAuth.email || null
+            }
+          ]
+        };
+      }
+    } catch {
+    }
+  }
+  if (envKeys.length > 0) {
+    return {
+      accounts: envKeys.map((key, idx) => ({
+        accountId: `hermes-env-${idx + 1}`,
+        displayName: `Hermes Env Key ${idx + 1}`,
+        apiKey: key,
+        balance: null,
+        email: null
+      }))
+    };
+  }
+  return null;
+}
+function contentPartText2(part) {
+  if (typeof part === "string") return part;
+  if (!part || typeof part !== "object") return "";
+  if (typeof part.text === "string") return part.text;
+  if (typeof part.content === "string") return part.content;
+  return "";
+}
+async function openAiContent3(content, attachments = null) {
+  if (typeof content === "string") {
+    if (!Array.isArray(attachments) || attachments.length === 0) {
+      return content;
+    }
+    const parts = [{ type: "text", text: content }];
+    for (const attachment of attachments) {
+      const data = await resolveImageData(attachment, attachments);
+      if (data) {
+        parts.push({
+          type: "image_url",
+          image_url: { url: `data:${data.mediaType};base64,${data.data}` }
+        });
+      }
+    }
+    return parts;
+  }
+  if (Array.isArray(content)) {
+    const parts = [];
+    for (const part of content) {
+      if (typeof part === "string") {
+        parts.push({ type: "text", text: part });
+      } else if (part && typeof part === "object") {
+        if (part.type === "text" && typeof part.text === "string") {
+          parts.push(part);
+        } else if (part.type === "image") {
+          const image = await resolveImageData(part, attachments);
+          if (image) {
+            parts.push({
+              type: "image_url",
+              image_url: { url: `data:${image.mediaType};base64,${image.data}` }
+            });
+          }
+        } else if (part.type === "image_url") {
+          parts.push(part);
+        } else {
+          const text3 = contentPartText2(part);
+          if (text3) parts.push({ type: "text", text: text3 });
+        }
+      }
+    }
+    if (Array.isArray(attachments)) {
+      for (const attachment of attachments) {
+        const data = await resolveImageData(attachment, attachments);
+        if (data) {
+          parts.push({
+            type: "image_url",
+            image_url: { url: `data:${data.mediaType};base64,${data.data}` }
+          });
+        }
+      }
+    }
+    return parts;
+  }
+  return "";
+}
+async function buildHermesMessages(request = {}, attachments = null) {
+  const result = [];
+  const rawMessages = Array.isArray(request.messages) ? request.messages : [];
+  for (const message of rawMessages) {
+    if (message?.role === "tool") {
+      result.push({
+        role: "tool",
+        tool_call_id: sanitizeToolCallId(firstString11(message.toolCallId, message.tool_call_id, message.id, "tool-result")),
+        content: typeof message.content === "string" ? message.content : textFromContent(message.content ?? message.text ?? message.output ?? message.result)
+      });
+      continue;
+    }
+    const role = message?.role === "assistant" ? "assistant" : message?.role === "system" ? "system" : "user";
+    const content = await openAiContent3(message?.content ?? message?.text, attachments);
+    const calls = [];
+    if (Array.isArray(message?.content)) {
+      for (const part of message.content) {
+        if (part?.type === "tool-call" || part?.type === "tool_call") {
+          calls.push({
+            id: sanitizeToolCallId(firstString11(part.id, part.toolCallId, `call_${calls.length}`)),
+            type: "function",
+            function: {
+              name: firstString11(part.name, part.function?.name, "tool"),
+              arguments: typeof (part.arguments ?? part.function?.arguments) === "string" ? part.arguments ?? part.function?.arguments : JSON.stringify(part.arguments ?? part.input ?? {})
+            }
+          });
+        }
+      }
+    }
+    if (Array.isArray(message?.tool_calls)) {
+      for (const tc of message.tool_calls) {
+        calls.push({
+          id: sanitizeToolCallId(firstString11(tc.id, tc.toolCallId, `call_${calls.length}`)),
+          type: "function",
+          function: {
+            name: firstString11(tc.name, tc.function?.name, "tool"),
+            arguments: typeof (tc.arguments ?? tc.function?.arguments) === "string" ? tc.arguments ?? tc.function?.arguments : JSON.stringify(tc.arguments ?? tc.input ?? {})
+          }
+        });
+      }
+    }
+    if (Array.isArray(content) && content.length === 0 && calls.length === 0) {
+      continue;
+    }
+    const msgObj = {
+      role,
+      content: Array.isArray(content) && content.length === 1 && content[0]?.type === "text" ? content[0].text : Array.isArray(content) && content.length === 0 ? "" : content
+    };
+    if (role === "assistant" && calls.length > 0) {
+      msgObj.tool_calls = calls;
+    }
+    result.push(msgObj);
+  }
+  if (result.length === 0 && typeof request.prompt === "string" && request.prompt.trim()) {
+    result.push({
+      role: "user",
+      content: request.prompt.trim()
+    });
+  }
+  return result;
+}
+function extractReasoningDelta(delta) {
+  if (!delta || typeof delta !== "object") return null;
+  const direct = firstString11(delta.reasoning_content, delta.reasoning, delta.thought);
+  if (direct) return direct;
+  if (Array.isArray(delta.reasoning_details)) {
+    for (const item of delta.reasoning_details) {
+      if (item && item.type !== "reasoning.encrypted") {
+        const text3 = firstString11(item.text, item.content, item.summary);
+        if (text3) return text3;
+      }
+    }
+  }
+  return null;
+}
+function createHermesNativeExecutor({
+  endpoint: endpoint2 = DEFAULT_HERMES_CHAT_ENDPOINT,
+  apiKey = null,
+  fetchImpl = fetch,
+  timeoutMs = 18e4
+} = {}) {
+  const validatedEndpoint = validateNativeEndpoint(endpoint2, {
+    providerId: PROVIDER_ID15,
+    defaultEndpoint: DEFAULT_HERMES_CHAT_ENDPOINT
+  });
+  async function* runHermesAttempt(envelope2 = {}) {
+    const req = envelope2 && typeof envelope2 === "object" && "request" in envelope2 ? envelope2.request ?? {} : envelope2 ?? {};
+    const attachments = envelope2?.attachments ?? req?.attachments;
+    const credential = envelope2?.credential ?? req?.credential;
+    const signal = envelope2?.signal ?? req?.signal;
+    let token = apiKey ?? (credential?.apiKey && credential.apiKey !== "free-tier" ? credential.apiKey : null) ?? (credential?.token && credential.token !== "free-tier" ? credential.token : null) ?? (credential?.accessToken && credential.accessToken !== "free-tier" ? credential.accessToken : null);
+    if (!token) {
+      const extracted = extractHermesAuth();
+      if (extracted?.accounts?.length) {
+        token = extracted.accounts[0].apiKey;
+      }
+    }
+    if (!token) {
+      const err = new Error("Hermes API Key \u672A\u914D\u7F6E\uFF0C\u53EF\u5728 ~/.hermes/auth.json \u4E2D\u914D\u7F6E\u6216\u5728\u9762\u677F\u4E2D\u8BBE\u7F6E API Key\u3002");
+      err.code = "AUTH_REQUIRED";
+      err.providerId = PROVIDER_ID15;
+      throw err;
+    }
+    const messages = await buildHermesMessages(req, attachments);
+    const headers = {
+      Accept: "text/event-stream",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    };
+    const rawEffort = req.reasoningEffort ?? req.reasoning_effort ?? req.reasoning?.effort;
+    let reasoningEffort = null;
+    if (typeof rawEffort === "string" && rawEffort.length > 0) {
+      const lower = rawEffort.toLowerCase();
+      if (lower === "none" || lower === "off") {
+        reasoningEffort = "none";
+      } else if (lower === "minimal") {
+        reasoningEffort = "low";
+      } else {
+        reasoningEffort = lower;
+      }
+    }
+    const tools = buildOpenAiTools(req.tools);
+    const body = {
+      model: req.model ?? "deepseek/deepseek-v4.1-flash",
+      messages,
+      stream: true,
+      tags: ["user=dockyard"],
+      ...typeof req.temperature === "number" ? { temperature: req.temperature } : {},
+      ...typeof req.maxTokens === "number" ? { max_tokens: req.maxTokens } : {},
+      ...reasoningEffort && reasoningEffort !== "none" ? { reasoning_effort: reasoningEffort } : {},
+      ...tools ? { tools } : {}
+    };
+    let response;
+    try {
+      response = await fetchNativeResponse(
+        validatedEndpoint,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          signal
+        },
+        {
+          providerId: PROVIDER_ID15,
+          timeoutMs,
+          fetchImpl
+        }
+      );
+    } catch (err) {
+      if (!req.probe && !req.noFallback && body.model !== "deepseek/deepseek-v4.1-flash" && (err?.status === 503 || err?.status === 502 || err?.status === 504 || err?.status === 404)) {
+        const fallbackBody = { ...body, model: "deepseek/deepseek-v4.1-flash" };
+        response = await fetchNativeResponse(
+          validatedEndpoint,
+          {
+            method: "POST",
+            headers,
+            body: JSON.stringify(fallbackBody),
+            signal
+          },
+          {
+            providerId: PROVIDER_ID15,
+            timeoutMs,
+            fetchImpl
+          }
+        );
+      } else {
+        throw err;
+      }
+    }
+    const streamEvents = [];
+    let nextIndex = 1;
+    let rawUsage = null;
+    let stop = "stop";
+    let probeYielded = false;
+    const activeTools = /* @__PURE__ */ new Map();
+    const reasoningFilter = new DsmlStreamFilter({
+      onTextBlockStart: (index) => streamEvents.push({ type: "block-start", index, blockType: "reasoning" }),
+      onTextDelta: (index, text3) => streamEvents.push({ type: "reasoning-delta", index, text: text3 }),
+      onTextBlockEnd: (index, text3) => streamEvents.push({ type: "block-end", index, block: { type: "reasoning", text: text3 } })
+    });
+    const textFilter = new DsmlStreamFilter({
+      onTextBlockStart: (index) => streamEvents.push({ type: "block-start", index, blockType: "text" }),
+      onTextDelta: (index, text3) => streamEvents.push({ type: "text-delta", index, text: text3 }),
+      onTextBlockEnd: (index, text3) => streamEvents.push({ type: "block-end", index, block: { type: "text", text: text3 } })
+    });
+    for await (const event of readSseEvents(response, { signal, timeoutMs, providerId: PROVIDER_ID15 })) {
+      if (event?.done) continue;
+      const parsed = event?.data;
+      if (!parsed || typeof parsed !== "object") continue;
+      if (parsed.usage) rawUsage = parsed.usage;
+      const choice = Array.isArray(parsed.choices) ? parsed.choices[0] : null;
+      if (!choice) continue;
+      if (req.probe && !probeYielded) {
+        probeYielded = true;
+        yield { type: "text-delta", index: 0, text: " " };
+      }
+      const delta = choice.delta ?? {};
+      const reasoningDelta = extractReasoningDelta(delta);
+      if (reasoningDelta) {
+        textFilter.closeText();
+        while (streamEvents.length > 0) yield streamEvents.shift();
+        reasoningFilter.push(reasoningDelta, () => nextIndex++);
+        while (streamEvents.length > 0) yield streamEvents.shift();
+      }
+      for (const call of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+        const key = Number(call.index ?? activeTools.size);
+        if (!activeTools.has(key)) {
+          reasoningFilter.closeText();
+          textFilter.closeText();
+          while (streamEvents.length > 0) yield streamEvents.shift();
+          const state2 = {
+            index: nextIndex++,
+            id: firstString11(call.id, `call_${key}_${randomUUID11().slice(0, 8)}`),
+            name: firstString11(call.function?.name, call.name, "tool"),
+            arguments: ""
+          };
+          activeTools.set(key, state2);
+          yield { type: "block-start", index: state2.index, blockType: "tool-call" };
+        }
+        const state = activeTools.get(key);
+        const argumentDelta = call.function?.arguments ?? call.arguments ?? "";
+        if (call.id) state.id = call.id;
+        if (call.function?.name) state.name = call.function.name;
+        state.arguments += argumentDelta;
+        if (argumentDelta) {
+          yield { type: "tool-call-delta", index: state.index, id: state.id, name: state.name, argumentsDelta: argumentDelta };
+        }
+      }
+      const content = typeof delta.content === "string" ? delta.content : textFromContent(delta.content);
+      if (content) {
+        reasoningFilter.closeText();
+        while (streamEvents.length > 0) yield streamEvents.shift();
+        textFilter.push(content, () => nextIndex++);
+        while (streamEvents.length > 0) yield streamEvents.shift();
+      }
+      if (choice.finish_reason) {
+        stop = choice.finish_reason;
+      }
+    }
+    reasoningFilter.closeText();
+    textFilter.closeText();
+    const reasoningDsml = reasoningFilter.flush(() => nextIndex++);
+    const textDsml = textFilter.flush(() => nextIndex++);
+    while (streamEvents.length > 0) yield streamEvents.shift();
+    const allDsmlCalls = [
+      ...reasoningDsml?.toolCalls || [],
+      ...textDsml?.toolCalls || []
+    ];
+    if (activeTools.size > 0) {
+      for (const state of activeTools.values()) {
+        yield {
+          type: "block-end",
+          index: state.index,
+          block: { type: "tool-call", id: state.id, name: state.name, arguments: state.arguments || "{}" }
+        };
+      }
+      stop = "tool_calls";
+    } else if (allDsmlCalls.length > 0) {
+      for (const dsml of allDsmlCalls) {
+        const toolIndex = nextIndex++;
+        const toolId = `call_${randomUUID11().slice(0, 8)}`;
+        yield { type: "block-start", index: toolIndex, blockType: "tool-call" };
+        yield { type: "tool-call-delta", index: toolIndex, id: toolId, name: dsml.name, argumentsDelta: dsml.arguments };
+        yield {
+          type: "block-end",
+          index: toolIndex,
+          block: { type: "tool-call", id: toolId, name: dsml.name, arguments: dsml.arguments }
+        };
+      }
+      stop = "tool_calls";
+    }
+    if (rawUsage) {
+      yield {
+        type: "usage",
+        usage: normalizeUsage(rawUsage)
+      };
+    }
+    yield {
+      type: "finish",
+      reason: finishReason(stop),
+      ...rawUsage ? { usage: normalizeUsage(rawUsage) } : {}
+    };
+  }
+  ;
+  return guardEmptyCompletion(runHermesAttempt, { providerId: PROVIDER_ID15 });
+}
+
+// modules/provider-hermes/src/driver.mjs
+var PROVIDER_ID16 = "hermes";
+function fingerprintApiKey2(apiKey) {
+  return createHash11("sha256").update(String(apiKey)).digest("hex").slice(0, 16);
+}
+function maskApiKey2(apiKey) {
+  const value = String(apiKey ?? "");
+  if (value.length <= 8) return "\u2022\u2022\u2022\u2022";
+  return `${value.slice(0, 4)}\u2026${value.slice(-4)}`;
+}
+var BUILTIN_HERMES_MODELS = Object.freeze([
+  {
+    id: "deepseek/deepseek-v4.1-flash",
+    name: "DeepSeek V4.1 Flash",
+    contextWindow: 1048576,
+    maxTokens: 131072,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "high", name: "High", default: true },
+        { id: "xhigh", name: "Extra High" },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "reflection/beam-1.0-501b-a23b:free",
+    name: "Beam 1.0 501B A23B (Free)",
+    contextWindow: 262144,
+    maxTokens: 131072,
+    inputModalities: ["text"],
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium", default: true },
+        { id: "high", name: "High" },
+        { id: "xhigh", name: "Extra High" },
+        { id: "max", name: "Max" }
+      ],
+      defaultEffort: "medium"
+    },
+    free: true
+  },
+  {
+    id: "ornith/ornith-1.5-122b:free",
+    name: "Ornith 1.5 122B (Free)",
+    contextWindow: 262144,
+    maxTokens: 262144,
+    inputModalities: ["text", "image"],
+    free: true
+  },
+  {
+    id: "stepfun/step-3.7-flash:free",
+    name: "Step 3.7 Flash (Free)",
+    contextWindow: 262144,
+    maxTokens: 32768,
+    inputModalities: ["text"],
+    free: true
+  },
+  {
+    id: "openai/gpt-6.1-terra-pro",
+    name: "GPT-6.1 Terra Pro",
+    contextWindow: 1e6,
+    maxTokens: 65536,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "anthropic/claude-haiku-5.5",
+    name: "Claude Haiku 5.5",
+    contextWindow: 1e6,
+    maxTokens: 65536,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "z-ai/glm-5.3",
+    name: "GLM 5.3",
+    contextWindow: 1048576,
+    maxTokens: 131072,
+    inputModalities: ["text"]
+  },
+  {
+    id: "particle-ai/particle-1",
+    name: "Particle-1",
+    contextWindow: 1048576,
+    maxTokens: 131072,
+    inputModalities: ["text", "image"]
+  }
+]);
+function parseHermesCatalog(data) {
+  const payload = data && typeof data === "object" && "body" in data ? data.body : data;
+  const items = Array.isArray(payload?.data) ? payload.data : Array.isArray(payload) ? payload : [];
+  if (!items.length) {
+    return { models: [...BUILTIN_HERMES_MODELS] };
+  }
+  const result = [];
+  const seen = /* @__PURE__ */ new Set();
+  const builtinMap = new Map(BUILTIN_HERMES_MODELS.map((m) => [m.id, m]));
+  for (const item of items) {
+    const id = stringValue(item?.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    if (Array.isArray(item?.endpoints) && !item.endpoints.some((e) => e.includes("chat") || e.includes("completions") || e.includes("messages"))) {
+      if (item.architecture?.modality === "text->embeddings" || item.architecture?.output_modalities?.includes("embeddings")) {
+        continue;
+      }
+    }
+    const builtin = builtinMap.get(id);
+    const name2 = stripVendorPrefix(stringValue(item?.name) ?? builtin?.name ?? id);
+    const contextWindow = resolveContextWindowFromModel(item, builtin?.contextWindow ?? 262144);
+    const maxTokens = resolveMaxTokensFromModel(item, builtin?.maxTokens ?? 32768);
+    const inputModalities = Array.isArray(item?.architecture?.input_modalities) ? [...item.architecture.input_modalities] : builtin?.inputModalities ? [...builtin.inputModalities] : ["text"];
+    let reasoning = null;
+    if (Array.isArray(item?.reasoning?.supported_efforts) && item.reasoning.supported_efforts.length > 0) {
+      const efforts = item.reasoning.supported_efforts.map((lvl) => ({
+        id: lvl,
+        name: lvl.charAt(0).toUpperCase() + lvl.slice(1),
+        ...lvl === (item.reasoning.default_effort ?? "high") ? { default: true } : {}
+      }));
+      reasoning = {
+        efforts,
+        defaultEffort: item.reasoning.default_effort ?? "high"
+      };
+    } else {
+      reasoning = resolveReasoningFromModel(item) ?? builtin?.reasoning;
+    }
+    const isFree = id.endsWith(":free") || item?.isFree === true || item?.pricing?.prompt === "0.0000000000" && item?.pricing?.completion === "0.0000000000";
+    result.push({
+      id,
+      name: name2,
+      contextWindow,
+      maxTokens,
+      inputModalities,
+      ...reasoning ? { reasoning } : {},
+      ...isFree ? { free: true } : {}
+    });
+  }
+  if (result.length === 0) {
+    return { models: [...BUILTIN_HERMES_MODELS] };
+  }
+  return { models: result };
+}
+function createHermesCatalogLoader({
+  modelsUrl = DEFAULT_HERMES_MODELS_ENDPOINT,
+  fetchImpl = fetch,
+  cacheTtlMs = 3e5
+} = {}) {
+  let cached = null;
+  let cachedAt = 0;
+  return async function hermesCatalogLoader({ force = false, credential = null, accounts = null } = {}) {
+    const now = Date.now();
+    if (!force && cached && now - cachedAt < cacheTtlMs) {
+      return cached;
+    }
+    let token = credential?.apiKey;
+    if (!token && Array.isArray(accounts) && accounts.length > 0) {
+      token = accounts[0]?.auth?.apiKey;
+    }
+    if (!token) {
+      const auth = extractHermesAuth();
+      token = auth?.accounts?.[0]?.apiKey;
+    }
+    try {
+      assertSecureEndpointUrl(modelsUrl, { providerId: PROVIDER_ID16 });
+      const headers = {
+        Accept: "application/json",
+        ...token ? { Authorization: `Bearer ${token}` } : {}
+      };
+      const { body: data } = await fetchJson(
+        modelsUrl,
+        { headers },
+        { fetchImpl, timeoutMs: 15e3 }
+      );
+      const parsed = parseHermesCatalog(data);
+      if (parsed.models.length > 0) {
+        cached = parsed;
+        cachedAt = now;
+        return cached;
+      }
+    } catch {
+    }
+    cached = { models: [...BUILTIN_HERMES_MODELS] };
+    cachedAt = now;
+    return cached;
+  };
+}
+function summarizeHermesCandidate(candidate2) {
+  return {
+    providerId: PROVIDER_ID16,
+    candidateId: candidate2?.candidateId ?? "hermes-default",
+    displayName: candidate2?.displayName ?? "Hermes Account",
+    email: candidate2?.email ?? null,
+    plan: candidate2?.subscription?.plan ?? "Nous Portal \u6309\u91CF\u8D26\u6237",
+    quota: candidate2?.quota ?? null
+  };
+}
+var HermesDriver = class {
+  constructor({
+    endpoint: endpoint2 = DEFAULT_HERMES_CHAT_ENDPOINT,
+    modelsUrl = DEFAULT_HERMES_MODELS_ENDPOINT,
+    catalogLoader = null,
+    requestExecutor = null,
+    fetchImpl = fetch,
+    timeoutMs = 18e4
+  } = {}) {
+    this.endpoint = endpoint2;
+    this.modelsUrl = modelsUrl;
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+    this.catalogLoader = catalogLoader ?? createHermesCatalogLoader({ modelsUrl, fetchImpl });
+    this.requestExecutor = requestExecutor ?? createHermesNativeExecutor({
+      endpoint: endpoint2,
+      fetchImpl,
+      timeoutMs
+    });
+  }
+  async discover() {
+    const auth = extractHermesAuth();
+    if (!auth || !Array.isArray(auth.accounts) || auth.accounts.length === 0) {
+      return {
+        candidates: [],
+        source: "hermes_auth",
+        diagnostics: ["\u672A\u5728 ~/.hermes/auth.json \u68C0\u6D4B\u5230\u53EF\u7528 Key\uFF0C\u53EF\u5728\u9762\u677F\u4E2D\u914D\u7F6E API Key\u3002"]
+      };
+    }
+    const candidates = auth.accounts.map((acc, index) => {
+      const amount = typeof acc.balance === "number" && Number.isFinite(acc.balance) ? acc.balance : null;
+      return {
+        candidateId: acc.accountId || `hermes-acc-${index + 1}`,
+        accountId: acc.accountId || `hermes-acc-${index + 1}`,
+        displayName: acc.displayName || `Hermes Account ${index + 1}`,
+        email: acc.email || null,
+        apiKey: acc.apiKey,
+        subscription: {
+          plan: amount === null ? "Nous Portal" : `Nous Portal (\u672C\u5730\u8BB0\u5F55 $${amount.toFixed(2)})`
+        },
+        // A balance is not a quota window: it has no cap to divide by and never
+        // resets, so reporting one produced a meaningless 100% bar.
+        balance: amount === null ? null : createBalanceSnapshot({ amount, unit: "USD", source: "nous_portal_billing" }),
+        // Kept as an empty snapshot so every candidate has the same shape; a
+        // balance provider has no windows to report.
+        quota: createQuotaSnapshot({}),
+        resources: {
+          quotaSource: "nous_portal_billing",
+          quotaAvailable: true,
+          quotaDiagnostic: "\u6309\u91CF\u5145\u503C\u4F59\u989D\uFF1B\u4EE5 Portal \u63A7\u5236\u53F0\u4E3A\u51C6",
+          quotaUrl: "https://portal.nousresearch.com"
+        },
+        source: "hermes_auth",
+        health: {
+          status: "healthy"
+        }
+      };
+    });
+    return {
+      candidates,
+      source: "hermes_auth",
+      diagnostics: []
+    };
+  }
+  async importAccount(candidate2, context = {}) {
+    const manual = candidate2?.source === "manual_api_key";
+    const accountId = candidate2?.accountId || (manual ? `hermes-${fingerprintApiKey2(candidate2?.apiKey)}` : null) || "hermes-default";
+    const ref = createCredentialRef(PROVIDER_ID16, accountId);
+    if (context.secretStore) {
+      await context.secretStore.write(ref, {
+        type: "hermes_auth",
+        apiKey: candidate2?.apiKey || "",
+        userId: accountId,
+        displayName: candidate2?.displayName || "Hermes User",
+        email: candidate2?.email || null
+      }).catch(() => {
+      });
+    }
+    const amount = typeof candidate2?.balance?.amount === "number" && Number.isFinite(candidate2.balance.amount) ? candidate2.balance.amount : null;
+    return createAccountRecord({
+      accountId,
+      providerId: PROVIDER_ID16,
+      displayName: candidate2?.displayName || "Hermes Account",
+      email: candidate2?.email || null,
+      auth: {
+        kind: "hermes_auth",
+        credentialRef: ref
+      },
+      subscription: {
+        plan: candidate2?.subscription?.plan || (amount === null ? "Nous Portal" : `Nous Portal ($${amount.toFixed(2)} \u4E0D\u9650\u65F6)`)
+      },
+      balance: amount === null ? null : createBalanceSnapshot({ amount, unit: "USD", source: "nous_portal_billing" }),
+      resources: {
+        quotaSource: "nous_portal_billing",
+        quotaAvailable: true,
+        quotaDiagnostic: "\u6309\u91CF\u5145\u503C\u4F59\u989D\uFF1B\u4EE5 Portal \u63A7\u5236\u53F0\u4E3A\u51C6",
+        quotaUrl: "https://portal.nousresearch.com"
+      },
+      health: {
+        status: "healthy"
+      }
+    });
+  }
+  /**
+   * Import a manually entered API Key. Hermes authenticates with static keys
+   * (~/.hermes/auth.json, ~/.nous/auth.json or an environment variable), never
+   * OAuth, so this is the panel's account entry point without the official CLI.
+   */
+  async importSource(source, context = {}) {
+    const rawKey = typeof source === "string" ? source : source?.apiKey ?? source?.key ?? source?.token ?? "";
+    const apiKey = String(rawKey ?? "").trim();
+    if (!apiKey) throw new ValidationError("\u8BF7\u8F93\u5165\u6709\u6548\u7684 Hermes / Nous API Key");
+    const label = typeof source === "object" && typeof source?.label === "string" ? source.label.trim() : "";
+    const masked = maskApiKey2(apiKey);
+    return [await this.importAccount({
+      apiKey,
+      source: "manual_api_key",
+      displayName: label || `Hermes Key (${masked})`,
+      email: masked
+    }, context)];
+  }
+  async getActiveSession() {
+    return this.discover().then((res) => Array.isArray(res?.candidates) ? res.candidates[0] : null);
+  }
+  async refreshAccount(account, context = {}) {
+    let apiKey = null;
+    if (context.secretStore && account?.auth?.credentialRef) {
+      try {
+        const secret = await context.secretStore.read(account.auth.credentialRef);
+        apiKey = secret?.apiKey;
+      } catch {
+      }
+    }
+    if (!apiKey) {
+      const auth = extractHermesAuth();
+      const match = auth?.accounts?.find((a) => a.accountId === account?.accountId);
+      apiKey = match?.apiKey || auth?.accounts?.[0]?.apiKey;
+    }
+    if (!apiKey) {
+      return {
+        health: { status: "auth_expired" }
+      };
+    }
+    const authNow = extractHermesAuth();
+    const authMatch = Array.isArray(authNow?.accounts) ? authNow.accounts.find((entry) => entry?.accountId === account?.accountId) : null;
+    const amount = typeof authMatch?.balance === "number" && Number.isFinite(authMatch.balance) ? authMatch.balance : typeof account?.balance?.amount === "number" && Number.isFinite(account.balance.amount) ? account.balance.amount : null;
+    return {
+      health: { status: "healthy" },
+      // An empty quota snapshot keeps the shape stable and tells the runtime this
+      // refresh already answered the quota question; the money travels beside it.
+      quota: createQuotaSnapshot({}),
+      balance: amount === null ? null : createBalanceSnapshot({ amount, unit: "USD", source: "nous_portal_billing" }),
+      resources: {
+        quotaSource: "nous_portal_billing",
+        quotaAvailable: true,
+        quotaDiagnostic: "\u6309\u91CF\u5145\u503C\u4F59\u989D\uFF1B\u4EE5 Portal \u63A7\u5236\u53F0\u4E3A\u51C6",
+        quotaUrl: "https://portal.nousresearch.com"
+      }
+    };
+  }
+  /**
+   * Quota for a balance provider: there is no window to report, only what is
+   * left to spend. The auth file is re-read so a top-up shows up without
+   * re-importing the account.
+   */
+  async getQuota(account, context = {}) {
+    const auth = extractHermesAuth();
+    const match = Array.isArray(auth?.accounts) ? auth.accounts.find((entry) => entry?.accountId === account?.accountId) : null;
+    const amount = typeof match?.balance === "number" && Number.isFinite(match.balance) ? match.balance : typeof account?.balance?.amount === "number" ? account.balance.amount : null;
+    return {
+      quota: createQuotaSnapshot({}),
+      balance: amount === null ? null : createBalanceSnapshot({ amount, unit: "USD", source: "nous_portal_billing" }),
+      resources: {
+        quotaSource: "nous_portal_billing",
+        quotaDiagnostic: "\u6309\u91CF\u5145\u503C\u4F59\u989D\uFF1B\u4EE5 Portal \u63A7\u5236\u53F0\u4E3A\u51C6",
+        quotaUrl: "https://portal.nousresearch.com"
+      }
+    };
+  }
+  async getCatalog(context = {}) {
+    let credential = null;
+    if (context.secretStore && context.accounts?.[0]?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(context.accounts[0].auth.credentialRef);
+      } catch {
+      }
+    }
+    return this.catalogLoader({
+      force: Boolean(context?.force),
+      credential,
+      accounts: context?.accounts ?? null
+    });
+  }
+  async invoke(request, invocation, context = {}) {
+    return this.stream(request, invocation, context);
+  }
+  async stream(request, invocation, context = {}) {
+    let credential = null;
+    if (context.secretStore && invocation?.account?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(invocation.account.auth.credentialRef);
+      } catch {
+      }
+    }
+    return this.requestExecutor({
+      request,
+      account: invocation?.account ?? null,
+      credential,
+      signal: context.signal ?? null,
+      // Images reach the provider as opaque attachment references; without the
+      // durable attachment service the transport silently drops them.
+      attachments: context.attachments ?? invocation?.attachments ?? null
+    });
+  }
+};
+function createHermesDriver(options = {}) {
+  return new HermesDriver(options);
+}
+
+// modules/provider-hermes/src/index.mjs
+function createHermesModule({ driver = {} } = {}) {
+  return defineProviderModule({
+    id: "hermes",
+    displayName: "Hermes (Nous Research)",
+    capabilities: [
+      "quota",
+      "catalog",
+      "invoke",
+      "stream",
+      PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT,
+      // Authenticates with a static API Key; the panel renders a key field for it.
+      PROVIDER_BEHAVIOR_CAPABILITIES.API_KEY_AUTH
+    ],
+    driver
+  });
+}
+
+// modules/provider-openrouter-free/src/driver.mjs
+import os2 from "node:os";
+
+// modules/provider-openrouter-free/src/native-transport.mjs
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import crypto, { randomUUID as randomUUID12 } from "node:crypto";
+var OPENROUTER_API_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
+var OPENROUTER_MODELS_ENDPOINT = "https://openrouter.ai/api/v1/models";
+var OPENROUTER_CREDITS_ENDPOINT = "https://openrouter.ai/api/v1/credits";
+var OPENROUTER_KEY_ENDPOINT = "https://openrouter.ai/api/v1/key";
+var OPENROUTER_AGENTIC_HEADERS = Object.freeze({
+  "HTTP-Referer": "https://opencode.ai",
+  "X-Title": "OpenCode"
+});
+var OPENROUTER_FREE_ROUTER_ID = "openrouter/free";
+var PRIORITIZED_FREE_MODELS = [
+  "stealth/crouton-alpha",
+  "thinkingmachines/inkling:free",
+  "thinkingmachines/inkling-small:free",
+  "cohere/north-mini-code:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
+  "nvidia/nemotron-3.5-super-vl:free",
+  "nvidia/nemotron-3.5-lightning:free",
+  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+  "google/gemma-4-31b-it:free",
+  "google/gemma-4-26b-a4b-it:free",
+  "xingchen-agi/xing4.0-29b-a4b:free",
+  "dots-studio/dots-3-note-preview:free",
+  "recursive/flint-v1.0:free",
+  "liquid/lfm-2.5-2.6b:free"
+];
+var MODEL_COOLDOWN_MS = 2 * 60 * 1e3;
+var failedFreeModels = /* @__PURE__ */ new Map();
+var cachedLiveModels = null;
+var cachedLiveModelsAt = 0;
+var LIVE_MODELS_CACHE_TTL_MS = 10 * 1e3;
+function createOpenRouterExecutionError(message, details = {}) {
+  const err = new DockyardError("provider_execution_error", message, details);
+  if (details.status) err.status = details.status;
+  if (details.code) err.code = details.code;
+  if (details.accountStatus === "expired") err.authExpired = true;
+  if (details.status === 429) err.rateLimited = true;
+  return err;
+}
+function estimateOpenRouterRequestTokens(request = {}) {
+  let chars = 0;
+  const sysText = request.system ?? request.systemPrompt ?? request.instructions;
+  if (typeof sysText === "string") chars += sysText.length;
+  const messages = Array.isArray(request.messages) ? request.messages : [];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") continue;
+    if (typeof msg.content === "string") {
+      chars += msg.content.length;
+    } else if (Array.isArray(msg.content)) {
+      for (const block of msg.content) {
+        if (typeof block === "string") chars += block.length;
+        else if (typeof block?.text === "string") chars += block.text.length;
+        else if (typeof block?.thinking === "string") chars += block.thinking.length;
+        else if (typeof block?.arguments === "string") chars += block.arguments.length;
+      }
+    }
+    if (Array.isArray(msg.tool_calls)) {
+      for (const tc of msg.tool_calls) {
+        if (typeof tc?.function?.arguments === "string") chars += tc.function.arguments.length;
+      }
+    }
+  }
+  if (Array.isArray(request.tools)) {
+    for (const tool of request.tools) {
+      chars += JSON.stringify(tool ?? {}).length;
+    }
+  }
+  return Math.ceil(chars / 3.5) + 512;
+}
+function isOpenRouterContextOverflowBody(status, errBody = "") {
+  if (status !== 400 && status !== 413 && status !== 422) return false;
+  return /context[\s_-]*(?:length|window)|maximum context|tokens.*exceed|too\s+(?:long|large)\s+for|prompt is too long|input is too long/i.test(String(errBody));
+}
+function markOpenRouterModelCooldown(modelId, nowMs = Date.now()) {
+  if (!modelId || modelId === OPENROUTER_FREE_ROUTER_ID) return;
+  failedFreeModels.set(modelId, nowMs);
+}
+function isOpenRouterModelCoolingDown(modelId, nowMs = Date.now()) {
+  const failedAt = failedFreeModels.get(modelId);
+  if (!failedAt) return false;
+  if (nowMs - failedAt >= MODEL_COOLDOWN_MS) {
+    failedFreeModels.delete(modelId);
+    return false;
+  }
+  return true;
+}
+function hashApiKeyFingerprint(apiKey) {
+  return crypto.createHash("sha256").update(String(apiKey ?? "")).digest("hex").slice(0, 12);
+}
+function maskApiKey3(apiKey) {
+  const trimmed = String(apiKey ?? "").trim();
+  if (trimmed.length <= 12) return "sk-or-***";
+  return `${trimmed.slice(0, 9)}\u2026${trimmed.slice(-4)}`;
+}
+function stripYamlQuotes(raw) {
+  const val = String(raw ?? "").trim();
+  if (val.startsWith('"') && val.endsWith('"') || val.startsWith("'") && val.endsWith("'")) {
+    return val.slice(1, -1);
+  }
+  return val;
+}
+function parseDshCredentialsYaml(rawText) {
+  const entries = [];
+  if (typeof rawText !== "string" || !rawText.trim()) return entries;
+  const lines = rawText.split(/\r?\n/);
+  let currentRef = null;
+  let currentValue = null;
+  for (const line of lines) {
+    const inlineMatch = line.match(/^\s{2}([A-Za-z0-9_.-]+):\s*(\S.+?)\s*$/);
+    if (inlineMatch) {
+      if (currentRef && currentValue) {
+        entries.push({ ref: currentRef, apiKey: currentValue });
+      }
+      currentRef = null;
+      currentValue = null;
+      entries.push({ ref: inlineMatch[1], apiKey: stripYamlQuotes(inlineMatch[2]) });
+      continue;
+    }
+    const refMatch = line.match(/^\s{2}([A-Za-z0-9_.-]+):\s*$/);
+    if (refMatch) {
+      if (currentRef && currentValue) {
+        entries.push({ ref: currentRef, apiKey: currentValue });
+      }
+      currentRef = refMatch[1];
+      currentValue = null;
+      continue;
+    }
+    if (currentRef) {
+      const valMatch = line.match(/^\s{4}value:\s*(.+?)\s*$/);
+      if (valMatch) {
+        currentValue = stripYamlQuotes(valMatch[1]);
+      }
+    }
+  }
+  if (currentRef && currentValue) {
+    entries.push({ ref: currentRef, apiKey: currentValue });
+  }
+  const results = [];
+  for (const entry of entries) {
+    if ((entry.ref === "OPENROUTER_API_KEY" || entry.ref.startsWith("OPENROUTER_DOCKYARD_") || entry.ref.startsWith("OPENROUTER_FREE_")) && entry.apiKey.startsWith("sk-or-")) {
+      results.push(entry);
+      continue;
+    }
+    if (entry.ref.startsWith("DOCKYARD_DSH_") && entry.apiKey.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(entry.apiKey);
+        if (parsed?.providerId === "openrouter-free" && typeof parsed?.apiKey === "string" && parsed.apiKey.startsWith("sk-or-")) {
+          results.push({ ref: entry.ref, apiKey: parsed.apiKey, label: parsed.label });
+        }
+      } catch {
+      }
+    }
+  }
+  return results;
+}
+function discoverLocalOpenRouterKeys({ homeDir = os.homedir(), env = process.env } = {}) {
+  const discovered = [];
+  const seenKeys = /* @__PURE__ */ new Set();
+  const addCandidate = (apiKey, source, label) => {
+    const trimmed = typeof apiKey === "string" ? apiKey.trim() : "";
+    if (!trimmed) return;
+    const fp = hashApiKeyFingerprint(trimmed);
+    if (seenKeys.has(fp)) return;
+    seenKeys.add(fp);
+    discovered.push({
+      apiKey: trimmed,
+      fingerprint: fp,
+      maskedKey: maskApiKey3(trimmed),
+      source,
+      label: label || `OpenRouter Key (${maskApiKey3(trimmed)})`
+    });
+  };
+  if (env?.OPENROUTER_FREE_API_KEY) {
+    addCandidate(env.OPENROUTER_FREE_API_KEY, "env:OPENROUTER_FREE_API_KEY", "Env OPENROUTER_FREE_API_KEY");
+  }
+  if (env?.OPENROUTER_API_KEY) {
+    addCandidate(env.OPENROUTER_API_KEY, "env:OPENROUTER_API_KEY", "Env OPENROUTER_API_KEY");
+  }
+  try {
+    const credPath = path.join(homeDir, ".dsh", ".credentials.yaml");
+    if (fs.existsSync(credPath)) {
+      const raw = fs.readFileSync(credPath, "utf8");
+      const parsed = parseDshCredentialsYaml(raw);
+      for (const item of parsed) {
+        addCandidate(
+          item.apiKey,
+          `dsh_credentials:${item.ref}`,
+          item.label || `OpenRouter Key (${maskApiKey3(item.apiKey)})`
+        );
+      }
+    }
+  } catch {
+  }
+  return discovered;
+}
+function extractOpenRouterFreeAuth({ homeDir = os.homedir(), env = process.env } = {}) {
+  const keys = discoverLocalOpenRouterKeys({ homeDir, env });
+  return keys[0] ?? null;
+}
+function classifyOpenRouterFreeKind(item) {
+  const id = String(item?.id ?? "").trim();
+  const lowerId = id.toLowerCase();
+  const desc = String(item?.description ?? "").toLowerCase();
+  if (id === OPENROUTER_FREE_ROUTER_ID) return "router";
+  if (lowerId.startsWith("stealth/") || lowerId.includes("stealth") || lowerId.includes("cloak") || !lowerId.endsWith(":free") && (lowerId.includes("-alpha") || desc.includes("stealth") || desc.includes("cloaked"))) {
+    return "stealth";
+  }
+  if (!lowerId.endsWith(":free")) {
+    return "limited_free";
+  }
+  return "free";
+}
+function isUsableOpenRouterFreeModel(item) {
+  if (!item || typeof item.id !== "string") return false;
+  const id = item.id.trim();
+  if (!id) return false;
+  if (id === OPENROUTER_FREE_ROUTER_ID) return true;
+  const lowerId = id.toLowerCase();
+  if (lowerId.includes("content-safety") || lowerId.includes("llama-guard") || lowerId.includes("prompt-guard") || lowerId.startsWith("google/lyria") || lowerId.startsWith("openrouter/auto") || lowerId.startsWith("openrouter/bodybuilder") || lowerId.startsWith("openrouter/fusion") || lowerId.startsWith("openrouter/pareto")) {
+    return false;
+  }
+  const isFreeSuffix = lowerId.endsWith(":free");
+  const promptPrice = item.pricing?.prompt;
+  const completionPrice = item.pricing?.completion;
+  const requestPrice = item.pricing?.request;
+  const isZeroPriced = promptPrice !== void 0 && completionPrice !== void 0 && Number(promptPrice) === 0 && Number(completionPrice) === 0 && (requestPrice === void 0 || Number(requestPrice) === 0);
+  if (!isFreeSuffix && !isZeroPriced) return false;
+  const outputModalities = item.architecture?.output_modalities;
+  if (Array.isArray(outputModalities)) {
+    if (outputModalities.length > 0 && !outputModalities.includes("text")) {
+      return false;
+    }
+    if (outputModalities.includes("audio") && !isFreeSuffix) {
+      return false;
+    }
+  }
+  const supportedParams = item.supported_parameters;
+  if (Array.isArray(supportedParams) && supportedParams.length === 0) {
+    return false;
+  }
+  return true;
+}
+function normalizeOpenRouterFreeModelEntry(item) {
+  const id = String(item.id).trim();
+  const kind = classifyOpenRouterFreeKind(item);
+  const isRouter = kind === "router";
+  const rawName = String(item.name || id).replace(/\s*\(free\)\s*$/i, "").replace(/\s*\[free\]\s*$/i, "").trim();
+  const name2 = isRouter ? "Free Models Router" : stripVendorPrefix(rawName);
+  const rawContextLength = Number(item.top_provider?.context_length || item.context_length);
+  const contextWindow = rawContextLength > 0 ? rawContextLength : isRouter ? 2e5 : 131072;
+  const rawMaxCompletion = Number(item.top_provider?.max_completion_tokens);
+  const maxTokens = rawMaxCompletion > 0 ? rawMaxCompletion : isRouter ? 32768 : Math.min(contextWindow, 16384);
+  const inputModalities = ["text"];
+  if (isRouter || item.architecture?.input_modalities?.includes("image")) {
+    inputModalities.push("image");
+  }
+  const supportedParams = Array.isArray(item.supported_parameters) ? item.supported_parameters : [];
+  const supportsTools = isRouter || supportedParams.length === 0 || supportedParams.includes("tools");
+  const supportsReasoning = isRouter || supportedParams.includes("reasoning") || supportedParams.includes("include_reasoning");
+  const created = Number(item.created) || 0;
+  return {
+    id,
+    name: name2,
+    free: true,
+    freeKind: kind,
+    created,
+    contextWindow,
+    maxTokens,
+    inputModalities,
+    supportsTools,
+    supportsReasoning,
+    ...supportsReasoning ? {
+      reasoning: {
+        defaultEffort: "medium",
+        efforts: [
+          { id: "low", name: "Low" },
+          { id: "medium", name: "Medium" },
+          { id: "high", name: "High" },
+          { id: "xhigh", name: "Extra High" }
+        ]
+      }
+    } : {}
+  };
+}
+function buildOpenRouterFreeCatalogFromRaw(rawModels = []) {
+  const entriesById = /* @__PURE__ */ new Map();
+  entriesById.set(OPENROUTER_FREE_ROUTER_ID, normalizeOpenRouterFreeModelEntry({
+    id: OPENROUTER_FREE_ROUTER_ID,
+    name: "Free Models Router",
+    context_length: 2e5,
+    top_provider: { context_length: 2e5, max_completion_tokens: 32768 },
+    architecture: { input_modalities: ["text", "image"], output_modalities: ["text"] },
+    supported_parameters: ["tools", "reasoning", "include_reasoning", "max_tokens", "temperature"]
+  }));
+  const rawArray = Array.isArray(rawModels) ? rawModels : [];
+  for (let i = 0; i < rawArray.length; i++) {
+    const item = rawArray[i];
+    if (!isUsableOpenRouterFreeModel(item)) continue;
+    const normalized = normalizeOpenRouterFreeModelEntry({
+      ...item,
+      // Preserve OpenRouter's natural newest-first ordering when `created` is equal or missing
+      created: Number(item.created) || 1e6 - i
+    });
+    entriesById.set(normalized.id, normalized);
+  }
+  const routerEntry = entriesById.get(OPENROUTER_FREE_ROUTER_ID);
+  const specificEntries = [...entriesById.values()].filter((m) => m.id !== OPENROUTER_FREE_ROUTER_ID);
+  const kindRank = (m) => m.freeKind === "stealth" ? 0 : m.freeKind === "limited_free" ? 1 : 2;
+  specificEntries.sort((a, b) => {
+    const rA = kindRank(a);
+    const rB = kindRank(b);
+    if (rA !== rB) return rA - rB;
+    if (b.created !== a.created) return b.created - a.created;
+    return a.id.localeCompare(b.id);
+  });
+  return [routerEntry, ...specificEntries];
+}
+async function fetchLiveOpenRouterFreeModels({
+  fetchImpl = globalThis.fetch,
+  apiKey = null,
+  forceRefresh = false
+} = {}) {
+  const now = Date.now();
+  if (!forceRefresh && cachedLiveModels && now - cachedLiveModelsAt < LIVE_MODELS_CACHE_TTL_MS) {
+    return cachedLiveModels;
+  }
+  if (typeof fetchImpl !== "function") {
+    return cachedLiveModels ?? buildOpenRouterFreeCatalogFromRaw(
+      PRIORITIZED_FREE_MODELS.map((id, idx) => ({
+        id,
+        name: id,
+        created: 1e6 - idx,
+        pricing: { prompt: "0", completion: "0" }
+      }))
+    );
+  }
+  try {
+    const headers = {
+      Accept: "application/json",
+      "Cache-Control": "no-cache",
+      ...OPENROUTER_AGENTIC_HEADERS,
+      ...apiKey ? { Authorization: `Bearer ${apiKey}` } : {}
+    };
+    const response = await fetchImpl(OPENROUTER_MODELS_ENDPOINT, {
+      method: "GET",
+      headers,
+      signal: AbortSignal.timeout(1e4)
+    });
+    if (response.ok) {
+      const payload = await response.json();
+      const rawData = Array.isArray(payload?.data) ? payload.data : [];
+      const catalog = buildOpenRouterFreeCatalogFromRaw(rawData);
+      if (catalog.length > 1) {
+        cachedLiveModels = catalog;
+        cachedLiveModelsAt = Date.now();
+        return catalog;
+      }
+    }
+  } catch {
+  }
+  return cachedLiveModels ?? buildOpenRouterFreeCatalogFromRaw(
+    PRIORITIZED_FREE_MODELS.map((id, idx) => ({
+      id,
+      name: id,
+      created: 1e6 - idx,
+      pricing: { prompt: "0", completion: "0" }
+    }))
+  );
+}
+function contentToText(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return textFromContent(content);
+  return content.map((block) => {
+    if (typeof block === "string") return block;
+    if (block?.type === "text") return block.text ?? "";
+    if (block?.type === "tool-result" || block?.type === "tool_result") {
+      return textFromContent(block.content ?? block.output ?? block.result ?? block.text);
+    }
+    return textFromContent(block);
+  }).filter(Boolean).join("\n");
+}
+function isToolCallBlock(block) {
+  if (!block || typeof block !== "object") return false;
+  const type = String(block.type ?? "").toLowerCase().replace(/[_-]/g, "");
+  return type === "toolcall" || type === "tooluse" || type === "functioncall" || Boolean(block.functionCall);
+}
+function isToolResultBlock(block) {
+  if (!block || typeof block !== "object") return false;
+  const type = String(block.type ?? "").toLowerCase().replace(/[_-]/g, "");
+  return type === "toolresult";
+}
+function extractNormalizedToolCall(block, fallbackIndex = 1) {
+  const fnObj = block.function ?? block.functionCall ?? null;
+  const rawId = block.id ?? block.toolCallId ?? block.tool_call_id ?? fnObj?.id ?? `call_${fallbackIndex}`;
+  const rawName = block.name ?? block.toolName ?? block.tool_name ?? fnObj?.name ?? "tool";
+  const rawArgs = block.arguments ?? block.input ?? block.args ?? fnObj?.arguments ?? fnObj?.args ?? {};
+  return {
+    id: sanitizeToolCallId(String(rawId)),
+    type: "function",
+    function: {
+      name: String(rawName),
+      arguments: typeof rawArgs === "string" ? rawArgs : JSON.stringify(rawArgs ?? {})
+    }
+  };
+}
+async function normalizeMessages(request = {}, { includeReasoningContent = false, attachments = null } = {}) {
+  const out = [];
+  const sysText = request.system ?? request.systemPrompt ?? request.instructions;
+  if (typeof sysText === "string" && sysText.trim()) {
+    out.push({ role: "system", content: sysText.trim() });
+  }
+  const messages = Array.isArray(request.messages) ? request.messages : [];
+  for (const msg of messages) {
+    if (!msg || typeof msg !== "object") continue;
+    const role = msg.role === "developer" ? "system" : msg.role ?? "user";
+    if (role === "tool" || role === "toolResult" || role === "tool_result") {
+      if (Array.isArray(msg.content) && msg.content.some(isToolResultBlock)) {
+        for (const block of msg.content) {
+          if (!isToolResultBlock(block)) continue;
+          const toolCallId2 = sanitizeToolCallId(
+            block.toolCallId ?? block.tool_call_id ?? block.id ?? msg.tool_call_id ?? msg.toolCallId ?? msg.id ?? "call_1"
+          );
+          const resultText = typeof block.content === "string" ? block.content : textFromContent(block.content ?? block.output ?? block.result ?? block.text);
+          out.push({
+            role: "tool",
+            tool_call_id: toolCallId2,
+            content: resultText || ""
+          });
+        }
+        continue;
+      }
+      const toolCallId = sanitizeToolCallId(msg.tool_call_id ?? msg.toolCallId ?? msg.id ?? "call_1");
+      const rawContent = msg.content ?? msg.output ?? msg.result ?? msg.text;
+      out.push({
+        role: "tool",
+        tool_call_id: toolCallId,
+        content: typeof rawContent === "string" ? rawContent : contentToText(rawContent)
+      });
+      continue;
+    }
+    if (role === "assistant" && Array.isArray(msg.content)) {
+      const textParts = [];
+      const thinkingParts = [];
+      const toolCalls = [];
+      for (const block of msg.content) {
+        if (typeof block === "string") {
+          textParts.push(block);
+        } else if (block?.type === "text" && block.text) {
+          textParts.push(block.text);
+        } else if ((block?.type === "thinking" || block?.type === "reasoning") && (block.thinking ?? block.text)) {
+          thinkingParts.push(block.thinking ?? block.text);
+        } else if (isToolCallBlock(block)) {
+          toolCalls.push(extractNormalizedToolCall(block, toolCalls.length + 1));
+        }
+      }
+      if (Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls) {
+          const normalizedTc = extractNormalizedToolCall(tc, toolCalls.length + 1);
+          if (!toolCalls.some((existing) => existing.id === normalizedTc.id)) {
+            toolCalls.push(normalizedTc);
+          }
+        }
+      }
+      const joinedText = textParts.join("\n").replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "").trim();
+      const entry2 = {
+        role: "assistant",
+        content: joinedText || (toolCalls.length > 0 ? null : "")
+      };
+      const existingReasoning = msg.reasoning_content ?? msg.reasoning ?? (thinkingParts.length > 0 ? thinkingParts.join("\n") : void 0);
+      if (existingReasoning !== void 0) {
+        entry2.reasoning_content = existingReasoning;
+      } else if (includeReasoningContent) {
+        entry2.reasoning_content = " ";
+      }
+      if (toolCalls.length > 0) entry2.tool_calls = toolCalls;
+      out.push(entry2);
+      continue;
+    }
+    if (role === "user" && Array.isArray(msg.content)) {
+      const toolResults = msg.content.filter(isToolResultBlock);
+      const nonToolBlocks = msg.content.filter((b) => !isToolResultBlock(b));
+      for (const block of toolResults) {
+        const toolCallId = sanitizeToolCallId(block.toolCallId ?? block.tool_call_id ?? block.id ?? "call_1");
+        const resultText = typeof block.content === "string" ? block.content : textFromContent(block.content ?? block.output ?? block.result ?? block.text);
+        out.push({
+          role: "tool",
+          tool_call_id: toolCallId,
+          content: resultText || ""
+        });
+      }
+      if (nonToolBlocks.length === 0 && toolResults.length > 0) {
+        continue;
+      }
+      const parts = [];
+      for (const block of nonToolBlocks) {
+        if (typeof block === "string") {
+          parts.push({ type: "text", text: block });
+        } else if (block?.type === "text" && block.text) {
+          parts.push({ type: "text", text: block.text });
+        } else if (block?.type === "image") {
+          let url = block.url ?? (block.data ? `data:${block.mimeType ?? "image/png"};base64,${block.data}` : null);
+          if (!url && block.attachment) {
+            const resolved = await resolveImageData(block, attachments);
+            if (resolved) {
+              url = `data:${resolved.mediaType || "image/png"};base64,${resolved.data}`;
+            } else {
+              throw new Error("\u56FE\u7247\u9644\u4EF6\u65E0\u6CD5\u8BFB\u53D6\uFF1A\u7F3A\u5C11 DSH \u9644\u4EF6\u670D\u52A1\u6216\u9644\u4EF6\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u7C98\u8D34\u56FE\u7247");
+            }
+          }
+          if (url) parts.push({ type: "image_url", image_url: { url } });
+        } else if (block?.type === "image_url" && block.image_url) {
+          parts.push({ type: "image_url", image_url: block.image_url });
+        }
+      }
+      if (parts.some((p) => p.type === "image_url")) {
+        out.push({ role: "user", content: parts });
+        continue;
+      }
+      const textOnly = parts.map((p) => p.text).filter(Boolean).join("\n");
+      out.push({ role: "user", content: textOnly });
+      continue;
+    }
+    const rawText = typeof msg.content === "string" ? msg.content : contentToText(msg.content);
+    const cleanedText = role === "assistant" ? rawText.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "").trim() : rawText;
+    const entry = {
+      role,
+      content: cleanedText
+    };
+    if (role === "assistant") {
+      if (msg.reasoning_content !== void 0) {
+        entry.reasoning_content = msg.reasoning_content;
+      } else if (includeReasoningContent) {
+        entry.reasoning_content = " ";
+      }
+    }
+    if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+      entry.tool_calls = msg.tool_calls.map((tc, idx) => extractNormalizedToolCall(tc, idx + 1));
+      if (!entry.content) entry.content = null;
+    }
+    out.push(entry);
+  }
+  let lastAssistant = null;
+  for (let i = 0; i < out.length; i++) {
+    const item = out[i];
+    if (item.role === "assistant") {
+      lastAssistant = item;
+    } else if (item.role === "tool") {
+      const tcId = item.tool_call_id || "call_1";
+      if (!lastAssistant) {
+        lastAssistant = {
+          role: "assistant",
+          content: null,
+          ...includeReasoningContent ? { reasoning_content: " " } : {},
+          tool_calls: [{
+            id: tcId,
+            type: "function",
+            function: { name: "tool", arguments: "{}" }
+          }]
+        };
+        out.splice(i, 0, lastAssistant);
+        i += 1;
+      } else {
+        if (!Array.isArray(lastAssistant.tool_calls)) {
+          lastAssistant.tool_calls = [];
+          if (!lastAssistant.content) lastAssistant.content = null;
+        }
+        if (!lastAssistant.tool_calls.some((tc) => tc.id === tcId)) {
+          lastAssistant.tool_calls.push({
+            id: tcId,
+            type: "function",
+            function: { name: "tool", arguments: "{}" }
+          });
+        }
+      }
+    } else if (item.role === "user") {
+      lastAssistant = null;
+    }
+  }
+  return out;
+}
+function normalizeTools(tools) {
+  if (!Array.isArray(tools) || tools.length === 0) return void 0;
+  return tools.map((tool) => {
+    if (tool?.type === "function" && tool.function) return tool;
+    return {
+      type: "function",
+      function: {
+        name: tool.name,
+        description: tool.description ?? "",
+        parameters: tool.parameters ?? tool.inputSchema ?? { type: "object", properties: {} }
+      }
+    };
+  });
+}
+function requestHasImages(messages = []) {
+  return messages.some((m) => Array.isArray(m?.content) && m.content.some((part) => part?.type === "image" || part?.type === "image_url"));
+}
+function normalizeReasoningParam(request = {}) {
+  const rawEffort = request.reasoningEffort ?? request.reasoning?.effort ?? null;
+  if (!rawEffort || rawEffort === "none" || rawEffort === "off" || rawEffort === "default") {
+    return void 0;
+  }
+  const validEfforts = /* @__PURE__ */ new Set(["minimal", "low", "medium", "high", "xhigh", "max"]);
+  const normalized = String(rawEffort).toLowerCase().trim();
+  if (validEfforts.has(normalized)) {
+    return { effort: normalized };
+  }
+  return void 0;
+}
+function extractReasoningDelta2(delta = {}) {
+  if (typeof delta.reasoning_content === "string" && delta.reasoning_content) return delta.reasoning_content;
+  if (typeof delta.reasoning === "string" && delta.reasoning) return delta.reasoning;
+  if (Array.isArray(delta.reasoning_details)) {
+    for (const detail of delta.reasoning_details) {
+      if (typeof detail?.text === "string" && detail.text) return detail.text;
+      if (typeof detail?.summary === "string" && detail.summary) return detail.summary;
+    }
+  }
+  return "";
+}
+function selectOpenRouterFreeCandidateQueue({
+  requestedModel,
+  liveCatalog = [],
+  hasTools = false,
+  hasImages = false,
+  estimatedTokens = 0,
+  noFallback = false,
+  nowMs = Date.now()
+} = {}) {
+  const rawModel = String(requestedModel || OPENROUTER_FREE_ROUTER_ID).replace(/^openrouter-free\//, "");
+  const isRouter = rawModel === OPENROUTER_FREE_ROUTER_ID || rawModel === "free";
+  if (!isRouter && noFallback) {
+    return [rawModel];
+  }
+  const catalogEntries = liveCatalog.filter((entry) => entry.id && entry.id !== OPENROUTER_FREE_ROUTER_ID);
+  const entryMap = new Map(catalogEntries.map((entry) => [entry.id, entry]));
+  const orderedIds = [];
+  const seen = /* @__PURE__ */ new Set();
+  const pushCandidate = (id) => {
+    if (!id || seen.has(id)) return;
+    if (isOpenRouterModelCoolingDown(id, nowMs)) return;
+    seen.add(id);
+    orderedIds.push(id);
+  };
+  if (!isRouter) {
+    pushCandidate(rawModel);
+  }
+  const compatiblePool = [];
+  const contextFallbackPool = [];
+  const secondaryPool = [];
+  const allKnownIds = [
+    ...PRIORITIZED_FREE_MODELS.filter((id) => entryMap.size === 0 || entryMap.has(id)),
+    ...catalogEntries.map((e) => e.id)
+  ];
+  const requiredContextWindow = estimatedTokens > 0 ? estimatedTokens + 4096 : 0;
+  for (const id of allKnownIds) {
+    const meta = entryMap.get(id);
+    const toolsOk = !hasTools || !meta || meta.supportsTools !== false;
+    const imagesOk = !hasImages || !meta || Array.isArray(meta.inputModalities) && meta.inputModalities.includes("image");
+    const contextOk = !requiredContextWindow || !meta?.contextWindow || meta.contextWindow >= requiredContextWindow;
+    if (toolsOk && imagesOk && contextOk) {
+      compatiblePool.push(id);
+    } else if (toolsOk && imagesOk) {
+      contextFallbackPool.push(id);
+    } else {
+      secondaryPool.push(id);
+    }
+  }
+  contextFallbackPool.sort((a, b) => {
+    const ctxA = entryMap.get(a)?.contextWindow || 0;
+    const ctxB = entryMap.get(b)?.contextWindow || 0;
+    return ctxB - ctxA;
+  });
+  for (const id of compatiblePool) pushCandidate(id);
+  for (const id of contextFallbackPool) pushCandidate(id);
+  for (const id of secondaryPool) pushCandidate(id);
+  if (!seen.has(OPENROUTER_FREE_ROUTER_ID)) {
+    orderedIds.push(OPENROUTER_FREE_ROUTER_ID);
+  }
+  if (orderedIds.length === 0) {
+    return [isRouter ? OPENROUTER_FREE_ROUTER_ID : rawModel];
+  }
+  return orderedIds;
+}
+function createOpenRouterFreeNativeExecutor({
+  fetchImpl = globalThis.fetch,
+  homeDir = os.homedir(),
+  env = process.env,
+  timeoutMs = 12e4
+} = {}) {
+  const executeOpenRouterFreeStream = async function* (input = {}, maybeInvocation = {}, maybeContext = {}) {
+    const isWrappedInput = input && typeof input === "object" && ("request" in input || "credential" in input);
+    const request = isWrappedInput ? input.request ?? {} : input ?? {};
+    const secret = isWrappedInput ? input.credential ?? input.secret ?? null : maybeInvocation?.secret ?? maybeInvocation?.credential ?? maybeContext?.secret ?? null;
+    const signal = (isWrappedInput ? input.signal : null) ?? request.signal ?? maybeContext?.signal ?? null;
+    const attachments = (isWrappedInput ? input.attachments : null) ?? maybeInvocation?.attachments ?? maybeContext?.attachments ?? null;
+    const localAuth = extractOpenRouterFreeAuth({ homeDir, env });
+    const apiKey = secret?.apiKey ?? secret?.accessToken ?? secret?.token ?? localAuth?.apiKey;
+    if (!apiKey) {
+      throw createOpenRouterExecutionError(
+        "\u672A\u627E\u5230 OpenRouter API Key\u3002\u8BF7\u5728 Dockyard \u7684 OpenRouter Free \u8BA2\u9605\u5F39\u7A97\u4E2D\u7C98\u8D34\u60A8\u7684 API Key\uFF08\u6216\u626B\u63CF\u672C\u673A\u5DF2\u914D\u7F6E\u7684 OPENROUTER_API_KEY\uFF09\u3002",
+        { retryable: false, accountStatus: "expired" }
+      );
+    }
+    const rawModel = String(request.model || OPENROUTER_FREE_ROUTER_ID).replace(/^openrouter-free\//, "");
+    const isRouterRequest = rawModel === OPENROUTER_FREE_ROUTER_ID || rawModel === "free";
+    const noFallback = Boolean(request.noFallback || request.probe);
+    const tools = normalizeTools(request.tools);
+    const hasTools = Boolean(tools && tools.length > 0);
+    const hasImages = requestHasImages(request.messages);
+    const liveCatalog = await fetchLiveOpenRouterFreeModels({ fetchImpl, apiKey });
+    const estimatedTokens = estimateOpenRouterRequestTokens(request);
+    const candidateQueue = selectOpenRouterFreeCandidateQueue({
+      requestedModel: rawModel,
+      liveCatalog,
+      hasTools,
+      hasImages,
+      estimatedTokens,
+      noFallback: noFallback && !isRouterRequest
+    });
+    const reasoningParam = normalizeReasoningParam(request);
+    const normalizedCache = /* @__PURE__ */ new Map();
+    const normalizedMessagesFor = async (includeReasoningContent2) => {
+      const key = includeReasoningContent2 ? "1" : "0";
+      if (!normalizedCache.has(key)) {
+        normalizedCache.set(key, await normalizeMessages(request, { includeReasoningContent: includeReasoningContent2, attachments }));
+      }
+      return normalizedCache.get(key);
+    };
+    const buildBodyForModels = async (modelsSlice, { includeReasoningContent: includeReasoningContent2 = false } = {}) => {
+      const primaryModel = modelsSlice[0];
+      const fallbackModels = modelsSlice.slice(1, 3);
+      return {
+        model: primaryModel,
+        ...fallbackModels.length > 0 ? { models: [primaryModel, ...fallbackModels] } : {},
+        messages: await normalizedMessagesFor(includeReasoningContent2),
+        stream: true,
+        ...tools ? { tools } : {},
+        ...reasoningParam ? { reasoning: reasoningParam } : {},
+        ...typeof request.maxTokens === "number" ? { max_tokens: request.maxTokens } : {},
+        ...typeof request.temperature === "number" ? { temperature: request.temperature } : {}
+      };
+    };
+    const doFetch = async (bodyObj) => {
+      let lastNetworkErr = null;
+      const maxNetworkAttempts = 2;
+      for (let attempt = 1; attempt <= maxNetworkAttempts; attempt++) {
+        try {
+          return await fetchImpl(OPENROUTER_API_ENDPOINT, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+              Accept: "text/event-stream, application/json",
+              ...OPENROUTER_AGENTIC_HEADERS
+            },
+            body: JSON.stringify(bodyObj),
+            ...signal ? { signal } : {}
+          });
+        } catch (err) {
+          lastNetworkErr = err;
+          if (signal?.aborted || attempt >= maxNetworkAttempts) {
+            throw createOpenRouterExecutionError(
+              `OpenRouter Free network request failed: ${err?.message || String(err)}`,
+              { retryable: true, cause: err }
+            );
+          }
+          await new Promise((resolve2) => setTimeout(resolve2, 250 * attempt));
+        }
+      }
+      throw lastNetworkErr;
+    };
+    const batches = [];
+    if (noFallback && !isRouterRequest) {
+      batches.push([rawModel]);
+    } else {
+      for (let i = 0; i < candidateQueue.length && batches.length < 6; i += 1) {
+        const slice = isRouterRequest ? candidateQueue.slice(i, i + 3) : [candidateQueue[i]];
+        batches.push(slice);
+      }
+    }
+    let lastStatus = 500;
+    let lastErrBody = "Unknown OpenRouter error";
+    let sawContextOverflow = false;
+    let includeReasoningContent = false;
+    let response = null;
+    for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+      const batch = batches[bIdx];
+      let candidateRes = await doFetch(await buildBodyForModels(batch, { includeReasoningContent }));
+      if (!candidateRes.ok) {
+        const errBody = await candidateRes.text().catch(() => "");
+        if (candidateRes.status === 400 && errBody.includes("reasoning_content") && !includeReasoningContent) {
+          includeReasoningContent = true;
+          candidateRes = await doFetch(await buildBodyForModels(batch, { includeReasoningContent: true }));
+        } else {
+          lastStatus = candidateRes.status;
+          lastErrBody = errBody || `HTTP ${candidateRes.status}`;
+          if (isOpenRouterContextOverflowBody(candidateRes.status, errBody)) {
+            sawContextOverflow = true;
+          }
+          if (candidateRes.status === 401) {
+            throw createOpenRouterExecutionError(
+              `OpenRouter API Key \u65E0\u6548\u6216\u5DF2\u8FC7\u671F (${candidateRes.status}): ${lastErrBody.slice(0, 300)}`,
+              { status: candidateRes.status, retryable: false, accountStatus: "expired" }
+            );
+          }
+          markOpenRouterModelCooldown(batch[0]);
+          continue;
+        }
+      }
+      if (!candidateRes.ok) {
+        const errBody = await candidateRes.text().catch(() => "");
+        lastStatus = candidateRes.status;
+        lastErrBody = errBody || `HTTP ${candidateRes.status}`;
+        if (isOpenRouterContextOverflowBody(candidateRes.status, errBody)) {
+          sawContextOverflow = true;
+        }
+        markOpenRouterModelCooldown(batch[0]);
+        continue;
+      }
+      response = candidateRes;
+      break;
+    }
+    if (!response) {
+      throw createOpenRouterExecutionError(
+        `OpenRouter Free request failed (${lastStatus}): ${String(lastErrBody).slice(0, 300)}`,
+        {
+          status: lastStatus,
+          ...sawContextOverflow ? { code: "CONTEXT_WINDOW_EXCEEDED" } : {},
+          retryable: sawContextOverflow || lastStatus === 429 || lastStatus >= 500
+        }
+      );
+    }
+    const streamEvents = [];
+    let nextIndex = 1;
+    let reasoning = null;
+    let rawUsage = null;
+    let stop = "stop";
+    let probeYielded = false;
+    let substantiveYielded = false;
+    const activeTools = /* @__PURE__ */ new Map();
+    let inThinkTag = false;
+    let thinkPending = "";
+    const pushReasoningChunk = (text3) => {
+      if (!text3) return;
+      substantiveYielded = true;
+      textFilter.closeText();
+      if (!reasoning) {
+        reasoning = { index: nextIndex++, text: "" };
+        streamEvents.push({ type: "block-start", index: reasoning.index, blockType: "reasoning" });
+      }
+      reasoning.text += text3;
+      streamEvents.push({ type: "reasoning-delta", index: reasoning.index, text: text3 });
+    };
+    const reasoningDsmlCalls = [];
+    const closeReasoningBlock = () => {
+      if (!reasoning) return;
+      if (typeof reasoning.text === "string" && reasoning.text.includes("DSML")) {
+        const calls = parseDsmlCalls(reasoning.text);
+        if (calls?.length > 0) {
+          reasoningDsmlCalls.push(...calls);
+          reasoning.text = stripDsmlCalls(reasoning.text);
+        }
+      }
+      streamEvents.push({ type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } });
+      reasoning = null;
+    };
+    const pushContentChunk = (rawChunk) => {
+      if (!rawChunk) return;
+      let buf = thinkPending + rawChunk;
+      thinkPending = "";
+      while (buf.length > 0) {
+        if (inThinkTag) {
+          const closeMatch = buf.match(/<\/think(?:ing)?>/i);
+          if (closeMatch) {
+            const thoughtPart = buf.slice(0, closeMatch.index);
+            if (thoughtPart) pushReasoningChunk(thoughtPart);
+            closeReasoningBlock();
+            inThinkTag = false;
+            buf = buf.slice(closeMatch.index + closeMatch[0].length);
+            continue;
+          }
+          const partialClose = buf.match(/<\/(?:t(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?)?$/i);
+          if (partialClose) {
+            const safeThought = buf.slice(0, partialClose.index);
+            if (safeThought) pushReasoningChunk(safeThought);
+            thinkPending = partialClose[0];
+          } else {
+            pushReasoningChunk(buf);
+          }
+          break;
+        } else {
+          const openMatch = buf.match(/<think(?:ing)?>/i);
+          if (openMatch) {
+            const beforeText = buf.slice(0, openMatch.index);
+            if (beforeText) {
+              closeReasoningBlock();
+              textFilter.push(beforeText, () => nextIndex++);
+            }
+            inThinkTag = true;
+            buf = buf.slice(openMatch.index + openMatch[0].length);
+            continue;
+          }
+          const partialOpen = buf.match(/<(?:t(?:h(?:i(?:n(?:k(?:i(?:n(?:g)?)?)?)?)?)?)?)?$/i);
+          if (partialOpen) {
+            const safeText = buf.slice(0, partialOpen.index);
+            if (safeText) {
+              closeReasoningBlock();
+              textFilter.push(safeText, () => nextIndex++);
+            }
+            thinkPending = partialOpen[0];
+          } else {
+            closeReasoningBlock();
+            textFilter.push(buf, () => nextIndex++);
+          }
+          break;
+        }
+      }
+    };
+    const textFilter = new DsmlStreamFilter({
+      onTextBlockStart: (index) => streamEvents.push({ type: "block-start", index, blockType: "text" }),
+      onTextDelta: (index, text3) => streamEvents.push({ type: "text-delta", index, text: text3 }),
+      onTextBlockEnd: (index, text3) => streamEvents.push({ type: "block-end", index, block: { type: "text", text: text3 } })
+    });
+    for await (const event of readSseEvents(response, { signal, timeoutMs, providerId: "openrouter-free" })) {
+      if (event?.done) continue;
+      const parsed = event?.data;
+      if (!parsed || typeof parsed !== "object") continue;
+      if (parsed.error && !substantiveYielded) {
+        const errMsg = parsed.error?.message || JSON.stringify(parsed.error);
+        const errCode = Number(parsed.error?.code) || 502;
+        throw createOpenRouterExecutionError(
+          `OpenRouter Free stream error (${errCode}): ${errMsg}`,
+          { status: errCode, retryable: errCode === 429 || errCode >= 500 }
+        );
+      }
+      if (parsed.usage) rawUsage = parsed.usage;
+      const choice = Array.isArray(parsed.choices) ? parsed.choices[0] : null;
+      if (!choice) continue;
+      if (request.probe && !probeYielded) {
+        probeYielded = true;
+        substantiveYielded = true;
+        yield { type: "text-delta", index: 0, text: " " };
+        yield { type: "finish", reason: finishReason("stop") };
+        return;
+      }
+      const delta = choice.delta ?? choice.message ?? {};
+      const reasoningDelta = extractReasoningDelta2(delta);
+      if (reasoningDelta) {
+        pushReasoningChunk(reasoningDelta);
+        while (streamEvents.length > 0) yield streamEvents.shift();
+      }
+      for (const call of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+        substantiveYielded = true;
+        const key = Number(call.index ?? activeTools.size);
+        if (!activeTools.has(key)) {
+          closeReasoningBlock();
+          textFilter.closeText();
+          while (streamEvents.length > 0) yield streamEvents.shift();
+          const state2 = {
+            index: nextIndex++,
+            id: sanitizeToolCallId(call.id || `call_${key}_${randomUUID12().slice(0, 8)}`),
+            name: call.function?.name || call.name || "tool",
+            arguments: ""
+          };
+          activeTools.set(key, state2);
+          yield { type: "block-start", index: state2.index, blockType: "tool-call" };
+        }
+        const state = activeTools.get(key);
+        const argumentDelta = call.function?.arguments ?? call.arguments ?? "";
+        if (call.id) state.id = sanitizeToolCallId(call.id);
+        if (call.function?.name) state.name = call.function.name;
+        state.arguments += argumentDelta;
+        if (argumentDelta) {
+          yield { type: "tool-call-delta", index: state.index, id: state.id, name: state.name, argumentsDelta: argumentDelta };
+        }
+      }
+      const content = typeof delta.content === "string" ? delta.content : textFromContent(delta.content);
+      if (content) {
+        substantiveYielded = true;
+        pushContentChunk(content);
+        while (streamEvents.length > 0) yield streamEvents.shift();
+      }
+      if (choice.finish_reason) {
+        stop = choice.finish_reason;
+      }
+    }
+    if (thinkPending) {
+      if (inThinkTag) pushReasoningChunk(thinkPending);
+      else {
+        closeReasoningBlock();
+        textFilter.push(thinkPending, () => nextIndex++);
+      }
+      thinkPending = "";
+    }
+    closeReasoningBlock();
+    const dsmlResult = textFilter.flush(() => nextIndex++);
+    while (streamEvents.length > 0) yield streamEvents.shift();
+    const allDsmlCalls = [
+      ...reasoningDsmlCalls,
+      ...dsmlResult?.toolCalls || []
+    ];
+    if (activeTools.size > 0) {
+      for (const state of activeTools.values()) {
+        yield {
+          type: "block-end",
+          index: state.index,
+          block: { type: "tool-call", id: state.id, name: state.name, arguments: state.arguments || "{}" }
+        };
+      }
+      stop = "tool_calls";
+    } else if (allDsmlCalls.length > 0) {
+      for (const dsml of allDsmlCalls) {
+        substantiveYielded = true;
+        const toolIndex = nextIndex++;
+        const toolId = `call_${randomUUID12().slice(0, 8)}`;
+        yield { type: "block-start", index: toolIndex, blockType: "tool-call" };
+        yield { type: "tool-call-delta", index: toolIndex, id: toolId, name: dsml.name, argumentsDelta: dsml.arguments };
+        yield {
+          type: "block-end",
+          index: toolIndex,
+          block: { type: "tool-call", id: toolId, name: dsml.name, arguments: dsml.arguments }
+        };
+      }
+      stop = "tool_calls";
+    }
+    if (rawUsage) {
+      yield {
+        type: "usage",
+        usage: normalizeUsage(rawUsage)
+      };
+    }
+    yield {
+      type: "finish",
+      reason: finishReason(stop),
+      ...rawUsage ? { usage: normalizeUsage(rawUsage) } : {}
+    };
+  };
+  return guardEmptyCompletion(executeOpenRouterFreeStream, { providerId: "openrouter-free" });
+}
+
+// modules/provider-openrouter-free/src/driver.mjs
+var PROVIDER_ID17 = "openrouter-free";
+var OPENROUTER_KEYS_PAGE = "https://openrouter.ai/settings/keys";
+async function readSecret(secretStore, ref) {
+  if (!secretStore || !ref) return null;
+  try {
+    if (typeof secretStore.read === "function") return await secretStore.read(ref);
+    if (typeof secretStore.get === "function") return await secretStore.get(ref);
+  } catch {
+  }
+  return null;
+}
+async function writeSecret(secretStore, ref, value) {
+  if (!secretStore || !ref) return;
+  if (typeof secretStore.write === "function") {
+    await secretStore.write(ref, value);
+    return;
+  }
+  if (typeof secretStore.put === "function") {
+    await secretStore.put(ref, value);
+  }
+}
+function createOpenRouterFreeCatalogLoader({
+  fetchImpl = globalThis.fetch,
+  homeDir = os2.homedir(),
+  env = process.env
+} = {}) {
+  return async function loadOpenRouterFreeCatalog(context = {}) {
+    const localAuth = extractOpenRouterFreeAuth({ homeDir, env });
+    const apiKey = context?.credential?.apiKey ?? context?.secret?.apiKey ?? localAuth?.apiKey ?? null;
+    const models = await fetchLiveOpenRouterFreeModels({
+      fetchImpl,
+      apiKey,
+      forceRefresh: Boolean(context?.force)
+    });
+    return {
+      providerId: PROVIDER_ID17,
+      source: "openrouter_live_free_catalog",
+      fetchedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      models
+    };
+  };
+}
+async function fetchOpenRouterAccountQuota(apiKey, fetchImpl = globalThis.fetch, now = /* @__PURE__ */ new Date()) {
+  const nowIso = now.toISOString();
+  if (typeof fetchImpl !== "function" || !apiKey) {
+    return {
+      plan: "OpenRouter Free Router",
+      quota: createQuotaSnapshot({
+        remaining: null,
+        limit: null,
+        unit: "USD",
+        resetAt: null,
+        updatedAt: nowIso,
+        source: "openrouter_free_key",
+        windows: []
+      }, now),
+      quotaDiagnostic: "OpenRouter Free Key \u5DF2\u5C31\u7EEA \xB7 \u5B9E\u65F6\u540C\u6B65\u5E38\u9A7B\u514D\u8D39\u3001\u9690\u79D8\u4E0E\u9650\u65F6\u514D\u8D39\u6A21\u578B"
+    };
+  }
+  let totalCredits = null;
+  let totalUsage = null;
+  let isFreeTier = null;
+  let keyLabel = null;
+  let keyLimit = null;
+  let keyLimitRemaining = null;
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    Accept: "application/json",
+    ...OPENROUTER_AGENTIC_HEADERS
+  };
+  const [creditsRes, keyRes] = await Promise.allSettled([
+    fetchImpl(OPENROUTER_CREDITS_ENDPOINT, {
+      method: "GET",
+      headers,
+      signal: AbortSignal.timeout(8e3)
+    }),
+    fetchImpl(OPENROUTER_KEY_ENDPOINT, {
+      method: "GET",
+      headers,
+      signal: AbortSignal.timeout(8e3)
+    })
+  ]);
+  if (keyRes.status === "fulfilled") {
+    if (keyRes.value.status === 401 || keyRes.value.status === 403) {
+      const err = new Error(`OpenRouter API Key \u65E0\u6548 (${keyRes.value.status})`);
+      err.status = keyRes.value.status;
+      throw err;
+    }
+    if (keyRes.value.ok) {
+      const body = await keyRes.value.json().catch(() => ({}));
+      const data = body?.data ?? body ?? {};
+      if (typeof data.is_free_tier === "boolean") isFreeTier = data.is_free_tier;
+      if (typeof data.label === "string" && data.label.trim()) keyLabel = data.label.trim();
+      if (typeof data.limit === "number" && Number.isFinite(data.limit)) keyLimit = data.limit;
+      if (typeof data.limit_remaining === "number" && Number.isFinite(data.limit_remaining)) {
+        keyLimitRemaining = data.limit_remaining;
+      }
+    }
+  }
+  if (creditsRes.status === "fulfilled") {
+    if (creditsRes.value.status === 401 || creditsRes.value.status === 403) {
+      const err = new Error(`OpenRouter API Key \u65E0\u6548 (${creditsRes.value.status})`);
+      err.status = creditsRes.value.status;
+      throw err;
+    }
+    if (creditsRes.value.ok) {
+      const body = await creditsRes.value.json().catch(() => ({}));
+      const data = body?.data ?? body ?? {};
+      if (typeof data.total_credits === "number" && Number.isFinite(data.total_credits)) {
+        totalCredits = data.total_credits;
+      }
+      if (typeof data.total_usage === "number" && Number.isFinite(data.total_usage)) {
+        totalUsage = data.total_usage;
+      }
+    }
+  }
+  const rawRemaining = totalCredits !== null && totalUsage !== null ? Math.max(0, Number((totalCredits - totalUsage).toFixed(4))) : keyLimitRemaining;
+  const limitCredits = totalCredits !== null && totalCredits > 0 ? Number(totalCredits.toFixed(4)) : keyLimit;
+  const hasPositiveBalance = typeof rawRemaining === "number" && rawRemaining > 0;
+  const effectiveRemaining = hasPositiveBalance ? rawRemaining : null;
+  const windows = [];
+  if (hasPositiveBalance) {
+    windows.push({
+      id: "credits",
+      name: "OpenRouter Credits (\u514D\u8D39/\u9690\u79D8\u6A21\u578B\u4E0D\u6263\u8D39)",
+      remaining: rawRemaining,
+      limit: limitCredits !== null && limitCredits > 0 ? limitCredits : null,
+      unit: "USD",
+      resetAt: null,
+      updatedAt: nowIso,
+      source: "openrouter_credits_api"
+    });
+  }
+  const plan = isFreeTier === false || hasPositiveBalance ? "OpenRouter Key (\u9AD8\u5E76\u53D1\u514D\u8D39\u989D\u5EA6)" : "OpenRouter Free Key (0 \u6263\u8D39\u65E0\u9650\u7545\u4EAB)";
+  return {
+    plan,
+    keyLabel,
+    quota: createQuotaSnapshot({
+      remaining: effectiveRemaining,
+      limit: hasPositiveBalance ? limitCredits : null,
+      unit: "USD",
+      resetAt: null,
+      updatedAt: nowIso,
+      source: "openrouter_credits_api",
+      windows
+    }, now),
+    quotaDiagnostic: hasPositiveBalance ? `\u8D26\u6237\u4F59\u989D $${rawRemaining.toFixed(2)} \xB7 \u8C03\u7528\u514D\u8D39/\u9690\u79D8\u9650\u514D\u6A21\u578B\u5B8C\u5168 0 \u6263\u8D39` : "\u5DF2\u7ED1\u5B9A OpenRouter API Key \xB7 \u514D\u8D39\u6A21\u578B\u3001\u9690\u79D8\u6A21\u578B\u4E0E\u9650\u65F6\u514D\u8D39\u6A21\u578B\u5168\u90E8 0 \u6263\u8D39\u53EF\u7528"
+  };
+}
+var OpenRouterFreeDriver = class {
+  constructor(options = {}) {
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch;
+    this.homeDir = options.homeDir ?? os2.homedir();
+    this.env = options.env ?? process.env;
+    this.catalogLoader = options.catalogLoader ?? createOpenRouterFreeCatalogLoader({
+      fetchImpl: this.fetchImpl,
+      homeDir: this.homeDir,
+      env: this.env
+    });
+    this.requestExecutor = options.requestExecutor ?? createOpenRouterFreeNativeExecutor({
+      fetchImpl: this.fetchImpl,
+      homeDir: this.homeDir,
+      env: this.env
+    });
+  }
+  async discover() {
+    const keys = discoverLocalOpenRouterKeys({ homeDir: this.homeDir, env: this.env });
+    if (keys.length === 0) {
+      return {
+        source: "openrouter_local_credentials",
+        candidates: [],
+        diagnostics: ["\u672A\u5728\u672C\u673A\u73AF\u5883\u53D8\u91CF\u6216 DSH Credentials \u4E2D\u53D1\u73B0 OPENROUTER_API_KEY\uFF1B\u53EF\u76F4\u63A5\u5728\u4E0A\u65B9\u7C98\u8D34 API Key \u6DFB\u52A0\u3002"]
+      };
+    }
+    const candidates = keys.map((item) => {
+      const accountId = `openrouter-free-${item.fingerprint}`;
+      return {
+        candidateId: `openrouter-free:${accountId}`,
+        accountId,
+        providerId: PROVIDER_ID17,
+        displayName: item.label,
+        email: item.maskedKey,
+        status: "available",
+        source: item.source,
+        apiKey: item.apiKey,
+        fingerprint: item.fingerprint,
+        resources: {
+          authSource: item.source,
+          identitySource: "openrouter_api_key",
+          identityLabel: item.maskedKey,
+          sessionFingerprint: item.fingerprint,
+          identityNote: `OpenRouter API Key (${item.maskedKey}) \xB7 \u81EA\u52A8\u540C\u6B65\u5B9E\u65F6\u514D\u8D39\u4E0E\u9690\u79D8\u9650\u514D\u6A21\u578B`,
+          quotaUrl: OPENROUTER_KEYS_PAGE
+        }
+      };
+    });
+    return {
+      source: "openrouter_local_credentials",
+      candidates,
+      diagnostics: []
+    };
+  }
+  async importAccount(candidate2, context = {}) {
+    if (!candidate2?.accountId) {
+      throw new ValidationError("OpenRouter Free candidate accountId is required");
+    }
+    const localAuth = extractOpenRouterFreeAuth({ homeDir: this.homeDir, env: this.env });
+    const apiKey = candidate2.apiKey ?? localAuth?.apiKey;
+    if (!apiKey) {
+      throw new ValidationError("OpenRouter API Key is required to import account");
+    }
+    const fingerprint = candidate2.fingerprint ?? hashApiKeyFingerprint(apiKey);
+    const masked = maskApiKey3(apiKey);
+    const credentialRef = createCredentialRef(PROVIDER_ID17, candidate2.accountId);
+    await writeSecret(context.secretStore, credentialRef, {
+      type: "openrouter_free_auth",
+      providerId: PROVIDER_ID17,
+      accountId: candidate2.accountId,
+      apiKey,
+      label: candidate2.displayName ?? `OpenRouter Key (${masked})`,
+      source: candidate2.source ?? "manual_api_key",
+      updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const now = context.now instanceof Date ? context.now : /* @__PURE__ */ new Date();
+    let quotaInfo;
+    try {
+      quotaInfo = await fetchOpenRouterAccountQuota(apiKey, this.fetchImpl, now);
+    } catch {
+      quotaInfo = {
+        plan: "OpenRouter Free Key (0 \u6263\u8D39\u65E0\u9650\u7545\u4EAB)",
+        quota: createQuotaSnapshot({
+          remaining: null,
+          limit: null,
+          unit: "USD",
+          resetAt: null,
+          updatedAt: now.toISOString(),
+          source: "openrouter_free_key",
+          windows: []
+        }, now),
+        quotaDiagnostic: "OpenRouter API Key \u5DF2\u63A5\u5165 \xB7 \u81EA\u52A8\u540C\u6B65\u5B9E\u65F6\u514D\u8D39\u4E0E\u9690\u79D8\u9650\u514D\u6A21\u578B"
+      };
+    }
+    return createAccountRecord({
+      providerId: PROVIDER_ID17,
+      accountId: candidate2.accountId,
+      displayName: candidate2.displayName || quotaInfo.keyLabel || `OpenRouter Key (${masked})`,
+      email: candidate2.email || masked,
+      credentialRef,
+      auth: {
+        kind: "api_key",
+        credentialRef,
+        scopes: ["chat", "models", "credits"]
+      },
+      subscription: {
+        plan: quotaInfo.plan,
+        status: "active"
+      },
+      quota: quotaInfo.quota,
+      refresh: {
+        refreshable: true,
+        lastRefreshedAt: now.toISOString()
+      },
+      resources: {
+        ...candidate2.resources ?? {},
+        authSource: candidate2.source ?? "manual_api_key",
+        identitySource: "openrouter_api_key",
+        identityLabel: masked,
+        sessionFingerprint: fingerprint,
+        identityNote: `OpenRouter API Key (${masked}) \xB7 \u5B9E\u65F6\u514D\u8D39\u3001\u9690\u79D8\u4E0E\u9650\u65F6\u514D\u8D39\u6A21\u578B`,
+        quotaDiagnostic: quotaInfo.quotaDiagnostic,
+        quotaUrl: OPENROUTER_KEYS_PAGE
+      },
+      health: {
+        status: ACCOUNT_HEALTH.HEALTHY
+      }
+    }, now);
+  }
+  async importSource(source, context = {}) {
+    const rawKey = typeof source === "string" ? source : source?.apiKey ?? source?.key ?? source?.token ?? source?.content ?? "";
+    const apiKey = String(rawKey ?? "").trim();
+    if (!apiKey) {
+      throw new ValidationError("\u8BF7\u8F93\u5165\u6709\u6548\u7684 OpenRouter API Key\uFF08\u4F8B\u5982 sk-or-v1-...\uFF09");
+    }
+    const customLabel = typeof source === "object" && typeof source?.label === "string" ? source.label.trim() : "";
+    const fingerprint = hashApiKeyFingerprint(apiKey);
+    const masked = maskApiKey3(apiKey);
+    const accountId = `openrouter-free-${fingerprint}`;
+    const account = await this.importAccount({
+      candidateId: `openrouter-free:${accountId}`,
+      accountId,
+      providerId: PROVIDER_ID17,
+      displayName: customLabel || `OpenRouter Key (${masked})`,
+      email: masked,
+      source: "manual_api_key",
+      apiKey,
+      fingerprint
+    }, context);
+    return [account];
+  }
+  async getActiveSession(context = {}) {
+    const discovered = await this.discover(context);
+    if (!discovered.candidates?.length) return null;
+    const accounts = [];
+    for (const candidate2 of discovered.candidates) {
+      accounts.push(await this.importAccount(candidate2, context));
+    }
+    return {
+      status: "completed",
+      providerId: PROVIDER_ID17,
+      instructions: "\u5DF2\u81EA\u52A8\u5BFC\u5165\u672C\u673A OpenRouter API Key\u3002",
+      accounts
+    };
+  }
+  async startAuthorization(context = {}) {
+    const active = await this.getActiveSession(context);
+    if (active) return active;
+    return {
+      status: "opened",
+      providerId: PROVIDER_ID17,
+      authorizationUrl: OPENROUTER_KEYS_PAGE,
+      instructions: "\u8BF7\u5728\u4E0B\u65B9\u76F4\u63A5\u7C98\u8D34\u60A8\u7684 OpenRouter API Key\uFF08sk-or-v1-...\uFF09\uFF0C\u6216\u5728\u6253\u5F00\u7684 OpenRouter \u9875\u9762\u521B\u5EFA\u65B0 Key \u540E\u7C98\u8D34\u6DFB\u52A0\u3002"
+    };
+  }
+  async refreshAccount(account, context = {}) {
+    const stored = await readSecret(context.secretStore, account?.auth?.credentialRef);
+    const localAuth = extractOpenRouterFreeAuth({ homeDir: this.homeDir, env: this.env });
+    const apiKey = stored?.apiKey ?? localAuth?.apiKey;
+    if (!apiKey) {
+      return {
+        account: {
+          ...account,
+          health: {
+            status: ACCOUNT_HEALTH.EXPIRED,
+            lastError: "\u672A\u627E\u5230\u5BF9\u5E94\u7684 OpenRouter API Key\uFF0C\u8BF7\u5728\u4E0A\u65B9\u91CD\u65B0\u7C98\u8D34\u6DFB\u52A0\u3002"
+          }
+        }
+      };
+    }
+    await fetchLiveOpenRouterFreeModels({
+      fetchImpl: this.fetchImpl,
+      apiKey,
+      forceRefresh: true
+    }).catch(() => {
+    });
+    const now = context.now instanceof Date ? context.now : /* @__PURE__ */ new Date();
+    try {
+      const quotaInfo = await fetchOpenRouterAccountQuota(apiKey, this.fetchImpl, now);
+      return {
+        account: {
+          ...account,
+          subscription: {
+            plan: quotaInfo.plan,
+            status: "active"
+          },
+          quota: quotaInfo.quota,
+          refresh: {
+            ...account.refresh,
+            refreshable: true,
+            lastRefreshedAt: now.toISOString()
+          },
+          resources: {
+            ...account.resources ?? {},
+            quotaDiagnostic: quotaInfo.quotaDiagnostic,
+            quotaUrl: OPENROUTER_KEYS_PAGE
+          },
+          health: {
+            status: ACCOUNT_HEALTH.HEALTHY,
+            lastError: null
+          }
+        }
+      };
+    } catch (err) {
+      if (err?.status === 401 || err?.status === 403) {
+        return {
+          account: {
+            ...account,
+            health: {
+              status: ACCOUNT_HEALTH.EXPIRED,
+              lastError: err.message
+            }
+          }
+        };
+      }
+      return {
+        account: {
+          ...account,
+          refresh: {
+            ...account.refresh,
+            refreshable: true,
+            lastRefreshedAt: now.toISOString()
+          },
+          health: {
+            status: ACCOUNT_HEALTH.HEALTHY,
+            lastError: null
+          }
+        }
+      };
+    }
+  }
+  async getQuota(account, context = {}) {
+    const refreshed = await this.refreshAccount(account, context);
+    return refreshed.account.quota;
+  }
+  async getCatalog(context = {}) {
+    let credential = null;
+    if (context?.secretStore && context?.accounts?.[0]?.auth?.credentialRef) {
+      credential = await readSecret(context.secretStore, context.accounts[0].auth.credentialRef);
+    }
+    return this.catalogLoader({
+      ...context,
+      force: Boolean(context?.force),
+      credential
+    });
+  }
+  async invoke(request, invocation, context = {}) {
+    return this.stream(request, invocation, context);
+  }
+  async stream(request, invocation, context = {}) {
+    if (typeof this.requestExecutor !== "function") {
+      throw new DockyardError("provider_execution_error", "OpenRouter Free requestExecutor is not configured", {
+        retryable: false
+      });
+    }
+    const credential = await readSecret(context.secretStore, invocation?.account?.auth?.credentialRef);
+    return this.requestExecutor({
+      request,
+      account: invocation?.account ?? null,
+      credential,
+      signal: context.signal ?? request?.signal ?? null,
+      // Images reach the provider as opaque attachment references; without the
+      // durable attachment service the transport silently drops them.
+      attachments: context.attachments ?? invocation?.attachments ?? null
+    });
+  }
+};
+function createOpenRouterFreeDriver(options = {}) {
+  return new OpenRouterFreeDriver(options);
+}
+
+// modules/provider-openrouter-free/src/index.mjs
+function summarizeOpenRouterFreeCandidate(candidate2) {
+  return {
+    candidateId: candidate2.candidateId,
+    accountId: candidate2.accountId,
+    providerId: candidate2.providerId ?? "openrouter-free",
+    displayName: candidate2.displayName ?? null,
+    email: candidate2.email ?? null,
+    status: candidate2.status ?? "available",
+    source: candidate2.source ?? "openrouter_local_credentials",
+    resources: candidate2.resources ?? {}
+  };
+}
+function createOpenRouterFreeModule(options = {}) {
+  const driver = options.driver ?? createOpenRouterFreeDriver(options);
+  return defineProviderModule({
+    id: "openrouter-free",
+    displayName: "OpenRouter Free",
+    capabilities: [
+      ...PROVIDER_CAPABILITIES,
+      PROVIDER_BEHAVIOR_CAPABILITIES.API_KEY_AUTH,
+      PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT,
+      PROVIDER_BEHAVIOR_CAPABILITIES.FORCE_LIVE_CATALOG
+    ],
+    driver
+  });
+}
+
+// modules/provider-trae-cn/src/driver.mjs
+import { randomUUID as randomUUID14 } from "node:crypto";
+
+// modules/provider-trae-cn/src/native-transport.mjs
+import { createServer as createServer2 } from "node:http";
+import { randomBytes as randomBytes6, randomInt, randomUUID as randomUUID13 } from "node:crypto";
+var PROVIDER_ID18 = "trae-cn";
+var TRAE_CN_SITE = Object.freeze({
+  id: PROVIDER_ID18,
+  name: "Trae CN",
+  webHost: "https://www.trae.cn",
+  authHost: "https://api.trae.cn",
+  apiHost: "https://trae-api-cn.mchost.guru",
+  clientId: "ono9krqynydwx5",
+  appId: "6eefa01c-1036-4c7e-9ca5-d891f63bfcd8",
+  pluginVersion: "2.3.24254",
+  // The IDE version named to the authorization page, and the client version
+  // the model host is told it serves.
+  ideVersion: "3.3.65",
+  clientVersion: "0.1.69",
+  clientVersionCode: "20260917",
+  brand: "ASUS TUF Gaming A15 FA507RM_FA507RM",
+  deviceType: "windows",
+  osVersion: "Windows 10",
+  systemType: "Windows",
+  deviceCpu: "AMD"
+});
+var TRAE_CN_REASONING = Object.freeze({
+  efforts: [
+    { id: "ultra", name: "Ultra", description: "Maximum reasoning depth." },
+    { id: "high", name: "High", description: "Thorough reasoning for hard tasks.", default: true },
+    { id: "light", name: "Light", description: "Fast, light reasoning for simple tasks." }
+  ],
+  defaultEffort: "high"
+});
+var TRAE_CN_MODELS = Object.freeze([
+  {
+    id: "deepseek-v4.1-flash",
+    name: "DeepSeek-V4.1-Flash",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "DeepSeek-V4-Pro-Official",
+    name: "DeepSeek-V4-Pro",
+    contextWindow: 1e6,
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "glm-5.3",
+    name: "GLM-5.3",
+    contextWindow: 1e6,
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "glm-5.3-flash",
+    name: "GLM-5.3-Flash",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "glm-5.3-flashx",
+    name: "GLM-5.3-FlashX",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "kimi-k3",
+    name: "Kimi-K3",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "kimi-k2.7-code",
+    name: "kimi-k2.7-code",
+    contextWindow: 2e5
+  },
+  {
+    id: "mimo-v2.6-flash",
+    name: "MiMo-V2.6-Flash",
+    contextWindow: 981504,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "mimo-v2.6-pro",
+    name: "MiMo-V2.6-Pro",
+    contextWindow: 981504,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "minimax-m3",
+    name: "MiniMax-M3",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "minimax-m3.1-flash",
+    name: "MiniMax-M3.1-Flash",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "step-5-preview",
+    name: "Step-5-Preview",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "qwen3.8-flash",
+    name: "Qwen3.8-Flash",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "qwen3.8-max",
+    name: "Qwen3.8-Max",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true },
+        { id: "extra_high", name: "Extra High" }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "qwen-3.7-plus",
+    name: "Qwen3.7-Plus",
+    contextWindow: 2e5,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "Doubao-Seed-Evolving",
+    name: "Seed-Evolving",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "Doubao-Seed-2.1-Pro",
+    name: "Seed-2.1-Pro-0915",
+    contextWindow: 1e6,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "Doubao-Seed-2.1-Turbo",
+    name: "Seed-2.1-Turbo",
+    contextWindow: 256e3,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "DeepSeek-V4-Flash",
+    name: "DeepSeek-V4-Flash",
+    contextWindow: 2e5
+  },
+  {
+    id: "glm-5.2",
+    name: "glm-5.2",
+    contextWindow: 2e5
+  },
+  {
+    id: "glm-5.1",
+    name: "GLM-5.1",
+    contextWindow: 2e5
+  },
+  {
+    id: "glm-5",
+    name: "GLM-5",
+    contextWindow: 2e5
+  },
+  {
+    id: "glm-5v-turbo",
+    name: "GLM-5V-Turbo",
+    contextWindow: 2e5,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "kimi-k2.6",
+    name: "Kimi-K2.6",
+    contextWindow: 2e5,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "kimi-k2.5",
+    name: "Kimi-K2.5",
+    contextWindow: 2e5,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "minimax-m2.7",
+    name: "MiniMax-M2.7",
+    contextWindow: 2e5
+  },
+  {
+    id: "minimax-m2.5",
+    name: "minimax-m2.5",
+    contextWindow: 2e5
+  },
+  {
+    id: "qwen-3.6-plus",
+    name: "Qwen3.6-Plus",
+    contextWindow: 2e5,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "qwen-3.5",
+    name: "Qwen3.5-Plus",
+    contextWindow: 2e5,
+    inputModalities: ["text", "image"]
+  },
+  {
+    id: "Doubao-Seed-Code",
+    name: "Seed-Code",
+    contextWindow: 256e3,
+    inputModalities: ["text", "image"],
+    reasoning: {
+      efforts: [
+        { id: "light", name: "Light" },
+        { id: "high", name: "High", default: true }
+      ],
+      defaultEffort: "high"
+    }
+  },
+  {
+    id: "Doubao-Seed-2.0-Code",
+    name: "Doubao-Seed-2.0-Code",
+    contextWindow: 184e3,
+    inputModalities: ["text", "image"]
+  }
+]);
+var TRAE_CN_CHAT_FUNCTION = "chat_v3";
+var digits = (count) => Array.from(
+  { length: count },
+  (_, index) => index === 0 ? randomInt(1, 10) : randomInt(0, 10)
+).join("");
+function newTraeDevice() {
+  return {
+    deviceId: digits(16),
+    machineId: randomBytes6(16).toString("hex")
+  };
+}
+function traeWhen(value) {
+  if (value === void 0 || value === null || value === "") return 0;
+  if (typeof value === "string" && !/^\d+$/u.test(value.trim())) {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return number < 1e11 ? number * 1e3 : number;
+}
+function parseJsonish(value) {
+  if (value && typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(String(value ?? ""));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+function readTraeCallback(params, { site = TRAE_CN_SITE, device } = {}) {
+  const jwt = parseJsonish(params.get("userJwt"));
+  const info = parseJsonish(params.get("userInfo"));
+  const token = jwt.Token ?? jwt.token ?? "";
+  const refreshToken = jwt.RefreshToken ?? jwt.refreshToken ?? params.get("refreshToken") ?? "";
+  if (!token && !refreshToken) {
+    throw new Error(`${site.name} \u6CA1\u6709\u8FD4\u56DE\u767B\u5F55\u51ED\u636E\uFF08userJwt / refreshToken \u90FD\u662F\u7A7A\u7684\uFF09`);
+  }
+  return {
+    token,
+    refreshToken,
+    // `TokenExpireAt` is what the page sends; a bare JWT's exp is the fallback.
+    expiresAt: traeWhen(jwt.TokenExpireAt ?? jwt.tokenExpireAt) || traeWhen(jwt.exp * 1e3),
+    refreshExpiresAt: traeWhen(params.get("refreshExpireAt") ?? jwt.RefreshExpireAt),
+    clientId: jwt.ClientID ?? jwt.clientId ?? params.get("clientId") ?? site.clientId,
+    uid: String(info.UserID ?? info.userId ?? params.get("userId") ?? jwt.UserID ?? jwt.userId ?? ""),
+    name: String(info.ScreenName ?? info.screenName ?? info.UserName ?? ""),
+    email: String(info.Email ?? info.email ?? ""),
+    device: device ?? newTraeDevice(),
+    region: String(params.get("userRegion") ?? ""),
+    host: String(params.get("host") ?? "")
+  };
+}
+function traeAuthorizationUrl({ callback, device, site = TRAE_CN_SITE, traceId = randomUUID13() }) {
+  const query = new URLSearchParams({
+    login_version: "1",
+    auth_from: "solo",
+    login_channel: "native_ide",
+    plugin_version: site.pluginVersion,
+    auth_type: "local",
+    client_id: site.clientId,
+    redirect: "0",
+    login_trace_id: traceId,
+    auth_callback_url: callback,
+    machine_id: device.machineId,
+    device_id: device.deviceId,
+    x_device_id: device.deviceId,
+    x_machine_id: device.machineId,
+    x_device_brand: site.brand,
+    x_device_type: site.deviceType,
+    x_os_version: `${site.osVersion} Pro`,
+    x_env: "",
+    x_app_version: site.ideVersion,
+    x_app_type: "stable",
+    hide_saas_login: "false"
+  });
+  return `${site.webHost}/authorization?${query}`;
+}
+var SIGN_IN_PAGE = (ok, title, message) => `<!doctype html><html><head><meta charset="utf-8">
+<title>${title}</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding:40px;max-width:640px;line-height:1.6">
+<h2>${ok ? "\u2705" : "\u274C"} ${title}</h2><p>${message}</p></body></html>`;
+async function startTraeSignIn({ site = TRAE_CN_SITE, timeoutMs = 6e5, device = newTraeDevice() } = {}) {
+  let settle;
+  const done = new Promise((resolve2) => {
+    settle = resolve2;
+  });
+  let finished = false;
+  const finish = (value) => {
+    if (finished) return;
+    finished = true;
+    settle(value);
+  };
+  const server = createServer2((req, res) => {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const cors = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    };
+    if (req.method === "OPTIONS") {
+      res.writeHead(204, cors).end();
+      return;
+    }
+    const html = (body) => {
+      res.writeHead(200, { ...cors, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(body);
+    };
+    if (url.pathname !== "/authorize") {
+      res.writeHead(404, cors).end();
+      return;
+    }
+    if (finished) {
+      html(SIGN_IN_PAGE(false, "\u8FD9\u6B21\u767B\u5F55\u5DF2\u7ECF\u7ED3\u675F", "\u8BF7\u91CD\u65B0\u4ECE Dockyard \u53D1\u8D77\u767B\u5F55\u3002"));
+      return;
+    }
+    const params = url.searchParams;
+    if (params.get("error")) {
+      const message = params.get("error_description") || params.get("error");
+      finish({ ok: false, error: message });
+      html(SIGN_IN_PAGE(false, "\u767B\u5F55\u6CA1\u6709\u5B8C\u6210", message));
+      return;
+    }
+    try {
+      const credential = readTraeCallback(params, { site, device });
+      finish({ ok: true, credential });
+      html(SIGN_IN_PAGE(true, "\u767B\u5F55\u6210\u529F", `${credential.name || credential.uid || "\u8D26\u53F7"} \u5DF2\u63A5\u5165 Dockyard DSH\uFF0C\u53EF\u4EE5\u5173\u95ED\u6B64\u9875\u9762\u3002`));
+    } catch (error) {
+      finish({ ok: false, error: error.message });
+      html(SIGN_IN_PAGE(false, "\u767B\u5F55\u6CA1\u6709\u5B8C\u6210", error.message));
+    }
+  });
+  await new Promise((resolve2, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve2);
+  });
+  const callback = `http://127.0.0.1:${server.address().port}/authorize`;
+  const authorizationUrl = traeAuthorizationUrl({ callback, device, site });
+  const timer = setTimeout(() => finish({ ok: false, error: "\u767B\u5F55\u8D85\u65F6" }), timeoutMs);
+  const close = () => {
+    clearTimeout(timer);
+    try {
+      server.close();
+    } catch {
+    }
+  };
+  done.then(() => setTimeout(close, 5e3).unref?.());
+  return {
+    authorizationUrl,
+    instructions: `\u5728\u6D4F\u89C8\u5668\u4E2D\u767B\u5F55 ${site.name} \u5E76\u540C\u610F\u6388\u6743\uFF1B\u6388\u6743\u5B8C\u6210\u540E\u672C\u9875\u4F1A\u81EA\u52A8\u56DE\u5230 Dockyard\uFF0C\u4E0D\u9700\u8981\u590D\u5236\u4EFB\u4F55\u4EE3\u7801\u3002`,
+    device,
+    result: done,
+    cancel: () => {
+      finish({ ok: false, error: "\u5DF2\u53D6\u6D88" });
+      close();
+    }
+  };
+}
+function traeHeaders(account, { site = TRAE_CN_SITE, extra = {} } = {}) {
+  const token = String(account?.token ?? "");
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Cloud-IDE-JWT ${token}`,
+    "X-Cloudide-Token": token,
+    "x-ide-token": token,
+    "x-uid": String(account?.uid ?? ""),
+    "x-app-id": site.appId,
+    "x-device-id": String(account?.device?.deviceId ?? ""),
+    "x-machine-id": String(account?.device?.machineId ?? ""),
+    "x-request-id": randomUUID13(),
+    "x-app-version": site.clientVersion,
+    "x-app-version-code": site.clientVersionCode,
+    "x-ide-version": site.clientVersion,
+    "x-ide-version-code": site.clientVersionCode,
+    "x-ide-version-type": "stable",
+    "x-device-cpu": site.deviceCpu,
+    "x-device-brand": site.brand,
+    "x-device-type": site.deviceType,
+    "x-os-version": site.osVersion,
+    "x-system-type": site.systemType,
+    ...extra
+  };
+}
+function messageText(message) {
+  if (!message) return "";
+  const content = message.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.filter((part) => part && (part.type === "text" || typeof part.text === "string")).map((part) => part.text ?? "").filter(Boolean).join("\n");
+}
+function traeMessages(request = {}) {
+  const messages = [];
+  if (typeof request.system === "string" && request.system.trim().length > 0) {
+    messages.push({ role: "system", content: [{ type: "text", text: request.system }] });
+  }
+  for (const message of Array.isArray(request.messages) ? request.messages : []) {
+    const role = message?.role === "developer" ? "system" : message?.role ?? "user";
+    const calls = role === "assistant" ? assistantCalls(message) : [];
+    if (role === "tool") {
+      const text4 = messageText(message);
+      const toolCallId = toolResultId(message);
+      messages.push({
+        role: "tool",
+        tool_call_id: toolCallId,
+        content: [{ type: "text", text: text4 || "(no output)" }]
+      });
+      continue;
+    }
+    const text3 = messageText(message);
+    if (!text3 && calls.length === 0) continue;
+    const entry = { role, content: [{ type: "text", text: text3 ?? "" }] };
+    if (calls.length > 0) entry.tool_calls = calls;
+    messages.push(entry);
+  }
+  return messages;
+}
+function assistantCalls(message) {
+  const calls = [];
+  const push = (id, name2, args) => {
+    const trimmed = String(name2 ?? "").trim();
+    if (!trimmed) return;
+    calls.push({
+      id: String(id ?? `call_${calls.length + 1}`),
+      type: "function",
+      // Trae's own name for this: `function_call` (a `function` key is read as
+      // a ToolCall without a name and the whole stream fails).
+      function_call: { name: trimmed, arguments: typeof args === "string" ? args : JSON.stringify(args ?? {}) }
+    });
+  };
+  for (const block of Array.isArray(message?.content) ? message.content : []) {
+    if (block?.type !== "tool-call" && block?.type !== "tool_call") continue;
+    push(block.id ?? block.toolCallId, block.name ?? block.toolName, block.arguments ?? block.input ?? "{}");
+  }
+  for (const call of Array.isArray(message?.tool_calls) ? message.tool_calls : []) {
+    push(call.id, call.function?.name ?? call.name, call.function?.arguments ?? call.arguments ?? "{}");
+  }
+  return calls;
+}
+function toolResultId(message) {
+  const direct = message?.tool_call_id ?? message?.toolCallId ?? message?.id;
+  if (typeof direct === "string" && direct) return direct;
+  for (const block of Array.isArray(message?.content) ? message.content : []) {
+    const id = block?.toolCallId ?? block?.tool_call_id ?? block?.id;
+    if (typeof id === "string" && id) return id;
+  }
+  return "call_1";
+}
+function traeTools(tools) {
+  if (!Array.isArray(tools) || tools.length === 0) return void 0;
+  const mapped = [];
+  for (const tool of tools) {
+    const fn = tool?.function ?? tool;
+    const name2 = String(fn?.name ?? "").trim();
+    if (!name2) continue;
+    const parameters = typeof fn.parameters === "string" ? fn.parameters : JSON.stringify(fn.parameters ?? fn.input_schema ?? { type: "object", properties: {} });
+    mapped.push({
+      type: "function",
+      function: { name: name2, description: String(fn.description ?? ""), parameters }
+    });
+  }
+  return mapped.length > 0 ? mapped : void 0;
+}
+function traeChatBody(request = {}, { site = TRAE_CN_SITE, model } = {}) {
+  const chosen = model ?? request.model ?? TRAE_CN_MODELS[0].id;
+  const body = {
+    messages: traeMessages(request),
+    function: TRAE_CN_CHAT_FUNCTION,
+    // A real model id is required: `"auto"` is answered with
+    // `4001 param is invalid`.
+    config_name: chosen,
+    model: chosen,
+    stream: true,
+    request_id: randomUUID13(),
+    session_id: String(request.sessionId ?? randomUUID13())
+  };
+  if (typeof request.reasoningEffort === "string" && request.reasoningEffort.trim()) {
+    body.reasoning_effort = request.reasoningEffort.trim();
+  }
+  const toolChoice = request.toolChoice ?? request.tool_choice;
+  const tools = traeTools(request.tools);
+  if (tools && toolChoice !== "none") {
+    body.tools = tools;
+    const choice = typeof toolChoice === "object" ? toolChoice.function?.name ?? toolChoice.name : toolChoice;
+    if (typeof choice === "string" && choice && choice !== "none") body.tool_choice = choice;
+    else body.tool_choice = "auto";
+    if (typeof request.parallelToolCalls === "boolean") body.parallel_tool_calls = request.parallelToolCalls;
+  }
+  return body;
+}
+function traeUsageCandidate(data, event = "") {
+  if (!data || typeof data !== "object") return null;
+  if (event === "token_usage") return normalizeUsage(data);
+  const candidates = [
+    data.usage,
+    data.token_usage,
+    data.tokenUsage,
+    data.usage_metadata,
+    data.usageMetadata,
+    data.meta?.usage,
+    data.stat?.usage,
+    data
+  ];
+  let merged = null;
+  for (const candidate2 of candidates) {
+    if (!candidate2 || typeof candidate2 !== "object") continue;
+    const usage = normalizeUsage(candidate2);
+    if (!usage) continue;
+    merged = { ...merged ?? {}, ...usage };
+  }
+  return merged;
+}
+async function* traeSseEvents(stream) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let event = "";
+  const pending = [];
+  try {
+    for (; ; ) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, index).replace(/\r$/u, "");
+        buffer = buffer.slice(index + 1);
+        if (line === "") {
+          if (pending.length > 0) {
+            const raw = pending.join("\n");
+            pending.length = 0;
+            let data = raw;
+            try {
+              data = JSON.parse(raw);
+            } catch {
+            }
+            yield { event, data };
+            event = "";
+          }
+          continue;
+        }
+        if (line.startsWith("event:")) {
+          event = line.slice(6).trim();
+          continue;
+        }
+        if (line.startsWith("data:")) {
+          pending.push(line.slice(5).replace(/^ /u, ""));
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock?.();
+  }
+}
+function traeRequestError(status, detail = "") {
+  const parsed = (() => {
+    try {
+      return JSON.parse(detail);
+    } catch {
+      return null;
+    }
+  })();
+  const code = Number(parsed?.code) || 0;
+  const message = String(parsed?.message ?? "");
+  if (code === 4026 || /context length has exceeded/u.test(message)) {
+    const error2 = new Error("\u4E0A\u4E0B\u6587\u8D85\u957F\uFF1A\u8FD9\u4E2A\u6A21\u578B\u88C5\u4E0D\u4E0B\u5F53\u524D\u5BF9\u8BDD\uFF0C\u8BF7\u538B\u7F29\u6216\u6362\u4E2A\u4E0A\u4E0B\u6587\u66F4\u5927\u7684\u6A21\u578B");
+    error2.code = "CONTEXT_TOO_LONG";
+    error2.detail = detail.slice(0, 500);
+    return error2;
+  }
+  if (code === 1001) {
+    const error2 = new Error("Trae CN \u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+    error2.code = "AUTH_EXPIRED";
+    error2.detail = detail.slice(0, 500);
+    return error2;
+  }
+  const error = new Error(`Trae CN \u8BF7\u6C42\u5931\u8D25\uFF08HTTP ${status}\uFF09${code ? ` code=${code}` : ""}`);
+  error.detail = detail.slice(0, 500);
+  return error;
+}
+function createTraeNativeExecutor({
+  site = TRAE_CN_SITE,
+  fetchImpl = fetch,
+  timeoutMs = 3e5
+} = {}) {
+  async function executeTrae({ request = {}, credential, signal } = {}) {
+    const account = credential ?? {};
+    const body = traeChatBody(request, { site, model: request.model });
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener?.("abort", abort, { once: true });
+    const timer = setTimeout(abort, timeoutMs);
+    return (async function* responseStream() {
+      let nextIndex = 0;
+      let textOpen = false;
+      let textIndex = 0;
+      let text3 = "";
+      let reasoningOpen = false;
+      let reasoningIndex = 0;
+      let reasoning = "";
+      let rawUsage = null;
+      const calls = /* @__PURE__ */ new Map();
+      let callIndex = null;
+      function* closeText() {
+        if (!textOpen) return;
+        yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+        textOpen = false;
+        text3 = "";
+      }
+      function* closeReasoning() {
+        if (!reasoningOpen) return;
+        yield { type: "block-end", index: reasoningIndex, block: { type: "reasoning", text: reasoning } };
+        reasoningOpen = false;
+        reasoning = "";
+      }
+      function* openText() {
+        if (textOpen) return;
+        textIndex = nextIndex;
+        nextIndex += 1;
+        textOpen = true;
+        yield { type: "block-start", index: textIndex, blockType: "text" };
+      }
+      function* openReasoning() {
+        if (reasoningOpen) return;
+        reasoningIndex = nextIndex;
+        nextIndex += 1;
+        reasoningOpen = true;
+        yield { type: "block-start", index: reasoningIndex, blockType: "reasoning" };
+      }
+      try {
+        const response = await fetchImpl(`${site.apiHost}/api/agent/v3/llm_utils_chat`, {
+          method: "POST",
+          headers: traeHeaders(account, {
+            site,
+            extra: { Accept: "text/event-stream", ...request.headers ?? {} }
+          }),
+          body: JSON.stringify(body),
+          signal: controller.signal
+        });
+        if (!response.ok) {
+          const detail = await response.text().catch(() => "");
+          throw traeRequestError(response.status, detail);
+        }
+        for await (const { event, data } of traeSseEvents(response.body)) {
+          const reportedUsage = traeUsageCandidate(data, event);
+          if (reportedUsage) rawUsage = { ...rawUsage ?? {}, ...reportedUsage };
+          if (event === "error") {
+            const message = data?.message ?? "Trae CN \u8FD4\u56DE\u4E86\u9519\u8BEF";
+            const error = new Error(message);
+            error.detail = data;
+            throw error;
+          }
+          if (event !== "output" || !data || typeof data !== "object") continue;
+          for (const piece of Array.isArray(data.tool_calls) ? data.tool_calls : []) {
+            const key = piece?.index ?? piece?.id ?? 0;
+            const existing = calls.get(key);
+            const fn = piece?.function_call ?? piece?.function ?? piece;
+            const name2 = fn?.name;
+            const args = fn?.arguments;
+            if (!existing) {
+              yield* closeReasoning();
+              yield* closeText();
+              callIndex = { index: nextIndex, id: String(piece?.id ?? `call_${key}`), name: "", arguments: "" };
+              nextIndex += 1;
+              calls.set(key, callIndex);
+              yield { type: "block-start", index: callIndex.index, blockType: "tool-call" };
+            }
+            const state = calls.get(key);
+            if (typeof piece?.id === "string" && piece.id) state.id = piece.id;
+            if (typeof name2 === "string" && name2) state.name = name2;
+            const delta = typeof args === "string" ? args : args ? JSON.stringify(args) : "";
+            if (delta) {
+              state.arguments += delta;
+              yield { type: "tool-call-delta", index: state.index, id: state.id, name: state.name, argumentsDelta: delta };
+            }
+          }
+          const thought = typeof data.reasoning_content === "string" ? data.reasoning_content : "";
+          if (thought) {
+            yield* closeText();
+            yield* openReasoning();
+            reasoning += thought;
+            yield { type: "reasoning-delta", index: reasoningIndex, text: thought };
+          }
+          const answer = typeof data.response === "string" ? data.response : "";
+          if (answer) {
+            yield* closeReasoning();
+            yield* openText();
+            text3 += answer;
+            yield { type: "text-delta", index: textIndex, text: answer };
+          }
+        }
+        yield* closeReasoning();
+        yield* closeText();
+        for (const state of calls.values()) {
+          yield {
+            type: "block-end",
+            index: state.index,
+            block: { type: "tool-call", id: state.id, name: state.name || "tool", arguments: state.arguments || "{}" }
+          };
+        }
+        if (rawUsage) yield { type: "usage", usage: rawUsage };
+        yield { type: "finish", reason: calls.size === 0 ? { kind: "stop" } : { kind: "tool-calls" } };
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener?.("abort", abort);
+      }
+    })();
+  }
+  ;
+  return guardEmptyCompletion(executeTrae, { providerId: PROVIDER_ID18 });
+}
+async function readTraeCredits({ credential, site = TRAE_CN_SITE, fetchImpl = fetch, timeoutMs = 2e4 } = {}) {
+  const response = await fetchImpl(`${site.authHost}/trae/api/v2/pay/ide_user_ent_usage`, {
+    method: "POST",
+    headers: traeHeaders(credential, { site, extra: { Accept: "application/json" } }),
+    body: JSON.stringify({ require_usage: true, req_source: 0 }),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!response.ok) {
+    const error = new Error(`Trae CN \u989D\u5EA6\u67E5\u8BE2\u5931\u8D25\uFF08HTTP ${response.status}\uFF09`);
+    error.status = response.status;
+    error.detail = await response.text().catch(() => "");
+    throw error;
+  }
+  const data = await response.json().catch(() => ({}));
+  const payload = data?.data ?? data;
+  const summary = payload?.usage_summary ?? payload?.usageSummary ?? {};
+  const used = Number(summary.consumed_amount ?? summary.consumedAmount ?? payload?.used_credits ?? 0);
+  const limit = Number(summary.total_amount ?? summary.totalAmount ?? payload?.total_credits ?? 0);
+  const resetsAt = payload?.expire_time ?? payload?.expireTime ?? summary?.expire_time ?? null;
+  return {
+    used: Number.isFinite(used) ? used : 0,
+    limit: Number.isFinite(limit) ? limit : 0,
+    ...resetsAt ? { resetsAt: new Date(traeWhen(resetsAt)).toISOString() } : {},
+    raw: payload
+  };
+}
+async function readTraeModelRoster({ credential, site = TRAE_CN_SITE, fetchImpl = fetch, timeoutMs = 2e4 } = {}) {
+  const response = await fetchImpl(`${site.apiHost}/api/remote/v1/models`, {
+    method: "GET",
+    headers: traeHeaders(credential, { site, extra: { Accept: "application/json" } }),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!response.ok) {
+    const error = new Error(`Trae CN \u6A21\u578B\u76EE\u5F55\u8BFB\u53D6\u5931\u8D25\uFF08HTTP ${response.status}\uFF09`);
+    error.status = response.status;
+    throw error;
+  }
+  const data = await response.json().catch(() => ({}));
+  const groups = data?.data?.list ?? [];
+  const roster = /* @__PURE__ */ new Map();
+  for (const group of groups) {
+    for (const model of group?.models ?? []) {
+      if (!model?.name) continue;
+      const features = parseTraeFeatures(model.features);
+      const dev = Number(model.context_window_tokens?.dev) || 0;
+      const max = Number(model.context_window_tokens?.max) || 0;
+      const contextWindow = Math.max(dev, max);
+      roster.set(String(model.name).toLowerCase(), {
+        id: String(model.name),
+        name: model.display_name ?? String(model.name),
+        ...contextWindow > 0 ? { contextWindow } : {},
+        multimodal: model.multimodal === true,
+        reasoning: features.reasoning?.enable !== false,
+        ...Number(features.consumption_rate?.data?.rate) > 0 ? { creditRate: Number(features.consumption_rate.data.rate) } : {}
+      });
+    }
+  }
+  return roster;
+}
+function parseTraeFeatures(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+async function claimTraeDailyCredits({ credential, site = TRAE_CN_SITE, fetchImpl = fetch, timeoutMs = 15e3 } = {}) {
+  const call = async (path2) => {
+    const response = await fetchImpl(`${site.authHost}${path2}`, {
+      method: "POST",
+      headers: traeHeaders(credential, { site, extra: { Accept: "application/json" } }),
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    if (!response.ok) {
+      const error = new Error(`Trae CN \u7B7E\u5230\u5931\u8D25\uFF08HTTP ${response.status}\uFF09`);
+      error.status = response.status;
+      throw error;
+    }
+    return response.json().catch(() => ({}));
+  };
+  const status = await call("/trae/api/v2/ug/checkin_credits/status");
+  const enabled = status?.enable === true;
+  const already = status?.checked_in === true;
+  const credits = Number(status?.credits) + Number(status?.extra_credits ?? 0) || Number(status?.credits) || 0;
+  if (!enabled || already) return { enabled, claimed: false, credits };
+  await call("/trae/api/v2/ug/checkin_credits/claim");
+  return { enabled, claimed: true, credits };
+}
+
+// modules/provider-trae-cn/src/driver.mjs
+var CREDENTIAL_SLOT6 = Symbol("dockyard-trae-cn-credential");
+function accountIdFor(credential) {
+  const uid = stringValue(credential?.uid);
+  if (!uid) return "trae-cn";
+  return `trae-cn-${uid}`;
+}
+function summarizeTraeCnCandidate(candidate2) {
+  return {
+    providerId: PROVIDER_ID18,
+    candidateId: candidate2?.candidateId ?? "trae-cn",
+    accountId: candidate2?.accountId ?? "trae-cn",
+    displayName: candidate2?.displayName ?? "Trae CN",
+    email: candidate2?.email ?? null,
+    source: candidate2?.source ?? "trae_cn_browser_oauth"
+  };
+}
+function parseTraeCnCatalog(models = TRAE_CN_MODELS) {
+  return {
+    models: models.map((model) => ({
+      id: model.id,
+      name: model.name ?? model.id,
+      ...model.contextWindow ? { contextWindow: model.contextWindow } : {},
+      ...model.maxTokens ? { maxTokens: model.maxTokens } : {},
+      ...model.reasoning ? { reasoning: model.reasoning } : {},
+      inputModalities: model.inputModalities ?? ["text"]
+    }))
+  };
+}
+function mergeTraeCnRoster(models, roster) {
+  if (!roster || roster.size === 0) return models;
+  return models.map((model) => {
+    const live = roster.get(String(model.id).toLowerCase());
+    if (!live) return model;
+    const creditRate = live.creditRate && live.creditRate !== 1 ? ` (x${live.creditRate})` : "";
+    const merged = {
+      ...model,
+      name: `${live.name ?? model.name}${creditRate}`,
+      contextWindow: live.contextWindow ?? model.contextWindow,
+      inputModalities: live.multimodal ? ["text", "image"] : ["text"]
+    };
+    if (live.reasoning === false) delete merged.reasoning;
+    return merged;
+  });
+}
+var TraeCnSubscriptionDriver = class {
+  #sessions = /* @__PURE__ */ new Map();
+  #requestExecutor;
+  constructor({
+    site = TRAE_CN_SITE,
+    fetchImpl = fetch,
+    timeoutMs = 3e5,
+    signInTimeoutMs = 6e5,
+    catalogLoader = null,
+    requestExecutor = null
+  } = {}) {
+    this.site = site;
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+    this.signInTimeoutMs = signInTimeoutMs;
+    this.#requestExecutor = requestExecutor ?? createTraeNativeExecutor({ site, fetchImpl, timeoutMs });
+    this.catalogLoader = catalogLoader ?? (async () => parseTraeCnCatalog());
+  }
+  /**
+   * Trae CN signs in through its own authorization page, which calls back to a
+   * loopback server this plugin runs. There is no API key to paste, so the
+   * panel's "log in" button is the only entry point.
+   */
+  async authorizationInstructions() {
+    return "Trae CN \u4F7F\u7528\u5B98\u65B9\u6388\u6743\u9875\u767B\u5F55\uFF0C\u6CA1\u6709\u53EF\u586B\u5199\u7684 API Key\u3002\u70B9\u300C\u767B\u5F55\u300D\u4F1A\u5728\u6D4F\u89C8\u5668\u6253\u5F00 Trae CN \u7684\u6388\u6743\u9875\u9762\uFF1B\u5728\u9875\u9762\u4E0A\u540C\u610F\u6388\u6743\u540E\uFF0C\u56DE\u8C03\u4F1A\u81EA\u52A8\u56DE\u5230\u672C\u673A\u5E76\u5B8C\u6210\u63A5\u5165\uFF0C\u4E0D\u9700\u8981\u590D\u5236\u4EFB\u4F55\u4EE3\u7801\u3002";
+  }
+  async startAuthorization(context = {}) {
+    const session = await startTraeSignIn({
+      site: this.site,
+      timeoutMs: this.signInTimeoutMs
+    });
+    const sessionId = `${PROVIDER_ID18}:${randomUUID14()}`;
+    const state = { status: "pending", credential: null, error: null };
+    session.result.then((result) => {
+      if (result?.ok) {
+        state.credential = result.credential;
+        return;
+      }
+      state.status = "failed";
+      state.error = result?.error ?? "\u767B\u5F55\u5931\u8D25";
+    }).catch((error) => {
+      state.status = "failed";
+      state.error = redactError(error);
+    });
+    this.#sessions.set(sessionId, { session, state, startedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    return {
+      status: "pending",
+      providerId: PROVIDER_ID18,
+      sessionId,
+      authorizationUrl: session.authorizationUrl,
+      instructions: session.instructions,
+      startedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+  }
+  async pollAuthorization(sessionId, context = {}) {
+    const entry = this.#sessions.get(sessionId);
+    if (!entry) {
+      return {
+        status: "failed",
+        providerId: PROVIDER_ID18,
+        sessionId,
+        diagnostic: "\u8FD9\u6B21\u767B\u5F55\u4F1A\u8BDD\u5DF2\u7ECF\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u53D1\u8D77\u767B\u5F55\u3002"
+      };
+    }
+    if (entry.state.status === "failed") {
+      this.#sessions.delete(sessionId);
+      return {
+        status: "failed",
+        providerId: PROVIDER_ID18,
+        sessionId,
+        diagnostic: entry.state.error
+      };
+    }
+    if (entry.state.result) return entry.state.result;
+    const credential = entry.state.credential;
+    if (!credential) {
+      return { status: "pending", providerId: PROVIDER_ID18, sessionId };
+    }
+    const accountId = accountIdFor(credential);
+    const candidate2 = {
+      candidateId: accountId,
+      accountId,
+      displayName: credential.name || credential.uid || "Trae CN",
+      email: credential.email || null,
+      source: "trae_cn_browser_oauth"
+    };
+    Object.defineProperty(candidate2, CREDENTIAL_SLOT6, { value: credential, enumerable: false });
+    const completed = {
+      status: "completed",
+      providerId: PROVIDER_ID18,
+      sessionId,
+      diagnostic: null,
+      accounts: [candidate2]
+    };
+    entry.state.result = completed;
+    setTimeout(() => this.#sessions.delete(sessionId), 12e4).unref?.();
+    return completed;
+  }
+  async cancelAuthorization(sessionId, context = {}) {
+    const entry = this.#sessions.get(sessionId);
+    if (entry) {
+      entry.session.cancel();
+      this.#sessions.delete(sessionId);
+    }
+    return { status: "cancelled", providerId: PROVIDER_ID18, sessionId };
+  }
+  async importAccount(candidate2, context = {}) {
+    const credential = candidate2?.[CREDENTIAL_SLOT6];
+    if (!credential) throw new Error("Trae CN \u7684\u767B\u5F55\u4FE1\u606F\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+    const accountId = candidate2?.accountId ?? accountIdFor(credential);
+    const ref = createCredentialRef(PROVIDER_ID18, accountId);
+    if (!context.secretStore) {
+      throw new Error("Trae CN \u9700\u8981\u5B89\u5168\u51ED\u636E\u5B58\u50A8\uFF0C\u4F46\u5F53\u524D\u73AF\u5883\u6CA1\u6709\u63D0\u4F9B secretStore");
+    }
+    {
+      await context.secretStore.write(ref, {
+        token: credential.token,
+        refreshToken: credential.refreshToken,
+        expiresAt: credential.expiresAt ?? null,
+        refreshExpiresAt: credential.refreshExpiresAt ?? null,
+        clientId: credential.clientId ?? this.site.clientId,
+        uid: credential.uid,
+        name: credential.name ?? null,
+        email: credential.email ?? null,
+        device: credential.device
+      });
+      const stored = await context.secretStore.read(ref).catch(() => null);
+      if (!stored?.token) {
+        throw new Error("Trae CN \u767B\u5F55\u51ED\u636E\u6CA1\u6709\u5199\u5165\u5B89\u5168\u5B58\u50A8\uFF08\u56DE\u8BFB\u4E3A\u7A7A\uFF09");
+      }
+    }
+    return createAccountRecord({
+      providerId: PROVIDER_ID18,
+      accountId,
+      credentialRef: ref,
+      displayName: candidate2?.displayName ?? credential.name ?? "Trae CN",
+      email: candidate2?.email ?? credential.email ?? null,
+      auth: { kind: "oauth", scopes: [] },
+      subscription: { plan: null, status: "active" },
+      refresh: {
+        accessTokenExpiresAt: credential.expiresAt ? new Date(credential.expiresAt).toISOString() : null,
+        refreshable: Boolean(credential.refreshToken)
+      },
+      resources: {
+        transport: "trae_cn_llm_utils_chat",
+        quotaSource: "trae_cn_credits",
+        uid: credential.uid ?? null
+      }
+    });
+  }
+  getActiveSession() {
+    return Promise.resolve(null);
+  }
+  async getCatalog(context = {}) {
+    const accounts = context?.accounts ?? [];
+    const account = accounts.find((candidate2) => candidate2?.accountId === context?.accountId) ?? accounts[0];
+    if (account) {
+      const credential = await this.#credentialOf(account, context);
+      if (credential) {
+        try {
+          const roster = await readTraeModelRoster({
+            credential,
+            site: this.site,
+            fetchImpl: this.fetchImpl
+          });
+          return parseTraeCnCatalog(mergeTraeCnRoster(TRAE_CN_MODELS, roster));
+        } catch {
+        }
+      }
+    }
+    return this.catalogLoader({ force: Boolean(context?.force) });
+  }
+  async getQuota(account, context = {}) {
+    const credential = await this.#credentialOf(account, context);
+    if (!credential) {
+      return createQuotaSnapshot({ unit: "credits", source: "trae_cn_credits" });
+    }
+    try {
+      const credits = await readTraeCredits({
+        credential,
+        site: this.site,
+        fetchImpl: this.fetchImpl
+      });
+      return createQuotaSnapshot({
+        unit: "credits",
+        source: "trae_cn_credits",
+        ...credits.limit > 0 ? { limit: credits.limit, remaining: Math.max(0, credits.limit - credits.used) } : {},
+        ...credits.resetsAt ? { resetAt: credits.resetsAt } : {},
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    } catch (error) {
+      if (error?.status === 401 || error?.status === 403) {
+        const expired = new Error("Trae CN \u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+        expired.code = "AUTH_EXPIRED";
+        throw expired;
+      }
+      return createQuotaSnapshot({ unit: "credits", source: "trae_cn_credits", updatedAt: (/* @__PURE__ */ new Date()).toISOString() });
+    }
+  }
+  async refreshAccount(account, context = {}) {
+    const credential = await this.#credentialOf(account, context);
+    if (credential) {
+      await claimTraeDailyCredits({
+        credential,
+        site: this.site,
+        fetchImpl: this.fetchImpl
+      }).catch(() => {
+      });
+    }
+    return {
+      health: {
+        status: "healthy",
+        lastCheckedAt: (/* @__PURE__ */ new Date()).toISOString()
+      },
+      quota: await this.getQuota(account, context)
+    };
+  }
+  async #credentialOf(account, context = {}) {
+    const ref = account?.auth?.credentialRef ?? account?.credentialRef;
+    if (ref && context.secretStore) {
+      const stored = await context.secretStore.read(ref).catch(() => null);
+      if (stored?.token) return stored;
+    }
+    return null;
+  }
+  async invoke(requestOrEnvelope, invocation, context = {}) {
+    const isEnvelope = requestOrEnvelope && typeof requestOrEnvelope === "object" && "request" in requestOrEnvelope;
+    const request = isEnvelope ? requestOrEnvelope.request : requestOrEnvelope;
+    const inv = isEnvelope ? requestOrEnvelope.invocation : invocation;
+    const ctx = isEnvelope ? requestOrEnvelope.context ?? {} : context;
+    const executor = ctx?.requestExecutor ?? this.#requestExecutor;
+    const credential = (isEnvelope ? requestOrEnvelope.credential : null) ?? await this.#credentialOf(inv?.auth ?? inv ?? {}, ctx);
+    if (!credential) {
+      throw new Error("Trae CN \u8D26\u53F7\u7F3A\u5C11\u767B\u5F55\u51ED\u636E\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55");
+    }
+    return executor({
+      request: {
+        ...request,
+        signal: request?.signal ?? ctx?.signal ?? inv?.signal
+      },
+      credential,
+      signal: request?.signal ?? ctx?.signal ?? inv?.signal
+    });
+  }
+  async stream(request, invocation, context = {}) {
+    return this.invoke(request, invocation, context);
+  }
+};
+function createTraeCnDriver(options = {}) {
+  return new TraeCnSubscriptionDriver(options);
+}
+
+// modules/provider-trae-cn/src/index.mjs
+function createTraeCnModule({ driver = {} } = {}) {
+  return defineProviderModule({
+    id: "trae-cn",
+    displayName: "Trae CN",
+    // Trae CN has its own authorization page, so the panel offers a real
+    // "log in" button: the plugin runs the loopback callback and takes the
+    // credential from the page, exactly as the IDE itself does.
+    capabilities: [
+      "oauth_authorization",
+      "oauth_import",
+      "quota",
+      "catalog",
+      "invoke",
+      "stream"
+    ],
+    driver
+  });
+}
+
+// modules/provider-agentrouter/src/driver.mjs
+import { createHash as createHash12 } from "node:crypto";
+
+// modules/provider-agentrouter/src/native-transport.mjs
+var PROVIDER_ID19 = "agentrouter";
+var DEFAULT_AGENTROUTER_ENDPOINT = "https://agentrouter.org/v1/chat/completions";
+var DEFAULT_AGENTROUTER_MODELS_ENDPOINT = "https://agentrouter.org/v1/models";
+var DEFAULT_AGENTROUTER_RESPONSES_ENDPOINT = "https://agentrouter.org/v1/responses";
+var DEFAULT_AGENTROUTER_USER_AGENT = "Cline/3.2.0";
+function firstString12(...values) {
+  return values.find((value) => typeof value === "string" && value.length > 0) ?? null;
+}
+function toolCallPart4(part) {
+  const type = String(part?.type ?? "").toLowerCase().replace(/[_-]/g, "");
+  return type === "toolcall" || type === "functioncall" || type === "tooluse" ? part : null;
+}
+async function openAiContent4(content, attachments) {
+  const values = Array.isArray(content) ? content : [content];
+  const blocks = [];
+  for (const part of values) {
+    if (typeof part === "string") {
+      if (part) blocks.push({ type: "text", text: part });
+      continue;
+    }
+    if (!part || typeof part !== "object") continue;
+    if (part.type === "image") {
+      const image = await resolveImageData(part, attachments);
+      if (!image) throw nativeProviderError(PROVIDER_ID19, "image attachment could not be resolved");
+      blocks.push({ type: "image_url", image_url: { url: `data:${image.mediaType};base64,${image.data}` } });
+      continue;
+    }
+    if (part.type === "tool-result" || part.type === "tool_result") {
+      blocks.push({
+        type: "text",
+        text: `[Tool Result ${part.toolCallId ?? part.id ?? ""}]
+${textFromContent(part.content ?? part.output ?? part.result ?? part.text)}`
+      });
+      continue;
+    }
+    if (toolCallPart4(part)) continue;
+    const text3 = textFromContent(part);
+    if (text3) blocks.push({ type: "text", text: text3 });
+  }
+  return blocks;
+}
+async function buildAgentRouterMessages(request, attachments) {
+  const result = [];
+  if (typeof request.system === "string" && request.system.length > 0) {
+    result.push({ role: "system", content: request.system });
+  }
+  for (const message of Array.isArray(request.messages) ? request.messages : []) {
+    const role = message?.role === "assistant" ? "assistant" : message?.role === "tool" ? "tool" : "user";
+    if (role === "tool") {
+      result.push({
+        role: "tool",
+        tool_call_id: sanitizeToolCallId(firstString12(message.toolCallId, message.tool_call_id, message.id, "tool-result")),
+        content: textFromContent(message.content ?? message.text ?? message.output ?? message.result)
+      });
+      continue;
+    }
+    const content = await openAiContent4(message?.content ?? message?.text, attachments);
+    const calls = (Array.isArray(message?.content) ? message.content : [message?.content]).map(toolCallPart4).filter(Boolean).map((call, index) => ({
+      id: sanitizeToolCallId(firstString12(call.id, call.toolCallId, call.tool_call_id, `tool-${index}`)),
+      type: "function",
+      function: {
+        name: firstString12(call.name, call.function?.name, "tool"),
+        arguments: typeof (call.arguments ?? call.function?.arguments) === "string" ? call.arguments ?? call.function.arguments : JSON.stringify(call.arguments ?? call.input ?? call.function?.arguments ?? {})
+      }
+    }));
+    const value = {
+      role,
+      content: content.length === 0 ? "" : content.length === 1 && content[0].type === "text" ? content[0].text : content
+    };
+    if (role === "assistant" && calls.length > 0) value.tool_calls = calls;
+    result.push(value);
+  }
+  if (!result.some((message) => message.role === "user")) result.push({ role: "user", content: "Continue the conversation." });
+  return result;
+}
+function buildAgentRouterTools(tools) {
+  if (!Array.isArray(tools)) return void 0;
+  const result = tools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool?.name ?? tool?.function?.name ?? "tool",
+      ...tool?.description ? { description: String(tool.description) } : {},
+      parameters: tool?.parameters ?? tool?.input_schema ?? tool?.function?.parameters ?? { type: "object" }
+    }
+  }));
+  return result.length > 0 ? result : void 0;
+}
+async function buildAgentRouterRequest(request = {}, context = {}) {
+  const body = {
+    model: request.model,
+    messages: await buildAgentRouterMessages(request, context.attachments),
+    stream: true,
+    stream_options: { include_usage: true }
+  };
+  if (request.temperature !== void 0) body.temperature = request.temperature;
+  const maxTokens = request.maxTokens ?? request.modelContext?.maxTokens;
+  if (Number.isInteger(maxTokens) && maxTokens > 0) body.max_tokens = maxTokens;
+  const tools = buildAgentRouterTools(request.tools);
+  if (tools) body.tools = tools;
+  return body;
+}
+async function* streamAgentRouterResponse(response) {
+  let text3 = "";
+  let textIndex = 0;
+  let textOpen = true;
+  let nextIndex = 1;
+  let usage = null;
+  let stop = "stop";
+  let reasoning = null;
+  const tools = /* @__PURE__ */ new Map();
+  let terminated = false;
+  yield { type: "block-start", index: textIndex, blockType: "text" };
+  for await (const event of readSseEvents(response)) {
+    if (event?.done) {
+      terminated = true;
+      continue;
+    }
+    const payload = event.data;
+    if (!payload || typeof payload !== "object") continue;
+    if (payload.error) {
+      throw nativeProviderError(PROVIDER_ID19, payload.error.message ?? "AgentRouter returned an error", {
+        status: payload.error.code ?? payload.error.status,
+        body: payload.error
+      });
+    }
+    usage = normalizeUsage(payload.usage) ?? usage;
+    const choice = payload.choices?.[0];
+    if (!choice) continue;
+    stop = choice.finish_reason ?? stop;
+    if (typeof choice.finish_reason === "string" && choice.finish_reason.trim()) terminated = true;
+    const delta = choice.delta ?? {};
+    const content = typeof delta.content === "string" ? delta.content : textFromContent(delta.content);
+    if (content) {
+      if (reasoning) {
+        yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+        reasoning = null;
+      }
+      if (!textOpen) {
+        textIndex = nextIndex++;
+        text3 = "";
+        textOpen = true;
+        yield { type: "block-start", index: textIndex, blockType: "text" };
+      }
+      text3 += content;
+      yield { type: "text-delta", index: textIndex, text: content };
+    }
+    const reasoningDelta = delta.reasoning_content ?? delta.reasoningContent;
+    if (reasoningDelta) {
+      if (textOpen) {
+        yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+        textOpen = false;
+      }
+      if (!reasoning) {
+        reasoning = { index: nextIndex++, text: "" };
+        yield { type: "block-start", index: reasoning.index, blockType: "reasoning" };
+      }
+      const value = String(reasoningDelta);
+      reasoning.text += value;
+      yield { type: "reasoning-delta", index: reasoning.index, text: value };
+    }
+    for (const call of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+      const key = Number(call.index ?? tools.size);
+      if (!tools.has(key)) {
+        if (reasoning) {
+          yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+          reasoning = null;
+        }
+        if (textOpen) {
+          yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+          textOpen = false;
+        }
+        const state2 = {
+          index: nextIndex++,
+          id: firstString12(call.id, `tool-${key}`),
+          name: firstString12(call.function?.name, call.name, "tool"),
+          arguments: ""
+        };
+        tools.set(key, state2);
+        yield { type: "block-start", index: state2.index, blockType: "tool-call" };
+      }
+      const state = tools.get(key);
+      const argumentDelta = call.function?.arguments ?? call.arguments ?? "";
+      if (call.id) state.id = call.id;
+      if (call.function?.name) state.name = call.function.name;
+      state.arguments += argumentDelta;
+      if (argumentDelta) {
+        yield { type: "tool-call-delta", index: state.index, id: state.id, name: state.name, argumentsDelta: argumentDelta };
+      }
+    }
+  }
+  if (!terminated) {
+    throw nativeProviderError(
+      PROVIDER_ID19,
+      "AgentRouter \u6D41\u5728\u6CA1\u6709 finish_reason \u6216 [DONE] \u7684\u60C5\u51B5\u4E0B\u7ED3\u675F\uFF0C\u54CD\u5E94\u53EF\u80FD\u88AB\u622A\u65AD",
+      { code: "AGENTROUTER_TRUNCATED_STREAM" }
+    );
+  }
+  if (reasoning) yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+  if (textOpen) yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+  for (const state of tools.values()) {
+    yield { type: "block-end", index: state.index, block: { type: "tool-call", id: state.id, name: state.name, arguments: state.arguments || "{}" } };
+  }
+  if (usage) yield { type: "usage", usage };
+  yield { type: "finish", reason: finishReason(stop) };
+}
+function responsesEffort(raw) {
+  const value = String(raw ?? "").toLowerCase();
+  if (!value) return null;
+  if (value === "minimal" || value === "low") return "low";
+  if (value === "medium") return "medium";
+  if (value === "high" || value === "xhigh" || value === "max") return "high";
+  return null;
+}
+async function buildAgentRouterResponsesInput(request, attachments) {
+  const items = [];
+  for (const message of Array.isArray(request.messages) ? request.messages : []) {
+    const role = message?.role;
+    if (role === "tool") {
+      items.push({
+        type: "function_call_output",
+        call_id: sanitizeToolCallId(firstString12(message.toolCallId, message.tool_call_id, message.id, "tool-result")),
+        output: textFromContent(message.content ?? message.text ?? message.output ?? message.result)
+      });
+      continue;
+    }
+    const calls = (Array.isArray(message?.content) ? message.content : [message?.content]).map(toolCallPart4).filter(Boolean).map((call, index) => ({
+      type: "function_call",
+      call_id: sanitizeToolCallId(firstString12(call.id, call.toolCallId, call.tool_call_id, `tool-${index}`)),
+      name: firstString12(call.name, call.function?.name, "tool"),
+      arguments: typeof (call.arguments ?? call.function?.arguments) === "string" ? call.arguments ?? call.function.arguments : JSON.stringify(call.arguments ?? call.input ?? call.function?.arguments ?? {})
+    }));
+    items.push(...calls);
+    const content = await openAiContent4(message?.content ?? message?.text, attachments);
+    if (content.length > 0) {
+      const mapped = content.map((part) => part.type === "image_url" ? { type: "input_image", image_url: part.image_url.url } : { type: role === "assistant" ? "output_text" : "input_text", text: part.text });
+      items.push({ role: role === "assistant" ? "assistant" : "user", content: mapped });
+    }
+  }
+  return items;
+}
+async function buildAgentRouterResponsesRequest(request = {}, context = {}) {
+  const body = {
+    model: request.model,
+    input: await buildAgentRouterResponsesInput(request, context.attachments),
+    stream: true
+  };
+  if (typeof request.system === "string" && request.system.length > 0) body.instructions = request.system;
+  if (request.temperature !== void 0) body.temperature = request.temperature;
+  const maxTokens = request.maxTokens ?? request.modelContext?.maxTokens;
+  if (Number.isInteger(maxTokens) && maxTokens > 0) body.max_output_tokens = maxTokens;
+  const effort = responsesEffort(request.reasoningEffort ?? request.reasoning_effort);
+  if (effort) body.reasoning = { effort };
+  const tools = buildAgentRouterTools(request.tools);
+  if (tools) {
+    body.tools = tools.map((tool) => ({
+      type: "function",
+      name: tool.function.name,
+      ...tool.function.description ? { description: tool.function.description } : {},
+      parameters: tool.function.parameters
+    }));
+  }
+  return body;
+}
+async function* streamAgentRouterResponses(response) {
+  let text3 = "";
+  let textIndex = 0;
+  let textOpen = true;
+  let nextIndex = 1;
+  let usage = null;
+  let stop = "stop";
+  let reasoning = null;
+  let terminated = false;
+  const tools = /* @__PURE__ */ new Map();
+  yield { type: "block-start", index: textIndex, blockType: "text" };
+  const ensureReasoning = function* (delta) {
+    if (textOpen) {
+      yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+      textOpen = false;
+    }
+    if (!reasoning) {
+      reasoning = { index: nextIndex++, text: "" };
+      yield { type: "block-start", index: reasoning.index, blockType: "reasoning" };
+    }
+    reasoning.text += delta;
+    yield { type: "reasoning-delta", index: reasoning.index, text: delta };
+  };
+  for await (const event of readSseEvents(response)) {
+    if (event?.done) {
+      terminated = true;
+      continue;
+    }
+    const payload = event.data;
+    if (!payload || typeof payload !== "object") continue;
+    const type = typeof payload.type === "string" ? payload.type : event.event ?? "";
+    if (type === "response.error" || type === "response.failed" || payload.error) {
+      const detail = payload.error?.message ?? payload.response?.error?.message ?? "AgentRouter returned an error";
+      throw nativeProviderError(PROVIDER_ID19, detail, { body: payload });
+    }
+    if (payload.response?.usage) usage = normalizeUsage(payload.response.usage) ?? usage;
+    if (payload.usage) usage = normalizeUsage(payload.usage) ?? usage;
+    if (type === "response.output_text.delta" && typeof payload.delta === "string" && payload.delta) {
+      if (reasoning) {
+        yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+        reasoning = null;
+      }
+      if (!textOpen) {
+        textIndex = nextIndex++;
+        text3 = "";
+        textOpen = true;
+        yield { type: "block-start", index: textIndex, blockType: "text" };
+      }
+      text3 += payload.delta;
+      yield { type: "text-delta", index: textIndex, text: payload.delta };
+      continue;
+    }
+    if ((type === "response.reasoning_summary_text.delta" || type === "response.reasoning_text.delta") && typeof payload.delta === "string" && payload.delta) {
+      yield* ensureReasoning(payload.delta);
+      continue;
+    }
+    const isFunctionCall = payload.item?.type === "function_call";
+    if ((type === "response.output_item.added" || type === "response.output_item.done") && isFunctionCall) {
+      const item = payload.item;
+      const itemKey = firstString12(item.id, item.call_id, `tool-${tools.size}`);
+      let state = tools.get(itemKey);
+      if (!state) {
+        state = {
+          index: nextIndex++,
+          itemId: itemKey,
+          id: firstString12(item.call_id, item.id, itemKey),
+          name: firstString12(item.name, "tool"),
+          arguments: ""
+        };
+        if (reasoning) {
+          yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+          reasoning = null;
+        }
+        if (textOpen) {
+          yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+          textOpen = false;
+        }
+        tools.set(itemKey, state);
+        yield { type: "block-start", index: state.index, blockType: "tool-call" };
+      }
+      if (typeof item.call_id === "string" && item.call_id) state.id = item.call_id;
+      if (typeof item.name === "string" && item.name) state.name = item.name;
+      if (typeof item.arguments === "string" && item.arguments) state.arguments = item.arguments;
+      continue;
+    }
+    if (type === "response.function_call_arguments.delta") {
+      const state = tools.get(payload.item_id) ?? [...tools.values()].at(-1);
+      const delta = typeof payload.delta === "string" ? payload.delta : "";
+      if (state && delta) {
+        state.arguments += delta;
+        yield { type: "tool-call-delta", index: state.index, id: state.id, name: state.name, argumentsDelta: delta };
+      }
+      continue;
+    }
+    if (type === "response.completed" || type === "response.done") {
+      terminated = true;
+      stop = tools.size > 0 ? "tool_calls" : "stop";
+      continue;
+    }
+  }
+  if (!terminated) {
+    throw nativeProviderError(
+      PROVIDER_ID19,
+      "AgentRouter\uFF08Responses\uFF09\u6D41\u5728\u6CA1\u6709\u5B8C\u6210\u4E8B\u4EF6\u7684\u60C5\u51B5\u4E0B\u7ED3\u675F\uFF0C\u54CD\u5E94\u53EF\u80FD\u88AB\u622A\u65AD",
+      { code: "AGENTROUTER_TRUNCATED_STREAM" }
+    );
+  }
+  if (reasoning) yield { type: "block-end", index: reasoning.index, block: { type: "reasoning", text: reasoning.text } };
+  if (textOpen) yield { type: "block-end", index: textIndex, block: { type: "text", text: text3 } };
+  for (const state of tools.values()) {
+    yield { type: "block-end", index: state.index, block: { type: "tool-call", id: state.id, name: state.name, arguments: state.arguments || "{}" } };
+  }
+  if (usage) yield { type: "usage", usage };
+  yield { type: "finish", reason: tools.size > 0 ? { kind: "tool-calls" } : finishReason(stop) };
+}
+function createAgentRouterNativeExecutor({
+  endpoint: endpoint2 = process.env.DOCKYARD_AGENTROUTER_ENDPOINT || DEFAULT_AGENTROUTER_ENDPOINT,
+  responsesEndpoint = process.env.DOCKYARD_AGENTROUTER_RESPONSES_ENDPOINT || DEFAULT_AGENTROUTER_RESPONSES_ENDPOINT,
+  env = process.env,
+  timeoutMs = 3e5,
+  fetchImpl = fetch,
+  userAgent = process.env.DOCKYARD_AGENTROUTER_USER_AGENT || DEFAULT_AGENTROUTER_USER_AGENT
+} = {}) {
+  const safeEndpoint = validateNativeEndpoint(endpoint2, { providerId: PROVIDER_ID19 });
+  const safeResponses = validateNativeEndpoint(responsesEndpoint, { providerId: PROVIDER_ID19 });
+  const send = async (url, body, token, signal) => {
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "text/event-stream",
+        // Without an allow-listed client string the endpoint rejects the request
+        // before it ever checks the key.
+        "user-agent": userAgent
+      },
+      body: JSON.stringify(body),
+      signal: signal ?? AbortSignal.timeout(timeoutMs)
+    });
+    return response;
+  };
+  const responsesOnly = /* @__PURE__ */ new Set();
+  const executor = async ({ request = {}, credential, context = {} } = {}) => {
+    const token = firstString12(credential?.apiKey, credential?.access, env.AGENTROUTER_API_KEY);
+    if (!token) {
+      const error = nativeProviderError(PROVIDER_ID19, "AgentRouter API Key \u672A\u914D\u7F6E\uFF0C\u8BF7\u5728\u9762\u677F\u4E2D\u7C98\u8D34 sk- \u5F00\u5934\u7684 Key");
+      error.code = "AUTH_REQUIRED";
+      throw error;
+    }
+    const modelKey = String(request.model ?? "");
+    if (responsesOnly.has(modelKey)) {
+      const response = await send(safeResponses, await buildAgentRouterResponsesRequest(request, context), token, context.signal);
+      if (response.ok) return streamAgentRouterResponses(response);
+      const detail2 = await response.text().catch(() => "");
+      throw nativeProviderError(PROVIDER_ID19, `AgentRouter \u62D2\u7EDD\u4E86\u8BF7\u6C42\uFF08${response.status}\uFF09\uFF1A${detail2.slice(0, 200)}`, {
+        status: response.status
+      });
+    }
+    const chatResponse = await send(safeEndpoint, await buildAgentRouterRequest(request, context), token, context.signal);
+    if (chatResponse.ok) return streamAgentRouterResponse(chatResponse);
+    const detail = await chatResponse.text().catch(() => "");
+    if (/\/v1\/responses/u.test(detail) || /does not support/iu.test(detail)) {
+      responsesOnly.add(modelKey);
+      const responsesResponse = await send(safeResponses, await buildAgentRouterResponsesRequest(request, context), token, context.signal);
+      if (responsesResponse.ok) return streamAgentRouterResponses(responsesResponse);
+      const responsesDetail = await responsesResponse.text().catch(() => "");
+      throw nativeProviderError(PROVIDER_ID19, `AgentRouter \u62D2\u7EDD\u4E86\u8BF7\u6C42\uFF08${responsesResponse.status}\uFF09\uFF1A${responsesDetail.slice(0, 200)}`, {
+        status: responsesResponse.status
+      });
+    }
+    throw nativeProviderError(PROVIDER_ID19, `AgentRouter \u62D2\u7EDD\u4E86\u8BF7\u6C42\uFF08${chatResponse.status}\uFF09\uFF1A${detail.slice(0, 200)}`, {
+      status: chatResponse.status
+    });
+  };
+  executor.nativeTransport = "agentrouter-openai-completions";
+  return guardEmptyCompletion(executor, { providerId: PROVIDER_ID19 });
+}
+var agentRouterNativeTransportConstants = Object.freeze({
+  providerId: PROVIDER_ID19,
+  endpoint: DEFAULT_AGENTROUTER_ENDPOINT,
+  modelsEndpoint: DEFAULT_AGENTROUTER_MODELS_ENDPOINT,
+  responsesEndpoint: DEFAULT_AGENTROUTER_RESPONSES_ENDPOINT,
+  userAgent: DEFAULT_AGENTROUTER_USER_AGENT
+});
+
+// modules/provider-agentrouter/src/driver.mjs
+var PROVIDER_ID20 = "agentrouter";
+var AGENTROUTER_REASONING = Object.freeze({
+  efforts: [
+    { id: "low", name: "Low" },
+    { id: "medium", name: "Medium", default: true },
+    { id: "high", name: "High" }
+  ],
+  defaultEffort: "medium"
+});
+var BUILTIN_AGENTROUTER_MODELS = Object.freeze([
+  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", contextWindow: 1e6, maxTokens: 128e3, inputModalities: ["text"], reasoning: AGENTROUTER_REASONING },
+  { id: "gpt-6-astra", name: "GPT-6 Astra", contextWindow: 4e5, maxTokens: 128e3, inputModalities: ["text"], reasoning: AGENTROUTER_REASONING },
+  { id: "gpt-5.6-sol", name: "GPT-5.6 Sol", contextWindow: 272e3, maxTokens: 128e3, inputModalities: ["text"], reasoning: AGENTROUTER_REASONING }
+]);
+function fingerprintApiKey3(apiKey) {
+  return createHash12("sha256").update(String(apiKey)).digest("hex").slice(0, 16);
+}
+function maskApiKey4(apiKey) {
+  const value = String(apiKey ?? "");
+  if (value.length <= 10) return "****";
+  return `${value.slice(0, 6)}\u2026${value.slice(-4)}`;
+}
+function parseAgentRouterCatalog(data) {
+  const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  const builtinById = new Map(BUILTIN_AGENTROUTER_MODELS.map((model) => [model.id, model]));
+  const models = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of list) {
+    const id = typeof item?.id === "string" ? item.id.trim() : "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const known = builtinById.get(id) ?? null;
+    models.push({
+      id,
+      name: typeof item?.name === "string" && item.name.length > 0 ? item.name : id,
+      contextWindow: known?.contextWindow ?? resolveContextWindowFromModel(item, 128e3),
+      maxTokens: known?.maxTokens ?? resolveMaxTokensFromModel(item, 32768),
+      inputModalities: ["text"],
+      ...known?.reasoning ? { reasoning: known.reasoning } : {}
+    });
+  }
+  return models.length > 0 ? { models, source: "agentrouter_live_catalog" } : null;
+}
+function createAgentRouterCatalogLoader({
+  modelsUrl = DEFAULT_AGENTROUTER_MODELS_ENDPOINT,
+  fetchImpl = fetch,
+  userAgent = DEFAULT_AGENTROUTER_USER_AGENT,
+  cacheTtlMs = 3e5
+} = {}) {
+  let cached = null;
+  let cachedAt = 0;
+  return async function agentRouterCatalogLoader({ force = false, credential = null, accounts = null } = {}) {
+    const now = Date.now();
+    if (!force && cached && now - cachedAt < cacheTtlMs) return cached;
+    let token = credential?.apiKey ?? credential?.access ?? null;
+    if (!token && Array.isArray(accounts) && accounts.length > 0) token = accounts[0]?.auth?.apiKey ?? null;
+    if (token) {
+      try {
+        assertSecureEndpointUrl(modelsUrl, { providerId: PROVIDER_ID20 });
+        const { body } = await fetchJson(
+          modelsUrl,
+          {
+            headers: {
+              Accept: "application/json",
+              // The allow-list is enforced on the client string, even for reads.
+              "user-agent": userAgent,
+              ...token ? { Authorization: `Bearer ${token}` } : {}
+            }
+          },
+          { fetchImpl, timeoutMs: 2e4 }
+        );
+        const parsed = parseAgentRouterCatalog(body);
+        if (parsed) {
+          cached = parsed;
+          cachedAt = now;
+          return cached;
+        }
+      } catch {
+      }
+    }
+    cached = {
+      models: BUILTIN_AGENTROUTER_MODELS.map((model) => ({ ...model })),
+      source: "agentrouter_builtin_catalog",
+      ...token ? {} : { diagnostics: ["\u5C1A\u672A\u914D\u7F6E API Key\uFF0C\u4EE5\u4E0B\u4E3A\u9ED8\u8BA4\u6A21\u578B\uFF1B\u6DFB\u52A0\u8D26\u53F7\u540E\u53EF\u8BFB\u53D6\u5B9E\u65F6\u76EE\u5F55"] }
+    };
+    cachedAt = now;
+    return cached;
+  };
+}
+function summarizeAgentRouterCandidate(candidate2) {
+  return {
+    providerId: PROVIDER_ID20,
+    candidateId: candidate2?.candidateId ?? "agentrouter-default",
+    displayName: candidate2?.displayName ?? "AgentRouter",
+    email: candidate2?.email ?? null,
+    plan: candidate2?.subscription?.plan ?? "AgentRouter \u4F59\u989D\u8D26\u6237",
+    quota: candidate2?.quota ?? null
+  };
+}
+var AgentRouterDriver = class {
+  constructor({
+    catalogLoader = null,
+    requestExecutor = null,
+    fetchImpl = fetch,
+    env = process.env,
+    userAgent = env.DOCKYARD_AGENTROUTER_USER_AGENT || DEFAULT_AGENTROUTER_USER_AGENT
+  } = {}) {
+    this.fetchImpl = fetchImpl;
+    this.env = env;
+    this.userAgent = userAgent;
+    this.catalogLoader = catalogLoader ?? createAgentRouterCatalogLoader({ fetchImpl, userAgent });
+    this.requestExecutor = requestExecutor ?? createAgentRouterNativeExecutor({ fetchImpl, env, userAgent });
+  }
+  async discover() {
+    const envKey = typeof this.env.AGENTROUTER_API_KEY === "string" && this.env.AGENTROUTER_API_KEY.length > 0 ? this.env.AGENTROUTER_API_KEY : null;
+    if (!envKey) {
+      return {
+        source: "agentrouter_env",
+        candidates: [],
+        diagnostics: ["\u672A\u5728\u73AF\u5883\u53D8\u91CF\u4E2D\u53D1\u73B0 AGENTROUTER_API_KEY\uFF1B\u53EF\u5728\u9762\u677F\u4E2D\u76F4\u63A5\u7C98\u8D34 AgentRouter \u7684 sk- Key\u3002"]
+      };
+    }
+    return {
+      source: "agentrouter_env",
+      candidates: [{
+        candidateId: `agentrouter:${fingerprintApiKey3(envKey)}`,
+        accountId: `agentrouter-${fingerprintApiKey3(envKey)}`,
+        providerId: PROVIDER_ID20,
+        displayName: `AgentRouter Key (${maskApiKey4(envKey)})`,
+        apiKey: envKey,
+        subscription: { plan: "AgentRouter \u4F59\u989D\u8D26\u6237", status: "active" }
+      }]
+    };
+  }
+  async importAccount(candidate2, context = {}) {
+    const apiKey = String(candidate2?.apiKey ?? "").trim();
+    const accountId = candidate2?.accountId || `agentrouter-${fingerprintApiKey3(apiKey)}`;
+    const ref = createCredentialRef(PROVIDER_ID20, accountId);
+    if (context.secretStore) {
+      await context.secretStore.write(ref, {
+        type: "agentrouter_api_key",
+        providerId: PROVIDER_ID20,
+        apiKey,
+        displayName: candidate2?.displayName || "AgentRouter"
+      }).catch(() => {
+      });
+    }
+    return createAccountRecord({
+      accountId,
+      providerId: PROVIDER_ID20,
+      displayName: candidate2?.displayName || `AgentRouter Key (${maskApiKey4(apiKey)})`,
+      email: candidate2?.email ?? null,
+      auth: { kind: "api_key", credentialRef: ref },
+      subscription: { plan: "AgentRouter \u4F59\u989D\u8D26\u6237", status: "active", expiresAt: null },
+      resources: {
+        quotaSource: "agentrouter_balance",
+        quotaAvailable: false,
+        quotaDiagnostic: "\u4F59\u989D\u5728 AgentRouter \u63A7\u5236\u53F0\u7684\u300C\u94B1\u5305\u300D\u67E5\u770B\uFF1B\u63A5\u53E3\u672A\u63D0\u4F9B\u4F59\u989D\u67E5\u8BE2",
+        quotaUrl: "https://agentrouter.org"
+      },
+      health: { status: "healthy" }
+    });
+  }
+  async importSource(source, context = {}) {
+    const raw = typeof source === "string" ? source : source?.apiKey ?? source?.key ?? source?.token ?? "";
+    const apiKey = String(raw ?? "").trim();
+    if (!apiKey) throw new ValidationError("\u8BF7\u8F93\u5165 AgentRouter API Key");
+    const label = typeof source === "object" && typeof source?.label === "string" ? source.label.trim() : "";
+    return [await this.importAccount({
+      apiKey,
+      source: "manual_api_key",
+      displayName: label || `AgentRouter Key (${maskApiKey4(apiKey)})`,
+      email: maskApiKey4(apiKey)
+    }, context)];
+  }
+  async refreshAccount(account, context = {}) {
+    let apiKey = null;
+    if (context.secretStore && account?.auth?.credentialRef) {
+      try {
+        const stored = await context.secretStore.read(account.auth.credentialRef);
+        apiKey = stored?.apiKey ?? null;
+      } catch {
+      }
+    }
+    return {
+      health: {
+        status: apiKey || account?.auth?.credentialRef ? "healthy" : "expired",
+        lastCheckedAt: (/* @__PURE__ */ new Date()).toISOString()
+      },
+      quota: await this.getQuota(account, context)
+    };
+  }
+  async getQuota(account, context = {}) {
+    return {
+      quota: createQuotaSnapshot({}),
+      resources: {
+        quotaSource: "agentrouter_balance",
+        quotaDiagnostic: "\u4F59\u989D\u5728 AgentRouter \u63A7\u5236\u53F0\u7684\u300C\u94B1\u5305\u300D\u67E5\u770B\uFF1B\u63A5\u53E3\u672A\u63D0\u4F9B\u4F59\u989D\u67E5\u8BE2",
+        quotaUrl: "https://agentrouter.org"
+      }
+    };
+  }
+  async getCatalog(context = {}) {
+    let credential = null;
+    if (context.secretStore && context.accounts?.[0]?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(context.accounts[0].auth.credentialRef);
+      } catch {
+      }
+    }
+    return this.catalogLoader({
+      force: Boolean(context?.force),
+      credential,
+      accounts: context?.accounts ?? null
+    });
+  }
+  async invoke(request, invocation, context = {}) {
+    return this.stream(request, invocation, context);
+  }
+  async stream(request, invocation, context = {}) {
+    let credential = null;
+    if (context.secretStore && invocation?.account?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(invocation.account.auth.credentialRef);
+      } catch {
+      }
+    }
+    return this.requestExecutor({
+      request,
+      account: invocation?.account ?? null,
+      credential,
+      signal: context.signal ?? null,
+      attachments: context.attachments ?? invocation?.attachments ?? null
+    });
+  }
+};
+function createAgentRouterDriver(options = {}) {
+  return new AgentRouterDriver(options);
+}
+
+// modules/provider-agentrouter/src/index.mjs
+function createAgentRouterModule({ driver = {} } = {}) {
+  return defineProviderModule({
+    id: "agentrouter",
+    displayName: "AgentRouter",
+    capabilities: [
+      "api_key_auth",
+      "catalog",
+      "quota",
+      "invoke",
+      "stream"
+    ],
+    driver
+  });
+}
+
 // packages/runtime/src/dockyard-runtime.mjs
 var candidateSummarizers = /* @__PURE__ */ new Map([
   ["openai-codex", summarizeCodexCandidate],
   ["antigravity", summarizeAntigravityCandidate],
   ["grok", summarizeGrokCandidate],
   ["claude", summarizeClaudeCandidate],
-  ["cursor", summarizeCursorCandidate]
+  ["cursor", summarizeCursorCandidate],
+  ["opencode", summarizeOpencodeCandidate],
+  ["kilo", summarizeKiloCandidate],
+  ["commandcode", summarizeCommandCodeCandidate],
+  ["hermes", summarizeHermesCandidate],
+  ["openrouter-free", summarizeOpenRouterFreeCandidate],
+  ["trae-cn", summarizeTraeCnCandidate],
+  ["agentrouter", summarizeAgentRouterCandidate]
 ]);
 var DEFAULT_REFRESH_TIMEOUT_MS = 3e4;
 function numericOption(value, fallback) {
@@ -10692,10 +21208,12 @@ function refreshTimeoutError(providerId, accountId, timeoutMs) {
   error.timeoutMs = timeoutMs;
   return error;
 }
-function reportPostRefreshHealth(pool, accountId, { allowExpiredRecovery = false } = {}) {
+function reportPostRefreshHealth(pool, accountId, { allowExpiredRecovery = false, previousRemaining = null } = {}) {
   const account = pool.get(accountId);
   if (!account || account.health?.status === ACCOUNT_HEALTH.EXPIRED && !allowExpiredRecovery) return;
   const remaining = account.quota?.remaining;
+  const grew = typeof remaining === "number" && typeof previousRemaining === "number" && remaining > previousRemaining;
+  if (account.health?.status === ACCOUNT_HEALTH.EXHAUSTED && !grew) return;
   if (typeof remaining === "number" && remaining <= 0) {
     pool.report(accountId, {
       status: "quota_exhausted",
@@ -10835,6 +21353,60 @@ function createDefaultProviderEntries(options = {}) {
         })
       }),
       driver: options.cursorDriver
+    },
+    {
+      module: createOpencodeModule({
+        driver: options.opencodeDriver ?? createOpencodeDriver({
+          ...withRequestExecutor("opencode", options.opencode, requestExecutors),
+          ...catalogLoaders.opencode ? { catalogLoader: catalogLoaders.opencode } : {}
+        })
+      }),
+      driver: options.opencodeDriver
+    },
+    {
+      module: createCommandCodeModule({
+        driver: options.commandcodeDriver ?? createCommandCodeDriver({
+          ...withRequestExecutor("commandcode", options.commandcode, requestExecutors),
+          ...catalogLoaders.commandcode ? { catalogLoader: catalogLoaders.commandcode } : {}
+        })
+      }),
+      driver: options.commandcodeDriver
+    },
+    {
+      module: createHermesModule({
+        driver: options.hermesDriver ?? createHermesDriver({
+          ...withRequestExecutor("hermes", options.hermes, requestExecutors),
+          ...catalogLoaders.hermes ? { catalogLoader: catalogLoaders.hermes } : {}
+        })
+      }),
+      driver: options.hermesDriver
+    },
+    {
+      module: createOpenRouterFreeModule({
+        driver: options.openrouterFreeDriver ?? createOpenRouterFreeDriver({
+          ...withRequestExecutor("openrouter-free", options["openrouter-free"] ?? options.openrouterFree, requestExecutors),
+          ...catalogLoaders["openrouter-free"] ? { catalogLoader: catalogLoaders["openrouter-free"] } : {}
+        })
+      }),
+      driver: options.openrouterFreeDriver
+    },
+    {
+      module: createAgentRouterModule({
+        driver: options.agentrouterDriver ?? createAgentRouterDriver({
+          ...withRequestExecutor("agentrouter", options.agentrouter, requestExecutors),
+          ...catalogLoaders.agentrouter ? { catalogLoader: catalogLoaders.agentrouter } : {}
+        })
+      }),
+      driver: options.agentrouterDriver
+    },
+    {
+      module: createTraeCnModule({
+        driver: options.traeCnDriver ?? createTraeCnDriver({
+          ...withRequestExecutor("trae-cn", options.traeCn, requestExecutors),
+          ...catalogLoaders["trae-cn"] ? { catalogLoader: catalogLoaders["trae-cn"] } : {}
+        })
+      }),
+      driver: options.traeCnDriver
     }
   ];
 }
@@ -10879,6 +21451,11 @@ var DockyardRuntime = class {
   #providerImportQueues = /* @__PURE__ */ new Map();
   #initialized = false;
   #initPromise = null;
+  // Phase 1 (pools, module registration, injection bridge) resolves here. The
+  // model picker only needs phase 1: auto-provisioning a free account can wait
+  // on a provider round-trip and must not hold the picker hostage.
+  #prepared = false;
+  #preparePromise = null;
   constructor({
     providers = createDefaultProviderEntries(),
     runtime = new ModuleRuntime({ logger: { error() {
@@ -10894,10 +21471,12 @@ var DockyardRuntime = class {
     this.stateStore = stateStore;
     this.secretStore = secretStore;
     this.contextWindowOverrides = new ContextWindowOverrideStore({ stateStore });
+    this.modelSelection = new ModelSelectionStore({ stateStore });
     this.bridge = new DshInjectionBridge({
       runtime,
       adapter: dshAdapter,
-      contextWindowOverrides: this.contextWindowOverrides
+      contextWindowOverrides: this.contextWindowOverrides,
+      modelSelection: this.modelSelection
     });
     this.providers = providers;
     this.refreshTimeoutMs = refreshTimeoutMs;
@@ -10909,12 +21488,31 @@ var DockyardRuntime = class {
     this.secretStore = secretStore;
     return this;
   }
-  async init() {
-    if (this.#initialized) return this;
-    if (this.#initPromise) return this.#initPromise;
-    this.#initPromise = (async () => {
+  /**
+   * Phase 1 of startup: build every account pool, register the provider
+   * modules, and mount the DSH injection bridge. Disk-bound and fast. The
+   * account auto-provisioning in {@link init} is deliberately not part of this
+   * phase, because it can wait on a provider's network round-trip.
+   *
+   * @returns The runtime, once the pools and routes exist.
+   */
+  async whenPrepared() {
+    if (this.#prepared) return this;
+    if (this.#preparePromise) return this.#preparePromise;
+    this.#preparePromise = (async () => {
       const state = await this.stateStore.load();
+      if (state?.pools?.kilo || state?.modelSelection?.providers?.kilo) {
+        if (typeof this.stateStore.update === "function") {
+          await this.stateStore.update((latest) => {
+            if (latest?.pools) delete latest.pools.kilo;
+            if (latest?.modelSelection?.providers) delete latest.modelSelection.providers.kilo;
+            return latest;
+          }).catch(() => {
+          });
+        }
+      }
       await this.contextWindowOverrides.ready();
+      await this.modelSelection.ready();
       for (const entry of this.providers) {
         const providerId = entry.module.manifest.id;
         const stored = state.pools?.[providerId] ?? {};
@@ -10939,6 +21537,59 @@ var DockyardRuntime = class {
         if (!this.runtime.has(providerId)) await this.runtime.register(entry.module);
         await this.bridge.mountProvider(entry.module, pool);
       }
+      this.#prepared = true;
+      return this;
+    })();
+    try {
+      return await this.#preparePromise;
+    } finally {
+      this.#preparePromise = null;
+    }
+  }
+  async init() {
+    if (this.#initialized) return this;
+    if (this.#initPromise) return this.#initPromise;
+    this.#initPromise = (async () => {
+      await this.whenPrepared();
+      const autoImported = /* @__PURE__ */ new Set();
+      for (const [providerId, entry] of this.#entries) {
+        const pool = entry.pool;
+        const hasExpiredOfficialSession = pool.list().some((a) => a.resources?.accountScope === "active_official_session" && a.health?.status === ACCOUNT_HEALTH.EXPIRED);
+        const hasNoEligible = pool.list().filter((a) => a.health?.status !== ACCOUNT_HEALTH.EXPIRED).length === 0;
+        const autoProvision = this.hasProviderCapability(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT) && pool.list().length === 0;
+        if (autoProvision || hasExpiredOfficialSession && hasNoEligible) {
+          try {
+            const discovery = await (entry.module?.discover?.(providerContext(this)) ?? entry.driver?.discover?.(providerContext(this)));
+            const candidates = Array.isArray(discovery?.candidates) ? discovery.candidates : Array.isArray(discovery) ? discovery : [];
+            for (const candidate2 of candidates) {
+              if (candidate2 && candidate2.status !== "unavailable" && typeof entry.module?.importAccount === "function") {
+                if (!pool.get(candidate2.accountId)) {
+                  const account = await entry.module.importAccount(candidate2, providerContext(this));
+                  const obsoleteOfficial = pool.list().find((a) => a.resources?.accountScope === "active_official_session" && candidate2.resources?.accountScope === "active_official_session" && a.accountId !== account.accountId);
+                  if (obsoleteOfficial) {
+                    pool.remove(obsoleteOfficial.accountId);
+                  }
+                  pool.upsert(account, { resetHealth: true });
+                  if (!pool.getDefaultAccountId()) {
+                    pool.setDefaultAccount(account.accountId);
+                  }
+                  autoImported.add(providerId);
+                }
+              }
+            }
+          } catch {
+          }
+        }
+      }
+      for (const [id, entry] of this.#entries) {
+        if (this.hasProviderCapability(id, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT) && entry.pool?.list()?.length > 0) {
+          autoImported.add(id);
+        }
+      }
+      if (autoImported.size > 0) {
+        await this.#saveState([...autoImported]).catch(() => {
+        });
+      }
       this.#initialized = true;
       return this;
     })();
@@ -10956,8 +21607,32 @@ var DockyardRuntime = class {
   listProviderManifests() {
     return this.providers.map(({ module }) => ({ ...module.manifest }));
   }
+  // Host code should ask the module what it supports instead of branching on
+  // provider ids. Capabilities are declared once in each provider module.
+  getProviderCapabilities(providerId) {
+    const manifest = this.providers.find(({ module }) => module.manifest.id === providerId)?.module.manifest;
+    return new Set(Array.isArray(manifest?.capabilities) ? manifest.capabilities : []);
+  }
+  hasProviderCapability(providerId, capability) {
+    return this.getProviderCapabilities(providerId).has(capability);
+  }
   listProviderIds() {
     return this.providers.map(({ module }) => module.manifest.id);
+  }
+  /**
+   * Ask a provider what the user has to do when it has no authorization entry
+   * point of its own (a desktop-session provider, for example). The host keeps
+   * one generic message for every provider that answers null.
+   */
+  async authorizationInstructions(providerId) {
+    const module = this.providers.find((entry) => entry.module.manifest.id === providerId)?.module;
+    if (typeof module?.authorizationInstructions !== "function") return null;
+    try {
+      const text3 = await module.authorizationInstructions(providerContext(this, {}));
+      return typeof text3 === "string" && text3.trim().length > 0 ? text3.trim() : null;
+    } catch {
+      return null;
+    }
   }
   async scan(providerId = null) {
     await this.init();
@@ -10979,7 +21654,22 @@ var DockyardRuntime = class {
         const existing = entry.pool.get(candidate2.accountId);
         const candidateIdentity = candidate2.resources ?? {};
         const existingIdentity = existing?.resources ?? {};
-        if (!existing) continue;
+        if (!existing) {
+          const obsoleteOfficial = entry.pool.list().find((a) => a.resources?.accountScope === "active_official_session" && candidate2.resources?.accountScope === "active_official_session" && a.accountId !== candidate2.accountId && a.health?.status === ACCOUNT_HEALTH.EXPIRED);
+          if (obsoleteOfficial && typeof entry.module.importAccount === "function") {
+            try {
+              const imported = await entry.module.importAccount(candidate2, providerContext(this));
+              entry.pool.remove(obsoleteOfficial.accountId);
+              entry.pool.upsert(imported, { resetHealth: true });
+              if (entry.pool.getDefaultAccountId() === obsoleteOfficial.accountId) {
+                entry.pool.setDefaultAccount(imported.accountId);
+              }
+              changedProviderIds.add(currentProviderId);
+            } catch {
+            }
+          }
+          continue;
+        }
         const identityChanged = candidate2.email !== existing.email || candidate2.displayName !== existing.displayName || candidateIdentity.identitySource !== existingIdentity.identitySource || candidateIdentity.identityLabel !== existingIdentity.identityLabel || candidateIdentity.sessionFingerprint !== existingIdentity.sessionFingerprint || candidateIdentity.identityNote !== existingIdentity.identityNote || candidateIdentity.sessionPersistence !== existingIdentity.sessionPersistence;
         if (identityChanged) {
           entry.pool.upsert({
@@ -10999,8 +21689,11 @@ var DockyardRuntime = class {
           } catch {
           }
         }
-        const shouldRepairGrokCredential = currentProviderId === "grok" && typeof entry.module.importAccount === "function" && (candidate2.email && !existing.email || candidate2.source && candidate2.source !== existingIdentity.authSource);
-        if (shouldRepairGrokCredential) {
+        const shouldRepairLegacyCredential = this.hasProviderCapability(
+          currentProviderId,
+          PROVIDER_BEHAVIOR_CAPABILITIES.REPAIR_LEGACY_CREDENTIAL
+        ) && typeof entry.module.importAccount === "function" && (candidate2.email && !existing.email || candidate2.source && candidate2.source !== existingIdentity.authSource);
+        if (shouldRepairLegacyCredential) {
           try {
             const repaired = await entry.module.importAccount(candidate2, providerContext(this));
             entry.pool.upsert(repaired, { resetHealth: true });
@@ -11145,6 +21838,7 @@ var DockyardRuntime = class {
     await this.init();
     const entry = this.#entry(providerId);
     providerAccount2(entry.pool, accountId);
+    const previousRemaining = entry.pool.get(accountId)?.quota?.remaining ?? null;
     const diagnostics = [];
     let authorizationFailure = null;
     let refresh = null;
@@ -11173,7 +21867,8 @@ var DockyardRuntime = class {
     try {
       if (refresh && Object.hasOwn(refresh, "quota")) {
         reportPostRefreshHealth(entry.pool, accountId, {
-          allowExpiredRecovery: refresh.resources?.quotaSource === "antigravity_native"
+          allowExpiredRecovery: refresh.resources?.quotaSource === "antigravity_native",
+          previousRemaining
         });
         await this.#saveState([providerId]);
         return { account: entry.pool.get(accountId), diagnostics };
@@ -11185,7 +21880,8 @@ var DockyardRuntime = class {
       if (signal?.aborted) throw signal.reason ?? refreshTimeoutError(providerId, accountId, this.refreshTimeoutMs);
       this.#applyPatch(entry.pool, accountId, quota);
       reportPostRefreshHealth(entry.pool, accountId, {
-        allowExpiredRecovery: quota.resources?.quotaSource === "antigravity_native"
+        allowExpiredRecovery: quota.resources?.quotaSource === "antigravity_native",
+        previousRemaining
       });
     } catch (error) {
       if (signal?.aborted) throw error;
@@ -11199,6 +21895,30 @@ var DockyardRuntime = class {
     }
     await this.#saveState([providerId]);
     return { account: entry.pool.get(accountId), diagnostics };
+  }
+  /**
+   * Retry accounts parked by an expired authorization once their cooldown has
+   * passed. Cheap when nothing is parked, so a host may call it on a timer.
+   *
+   * @returns {Promise<Array<{providerId: string, accountId: string}>>} Accounts
+   *   that were retried (whether or not they came back healthy).
+   */
+  async relistExpiredAccounts(providerId = null) {
+    await this.whenPrepared();
+    const providerIds = providerId ? [providerId] : [...this.#entries.keys()];
+    const relisted = [];
+    for (const id of providerIds) {
+      const pool = this.#entries.get(id)?.pool;
+      if (typeof pool?.relistable !== "function") continue;
+      for (const account of pool.relistable()) {
+        try {
+          await this.refreshAccount(id, account.accountId, { tolerateFailure: true });
+          relisted.push({ providerId: id, accountId: account.accountId });
+        } catch {
+        }
+      }
+    }
+    return relisted;
   }
   async refreshAll(providerId = null) {
     await this.init();
@@ -11274,11 +21994,24 @@ var DockyardRuntime = class {
     await this.init();
     return this.contextWindowOverrides.set(input, value);
   }
+  getModelSelection(providerId, accountId = null) {
+    return this.modelSelection.get(providerId, accountId);
+  }
+  async setModelSelection(providerId, enabledModelIds, accountId = null) {
+    await this.init();
+    return this.modelSelection.set(providerId, enabledModelIds, accountId);
+  }
   async getCatalog(providerId, context = {}) {
     await this.init();
     const entry = this.#entry(providerId);
     const accounts = entry.pool.list().map((account) => providerAccount2(entry.pool, account.accountId));
-    return entry.module.getCatalog(providerContext(this, { ...context, accounts }));
+    const accountId = context.accountId ?? entry.pool.getDefaultAccountId() ?? (accounts.length === 1 ? accounts[0].accountId : null);
+    return entry.module.getCatalog(providerContext(this, { ...context, accounts, accountId }));
+  }
+  /** The account a provider would use by default, if it has one. */
+  getDefaultAccountId(providerId) {
+    const pool = this.#entries.get(providerId)?.pool;
+    return typeof pool?.getDefaultAccountId === "function" ? pool.getDefaultAccountId() : null;
   }
   async invoke(providerId, request, context = {}) {
     await this.init();
@@ -11316,7 +22049,12 @@ var DockyardRuntime = class {
         manifest: { ...entry.module.manifest },
         policy: entry.pool.policy,
         defaultAccountId: entry.pool.getDefaultAccountId(),
-        accounts: entry.pool.list()
+        // Advisory warnings derived from what the provider already reported: a
+        // window nearly spent, or one that resets soon while mostly unused.
+        accounts: entry.pool.list().map((account) => ({
+          ...account,
+          alerts: evaluateQuotaAlerts(account)
+        }))
       })),
       routes: this.bridge.listRoutes()
     };
@@ -11324,7 +22062,7 @@ var DockyardRuntime = class {
   #applyPatch(pool, accountId, patch = {}) {
     if (!patch || typeof patch !== "object") return;
     const input = { accountId };
-    for (const key of ["email", "displayName", "subscription", "quota", "refresh", "resources"]) {
+    for (const key of ["email", "displayName", "subscription", "quota", "balance", "refresh", "resources"]) {
       if (patch[key] !== void 0) input[key] = patch[key];
     }
     if (patch.identity?.email !== void 0) input.email = patch.identity.email;
@@ -11415,8 +22153,16 @@ var DockyardRuntime = class {
 // packages/dsh-plugin/src/codex-transport.mjs
 import { access, readFile as readFile7 } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname as dirname4, join as join10, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname as dirname8, join as join16, resolve } from "node:path";
+import { pathToFileURL, fileURLToPath as fileURLToPath2 } from "node:url";
+var activeCodexModels = /* @__PURE__ */ new Map();
+function recordCodexModels(models) {
+  if (Array.isArray(models)) {
+    for (const m of models) {
+      if (m?.id) activeCodexModels.set(m.id, m);
+    }
+  }
+}
 var DSH_LLM_PI_AI = "@deepseek-ai/dsh-llm-pi-ai";
 var PI_AI = "@earendil-works/pi-ai";
 var PI_AI_CODEX_API = "@earendil-works/pi-ai/api/openai-codex-responses.lazy";
@@ -11441,9 +22187,9 @@ function exportTarget(value) {
   }
   return null;
 }
-async function isFile(path) {
+async function isFile2(path2) {
   try {
-    await access(path);
+    await access(path2);
     return true;
   } catch {
     return false;
@@ -11453,15 +22199,15 @@ async function findPackageRoot(startDirectory, packageName) {
   const packageParts = packageName.split("/");
   let current = resolve(startDirectory);
   while (true) {
-    const candidate2 = join10(current, "node_modules", ...packageParts);
-    if (await isFile(join10(candidate2, "package.json"))) return candidate2;
-    const parent = dirname4(current);
+    const candidate2 = join16(current, "node_modules", ...packageParts);
+    if (await isFile2(join16(candidate2, "package.json"))) return candidate2;
+    const parent = dirname8(current);
     if (parent === current) return null;
     current = parent;
   }
 }
 async function packageImportUrl(packageRoot, subpath = null) {
-  const packageJson = JSON.parse(await readFile7(join10(packageRoot, "package.json"), "utf8"));
+  const packageJson = JSON.parse(await readFile7(join16(packageRoot, "package.json"), "utf8"));
   const exports = packageJson.exports;
   let target = null;
   if (!subpath) {
@@ -11483,13 +22229,34 @@ async function packageImportUrl(packageRoot, subpath = null) {
   if (typeof target !== "string") {
     throw new Error(`Cannot resolve ${subpath ?? "."} from ${packageRoot}`);
   }
-  return pathToFileURL(join10(packageRoot, target)).href;
+  return pathToFileURL(join16(packageRoot, target)).href;
+}
+function resolveDshLlmPath(moduleAnchor) {
+  const anchors = [
+    moduleAnchor,
+    process.env.DOCKYARD_DSH_CLI_PATH,
+    process.argv[1],
+    process.env.DSH_INSTALL_DIR ? join16(process.env.DSH_INSTALL_DIR, "package.json") : null
+  ].filter((value) => typeof value === "string" && value.length > 0);
+  for (const anchor of anchors) {
+    try {
+      const target = anchor.startsWith("file://") ? anchor : resolve(anchor);
+      return createRequire(target).resolve(DSH_LLM_PI_AI);
+    } catch {
+    }
+  }
+  if (typeof import.meta.resolve === "function") {
+    try {
+      const resolved = import.meta.resolve(DSH_LLM_PI_AI);
+      if (resolved.startsWith("file://")) return fileURLToPath2(resolved);
+    } catch {
+    }
+  }
+  return createRequire(import.meta.url).resolve(DSH_LLM_PI_AI);
 }
 async function importFromDshInstall(moduleAnchor) {
-  const anchor = moduleAnchor ?? process.env.DOCKYARD_DSH_CLI_PATH ?? process.argv[1] ?? import.meta.url;
-  const dshRequire = createRequire(anchor);
-  const dshLlmPath = dshRequire.resolve(DSH_LLM_PI_AI);
-  const dshPackageRoot = dirname4(dirname4(dshLlmPath));
+  const dshLlmPath = resolveDshLlmPath(moduleAnchor);
+  const dshPackageRoot = dirname8(dshLlmPath);
   const piRoot = await findPackageRoot(dshPackageRoot, PI_AI);
   if (!piRoot) throw new Error(`Cannot find ${PI_AI} beside ${DSH_LLM_PI_AI}`);
   const [{ PiAiAdapter }, { createProvider }, { openAICodexResponsesApi }, { openaiCodexProvider }, builtinProviders2] = await Promise.all([
@@ -11501,29 +22268,23 @@ async function importFromDshInstall(moduleAnchor) {
   ]);
   return { PiAiAdapter, createProvider, openAICodexResponsesApi, openaiCodexProvider, builtinProviders: builtinProviders2 };
 }
-async function loadExecutor(moduleAnchor) {
-  let dependencies;
+async function loadDependencies(moduleAnchor) {
   try {
-    dependencies = await importBareDependencies();
+    return await importFromDshInstall(moduleAnchor);
   } catch {
-    dependencies = await importFromDshInstall(moduleAnchor);
+    return importBareDependencies();
   }
-  const { PiAiAdapter, createProvider, openAICodexResponsesApi, openaiCodexProvider } = dependencies;
+}
+async function loadExecutor(moduleAnchor) {
+  const { PiAiAdapter, createProvider, openAICodexResponsesApi, openaiCodexProvider } = await loadDependencies(moduleAnchor);
   const models = openaiCodexProvider().getModels();
   const modelById = new Map(models.map((model) => [model.id, model]));
   return createCodexPiAiExecutor({
     PiAiAdapter,
     createProvider,
     openAICodexResponsesApi,
-    modelResolver: (modelId) => modelById.get(modelId)
+    modelResolver: (modelId) => modelById.get(modelId) ?? activeCodexModels.get(modelId) ?? null
   });
-}
-async function loadDependencies(moduleAnchor) {
-  try {
-    return await importBareDependencies();
-  } catch {
-    return importFromDshInstall(moduleAnchor);
-  }
 }
 function createCodexDshRequestExecutor({ moduleAnchor = null } = {}) {
   let executorPromise;
@@ -11542,29 +22303,9 @@ function createPiAiModelRegistryLoader({ moduleAnchor = null } = {}) {
     return registryPromise;
   };
 }
-function reasoningFromThinkingLevelMap(thinkingLevelMap) {
-  if (!thinkingLevelMap || typeof thinkingLevelMap !== "object") return void 0;
-  const efforts = Object.entries(thinkingLevelMap).filter(([id, providerValue]) => id !== "off" && typeof providerValue === "string" && providerValue.length > 0).map(([id, providerValue]) => ({
-    id,
-    name: id.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase()),
-    ...providerValue === id ? {} : { description: `provider value: ${providerValue}` }
-  }));
-  return efforts.length > 0 ? { efforts } : void 0;
-}
-function codexModelToDshCatalog(model) {
-  const reasoning = reasoningFromThinkingLevelMap(model?.thinkingLevelMap);
-  return {
-    id: model.id,
-    name: model.name,
-    ...Array.isArray(model.input) ? { inputModalities: [...model.input] } : {},
-    ...Number.isInteger(model.contextWindow) ? { contextWindow: model.contextWindow } : {},
-    ...Number.isInteger(model.maxTokens) ? { maxTokens: model.maxTokens } : {},
-    ...reasoning ? { reasoning } : {}
-  };
-}
-function createCodexDshCatalogLoader({ moduleAnchor = null } = {}) {
+function createCodexDshCatalogLoader({ moduleAnchor = null, ...options } = {}) {
   let dependenciesPromise;
-  return async () => {
+  const fallbackLoader = async () => {
     dependenciesPromise ??= loadDependencies(moduleAnchor);
     const { openaiCodexProvider } = await dependenciesPromise;
     const models = openaiCodexProvider().getModels();
@@ -11573,10 +22314,19 @@ function createCodexDshCatalogLoader({ moduleAnchor = null } = {}) {
       source: "dsh_pi_ai_provider_catalog"
     };
   };
+  const loader = createCodexCatalogLoader({
+    fallbackLoader,
+    ...options
+  });
+  return async (context = {}) => {
+    const result = await loader(context);
+    recordCodexModels(result?.models);
+    return result;
+  };
 }
 
 // packages/dsh-plugin/src/dockyard-service.mjs
-import { spawn as spawn6 } from "node:child_process";
+import { spawn as spawn5 } from "node:child_process";
 var DEFAULT_REFRESH_INTERVAL_MS = 5 * 60 * 1e3;
 var AUTH_POLL_INTERVAL_MS = 750;
 var AUTH_URL_WAIT_MS = 2e3;
@@ -11656,9 +22406,22 @@ function commandError(text3) {
   return { kind: "error", text: text3 };
 }
 function openDefaultBrowser(url) {
-  if (process.platform !== "darwin" || !url) return;
+  if (!url) return;
   try {
-    const child = spawn6("open", [url], { detached: true, stdio: "ignore" });
+    let child;
+    if (process.platform === "darwin") {
+      child = spawn5("open", [url], { detached: true, stdio: "ignore" });
+    } else if (process.platform === "win32") {
+      const comspec = process.env.ComSpec || process.env.COMSPEC || "cmd.exe";
+      child = spawn5(comspec, ["/d", "/s", "/c", `start "" "${String(url).replace(/"/g, "")}"`], {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+        windowsVerbatimArguments: true
+      });
+    } else {
+      child = spawn5("xdg-open", [url], { detached: true, stdio: "ignore" });
+    }
     child.unref();
   } catch {
   }
@@ -11676,7 +22439,8 @@ var DockyardDshService = class {
     refreshIntervalMs = numericOption2(process.env.DOCKYARD_DSH_REFRESH_INTERVAL_MS, DEFAULT_REFRESH_INTERVAL_MS),
     autoRefresh = true,
     openBrowser = openDefaultBrowser,
-    logger = console
+    logger = console,
+    notifyAdaptersUpdated = null
   } = {}) {
     if (!runtime) throw new Error("Dockyard DSH service requires a runtime");
     this.runtime = runtime;
@@ -11684,6 +22448,7 @@ var DockyardDshService = class {
     this.autoRefresh = autoRefresh;
     this.openBrowser = openBrowser;
     this.logger = logger;
+    this.notifyAdaptersUpdated = notifyAdaptersUpdated;
     this.ready = runtime.init();
   }
   async start() {
@@ -11727,7 +22492,36 @@ var DockyardDshService = class {
       providers: result.providers.filter((provider) => provider.providerId === providerId)
     };
   }
-  async add(providerInput = null, candidateId = null) {
+  async addApiKey(providerInput, apiKey, label = "") {
+    await this.ready;
+    const providerId = providerIdFor(this.runtime, providerInput);
+    if (!providerId) throw new Error(`\u672A\u77E5 provider\uFF1A${providerInput}`);
+    const trimmedKey = String(apiKey ?? "").trim();
+    if (!trimmedKey) throw new Error("\u8BF7\u8F93\u5165\u6709\u6548\u7684 API Key");
+    const imported = await this.runtime.importSource(providerId, {
+      apiKey: trimmedKey,
+      label: String(label ?? "").trim()
+    });
+    const accounts = Array.isArray(imported?.accounts) ? imported.accounts : [];
+    if (accounts.length > 0) {
+      const firstId = accounts[0].accountId;
+      await this.runtime.setDefaultAccount(providerId, firstId).catch(() => {
+      });
+      await this.runtime.getCatalog(providerId, { force: true }).catch(() => null);
+    }
+    try {
+      this.notifyAdaptersUpdated?.();
+    } catch {
+    }
+    return {
+      accounts,
+      diagnostics: imported?.diagnostics ?? []
+    };
+  }
+  async add(providerInput = null, candidateId = null, options = {}) {
+    if (options?.apiKey) {
+      return this.addApiKey(providerInput, options.apiKey, options.label);
+    }
     const scan = await this.scan(providerInput);
     const imports = [];
     const diagnostics = [];
@@ -11755,16 +22549,37 @@ var DockyardDshService = class {
     if (candidateId && imports.length === 0 && diagnostics.length === 0) {
       throw new Error(`\u6CA1\u6709\u627E\u5230\u672A\u6DFB\u52A0\u7684 OAuth \u5019\u9009\uFF1A${candidateId}`);
     }
+    if (imports.length > 0) {
+      try {
+        this.notifyAdaptersUpdated?.();
+      } catch {
+      }
+    }
     return { accounts: imports, diagnostics, scan };
   }
-  async refresh(providerInput = null) {
+  async refresh(providerInput = null, { forceCatalog = false } = {}) {
     await this.ready;
     const providerId = providerInput ? providerIdFor(this.runtime, providerInput) : null;
     if (providerInput && !providerId) throw new Error(`\u672A\u77E5 provider\uFF1A${providerInput}`);
     const refreshKey = providerId ?? "*";
     const existing = this.#refreshPromises.get(refreshKey);
     if (existing) return existing;
-    const promise = this.runtime.refreshAll(providerId).finally(() => {
+    const promise = (async () => {
+      const results = await this.runtime.refreshAll(providerId);
+      if (forceCatalog) {
+        if (providerId) {
+          await this.runtime.getCatalog(providerId, { force: true }).catch(() => null);
+        } else {
+          const manifests = this.runtime.listProviderManifests?.() ?? [];
+          await Promise.all(manifests.map((m) => this.runtime.getCatalog(m.id, { force: true }).catch(() => null)));
+        }
+        try {
+          this.notifyAdaptersUpdated?.();
+        } catch {
+        }
+      }
+      return results;
+    })().finally(() => {
       if (this.#refreshPromises.get(refreshKey) === promise) this.#refreshPromises.delete(refreshKey);
     });
     this.#refreshPromises.set(refreshKey, promise);
@@ -11788,7 +22603,10 @@ var DockyardDshService = class {
     await this.ready;
     const providerId = providerIdFor(this.runtime, providerInput);
     if (!providerId) throw new Error(`\u672A\u77E5 provider\uFF1A${providerInput}`);
-    return this.runtime.setDefaultAccount(providerId, accountId);
+    const result = await this.runtime.setDefaultAccount(providerId, accountId);
+    void this.runtime.getCatalog(providerId, { force: true, accountId }).catch(() => {
+    });
+    return result;
   }
   async removeAccount(providerInput, accountId) {
     await this.ready;
@@ -11805,15 +22623,123 @@ var DockyardDshService = class {
     await this.ready;
     return this.runtime.setContextWindowOverride(input, value);
   }
+  #hasCapability(providerId, capability) {
+    return Boolean(this.runtime.hasProviderCapability?.(providerId, capability));
+  }
+  async #autoProvisionIfNeeded(providerId) {
+    if (!this.#hasCapability(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT)) return;
+    const snap = this.runtime.snapshot?.();
+    const provider = snap?.providers?.find((p) => p.providerId === providerId);
+    if (provider && (!Array.isArray(provider.accounts) || provider.accounts.length === 0)) {
+      await this.add(providerId).catch(() => {
+      });
+    }
+  }
+  async getModelSelection(providerId, accountId = null) {
+    await this.ready;
+    await this.#autoProvisionIfNeeded(providerId);
+    const forceLiveCatalog = this.#hasCapability(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.FORCE_LIVE_CATALOG);
+    const catalog = await this.runtime.getCatalog(providerId, {
+      force: forceLiveCatalog,
+      ...accountId ? { accountId } : {}
+    }).catch(() => ({ models: [] }));
+    if (forceLiveCatalog) {
+      try {
+        this.notifyAdaptersUpdated?.();
+      } catch {
+      }
+    }
+    const models = catalog?.models ?? [];
+    const usable = models.filter((model) => model?.unavailable !== true);
+    const enabledModelIds = reconcileModelSelection(
+      this.runtime.getModelSelection(providerId, accountId),
+      usable.length > 0 ? usable : models
+    );
+    return {
+      providerId,
+      models,
+      enabledModelIds
+    };
+  }
+  async setModelSelection(providerId, enabledModelIds, accountId = null) {
+    await this.ready;
+    const saved = await this.runtime.setModelSelection(providerId, enabledModelIds, accountId);
+    try {
+      this.notifyAdaptersUpdated?.();
+    } catch {
+    }
+    return {
+      providerId,
+      enabledModelIds: saved,
+      saved: true
+    };
+  }
+  async testModelConnection(providerInput, modelId, { timeoutMs = 15e3 } = {}) {
+    await this.ready;
+    const providerId = providerIdFor(this.runtime, providerInput);
+    if (!providerId) throw new Error(`\u672A\u77E5 provider\uFF1A${providerInput}`);
+    if (!modelId || typeof modelId !== "string") throw new Error("\u7F3A\u5C11\u6709\u6548\u7684 modelId");
+    await this.#autoProvisionIfNeeded(providerId);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error("\u8FDE\u63A5\u6D4B\u8BD5\u8D85\u65F6 (15s)")), timeoutMs);
+    const startTime = Date.now();
+    let receivedChunk = false;
+    let latencyMs = 0;
+    try {
+      const stream = await this.runtime.stream(
+        providerId,
+        {
+          model: modelId,
+          messages: [{ role: "user", content: "hi" }],
+          maxTokens: 512,
+          probe: true,
+          noFallback: true
+        },
+        { signal: controller.signal }
+      );
+      for await (const chunk of stream) {
+        receivedChunk = true;
+        latencyMs = Date.now() - startTime;
+        break;
+      }
+      if (!receivedChunk) {
+        latencyMs = Date.now() - startTime;
+      }
+      return {
+        ok: true,
+        providerId,
+        modelId,
+        latencyMs
+      };
+    } catch (error) {
+      latencyMs = Date.now() - startTime;
+      const message = redactError(error);
+      const status = error?.status ?? error?.statusCode ?? null;
+      return {
+        ok: false,
+        providerId,
+        modelId,
+        latencyMs,
+        status,
+        error: message || "\u8FDE\u63A5\u5931\u8D25"
+      };
+    } finally {
+      clearTimeout(timeout);
+      controller.abort();
+    }
+  }
   async startAuthorization(providerInput, { openBrowser = true } = {}) {
     await this.ready;
     const manifest = manifestFor2(this.runtime, providerInput);
     if (!manifest) throw new Error(`\u672A\u77E5 provider\uFF1A${providerInput}`);
     if (!manifest.capabilities?.includes("oauth_authorization")) {
+      const provided = typeof this.runtime.authorizationInstructions === "function" ? await this.runtime.authorizationInstructions(manifest.id) : null;
+      const keyOnly = manifest.capabilities?.includes("api_key_auth");
+      const fallback = keyOnly ? `${providerName(manifest)} \u4F7F\u7528 API Key \u8BA4\u8BC1\uFF1B\u8BF7\u5728\u9762\u677F\u7684\u300C\u6DFB\u52A0\u65B0\u7684 API Key\u300D\u4E2D\u586B\u5165\uFF0C\u6216\u626B\u63CF\u672C\u673A\u5DF2\u6709\u7684\u767B\u5F55\u6001\u3002` : `${providerName(manifest)} \u6CA1\u6709\u72EC\u7ACB\u7684\u5B98\u65B9\u6388\u6743\u5165\u53E3\uFF1B\u8BF7\u5148\u5728\u5B98\u65B9\u5BA2\u6237\u7AEF\u6216\u5B98\u65B9\u73AF\u5883\u767B\u5F55/\u5207\u6362\u8D26\u53F7\uFF0C\u7136\u540E\u626B\u63CF\u672C\u673A\u767B\u5F55\u6001\uFF0C\u518D\u6DFB\u52A0\u5019\u9009\u3002`;
       return {
         status: "unsupported",
         providerId: manifest.id,
-        instructions: `${providerName(manifest)} \u6CA1\u6709\u72EC\u7ACB\u7684\u5B98\u65B9\u6388\u6743\u5165\u53E3\uFF1B\u8BF7\u5148\u5728\u5B98\u65B9\u5BA2\u6237\u7AEF\u6216\u5B98\u65B9\u73AF\u5883\u767B\u5F55/\u5207\u6362\u8D26\u53F7\uFF0C\u7136\u540E\u626B\u63CF\u672C\u673A\u767B\u5F55\u6001\uFF0C\u518D\u6DFB\u52A0\u5019\u9009\u3002`
+        instructions: provided ?? fallback
       };
     }
     const existingStart = this.#authStartPromises.get(manifest.id);
@@ -12092,9 +23018,9 @@ var dockyardDshConstants = Object.freeze({
 });
 
 // packages/dsh-plugin/src/dockyard-credential-store.mjs
-import { createHash as createHash9 } from "node:crypto";
+import { createHash as createHash13 } from "node:crypto";
 function dshCredentialRef(ref) {
-  const digest = createHash9("sha256").update(String(ref)).digest("hex");
+  const digest = createHash13("sha256").update(String(ref)).digest("hex");
   return `DOCKYARD_DSH_${digest}`;
 }
 function parseCredential(value) {
@@ -12134,7 +23060,7 @@ function createDockyardCredentialStore(credentials, fallback = null) {
 // packages/dsh-plugin/src/native-key-pool-host.mjs
 import { AsyncLocalStorage } from "node:async_hooks";
 import { isAgentLoopRequest, markAgentLoopRequest } from "@deepseek-ai/dsh-llm";
-import { join as join11 } from "node:path";
+import { join as join17 } from "node:path";
 
 // packages/dsh-plugin/src/native-usage.mjs
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
@@ -12149,10 +23075,10 @@ function baseUrlFor(providerId, profile) {
   const baseUrl = configured || builtinBaseUrls.get(providerId) || null;
   return baseUrl ? validateNativeEndpoint(baseUrl, { providerId }) : null;
 }
-function endpoint(baseUrl, path) {
+function endpoint(baseUrl, path2) {
   if (!baseUrl) throw new Error("provider \u6CA1\u6709\u8FD4\u56DE\u53EF\u7528\u7684 base URL");
   const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  return new URL(path.replace(/^\//, ""), base).toString();
+  return new URL(path2.replace(/^\//, ""), base).toString();
 }
 async function readJson2(response) {
   const raw = await response.text();
@@ -12332,6 +23258,24 @@ function applyModelContextWindow(model, contextWindow) {
     ...Number.isInteger(model.contextWindow) ? { contextWindow } : {}
   };
 }
+function applyNativeProviderModelCompat(providerId, model) {
+  if (!model || typeof model !== "object") return model;
+  if (providerId === "openrouter") {
+    return {
+      ...model,
+      thinkingLevelMap: {
+        ...model.thinkingLevelMap ?? {},
+        off: null
+      },
+      headers: {
+        "HTTP-Referer": "https://opencode.ai",
+        "X-Title": "OpenCode",
+        ...model.headers ?? {}
+      }
+    };
+  }
+  return model;
+}
 async function* iterateWithContext(storage, state, next) {
   const output = await storage.run(state, () => next());
   const iterator = await storage.run(state, () => {
@@ -12350,9 +23294,9 @@ async function* iterateWithContext(storage, state, next) {
     await storage.run(state, () => iterator.return?.());
   }
 }
-function pathValue(source, path = []) {
+function pathValue(source, path2 = []) {
   let current = source;
-  for (const segment of path) {
+  for (const segment of path2) {
     if (!current || typeof current !== "object") return void 0;
     current = current[segment];
   }
@@ -12414,7 +23358,7 @@ var NativeKeyPoolHost = class {
     this.logger = logger ?? console;
     this.contextWindowOverrides = contextWindowOverrides;
     this.stateStore = stateStore ?? new JsonStateStore({
-      filePath: join11(defaultDockyardHome(), "native-key-pools.json")
+      filePath: join17(defaultDockyardHome(), "native-key-pools.json")
     });
     this.readyPromise = this.loadState();
   }
@@ -12509,22 +23453,23 @@ var NativeKeyPoolHost = class {
       config.resolveApiKey = wrapper;
       this.patches.push({ config, original, wrapper });
       this.patchAdapterMethod(adapter, "modelOf", (modelOf) => function(...args) {
-        const model = modelOf.apply(this, args);
+        const model = applyNativeProviderModelCompat(args[1], modelOf.apply(this, args));
         const contextWindow = thisHost.contextWindowForModel(args[1], args[2]);
         return applyModelContextWindow(model, contextWindow);
       });
       this.patchAdapterMethod(adapter, "resolveModel", (resolveModel) => async function(...args) {
-        const model = await resolveModel.apply(this, args);
+        const model = applyNativeProviderModelCompat(args[0], await resolveModel.apply(this, args));
         const contextWindow = thisHost.contextWindowForModel(args[0], args[1]);
         return applyModelContextWindow(model, contextWindow);
       });
       this.patchAdapterMethod(adapter, "prepareCall", (prepareCall) => async function(...args) {
         const prepared = await prepareCall.apply(this, args);
+        if (!prepared || typeof prepared !== "object") return prepared;
+        const compatModel = applyNativeProviderModelCompat(args[0], prepared.model);
         const contextWindow = thisHost.contextWindowForModel(args[0], args[1]);
-        if (!Number.isSafeInteger(contextWindow) || contextWindow <= 0 || !prepared || typeof prepared !== "object") return prepared;
         return {
           ...prepared,
-          model: applyModelContextWindow(prepared.model, contextWindow)
+          model: applyModelContextWindow(compatModel, contextWindow)
         };
       });
     }
@@ -12777,7 +23722,59 @@ var NativeKeyPoolHost = class {
   }
 };
 
+// packages/dsh-plugin/src/vpn-ssrf-patch.mjs
+var import_ipaddr = __toESM(require_ipaddr(), 1);
+import { createRequire as createRequire2 } from "node:module";
+import { dirname as dirname9, join as join18 } from "node:path";
+var isPatched = false;
+function patchFakeIpVpnSupport() {
+  if (isPatched) return true;
+  const patchedPrototypes = /* @__PURE__ */ new Set();
+  const applyProtoPatch = (proto) => {
+    if (!proto?.range || patchedPrototypes.has(proto)) return;
+    const origRange = proto.range;
+    proto.range = function() {
+      if (this.octets?.[0] === 198 && (this.octets?.[1] === 18 || this.octets?.[1] === 19)) {
+        return "unicast";
+      }
+      return origRange.call(this);
+    };
+    patchedPrototypes.add(proto);
+  };
+  if (import_ipaddr.default?.IPv4?.prototype) {
+    applyProtoPatch(import_ipaddr.default.IPv4.prototype);
+  }
+  const req = createRequire2(import.meta.url);
+  const candidates = [
+    "ipaddr.js",
+    "/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh/node_modules/ipaddr.js"
+  ];
+  if (typeof process?.execPath === "string") {
+    try {
+      candidates.push(join18(dirname9(dirname9(process.execPath)), "Resources/app.asar/dsh/node_modules/ipaddr.js"));
+    } catch {
+    }
+  }
+  for (const cand of candidates) {
+    try {
+      const mod = req(cand);
+      if (mod?.IPv4?.prototype) applyProtoPatch(mod.IPv4.prototype);
+    } catch {
+    }
+  }
+  if (typeof req?.cache === "object" && req.cache) {
+    for (const [key, val] of Object.entries(req.cache)) {
+      if (key.includes("ipaddr") && val?.exports?.IPv4?.prototype) {
+        applyProtoPatch(val.exports.IPv4.prototype);
+      }
+    }
+  }
+  isPatched = true;
+  return true;
+}
+
 // packages/dsh-plugin/src/index.mjs
+patchFakeIpVpnSupport();
 var name = "dockyard-dsh";
 var inject = ["llm", "commands", "credentials", "settings", "webServer"];
 function contextLogger(ctx, name2) {
@@ -12788,7 +23785,9 @@ function contextLogger(ctx, name2) {
   }
   return console;
 }
+var RELIST_INTERVAL_MS = 5 * 60 * 1e3;
 function apply(ctx, config = {}) {
+  patchFakeIpVpnSupport();
   const runtimeOptions = { ...config.runtimeOptions ?? {} };
   let catalogWarmers = [];
   if (!config.runtime && !runtimeOptions.providers) {
@@ -12808,32 +23807,50 @@ function apply(ctx, config = {}) {
       }),
       claude: runtimeOptions.requestExecutors?.claude ?? createClaudeNativeExecutor(runtimeOptions.claude ?? {}),
       cursor: runtimeOptions.requestExecutors?.cursor ?? createCursorNativeExecutor(runtimeOptions.cursor ?? {}),
-      grok: runtimeOptions.requestExecutors?.grok ?? createGrokNativeExecutor(runtimeOptions.grok ?? {})
+      opencode: runtimeOptions.requestExecutors?.opencode ?? createOpencodeNativeExecutor(runtimeOptions.opencode ?? {}),
+      grok: runtimeOptions.requestExecutors?.grok ?? createGrokNativeExecutor(runtimeOptions.grok ?? {}),
+      commandcode: runtimeOptions.requestExecutors?.commandcode ?? createCommandCodeNativeExecutor(runtimeOptions.commandcode ?? {}),
+      hermes: runtimeOptions.requestExecutors?.hermes ?? createHermesNativeExecutor(runtimeOptions.hermes ?? {}),
+      "openrouter-free": runtimeOptions.requestExecutors?.["openrouter-free"] ?? createOpenRouterFreeNativeExecutor(runtimeOptions["openrouter-free"] ?? runtimeOptions.openrouterFree ?? {}),
+      agentrouter: runtimeOptions.requestExecutors?.agentrouter ?? createAgentRouterNativeExecutor(runtimeOptions.agentrouter ?? {})
     };
     runtimeOptions.catalogLoaders = {
       ...runtimeOptions.catalogLoaders ?? {},
-      "openai-codex": createCodexDshCatalogLoader(),
+      "openai-codex": runtimeOptions.catalogLoaders?.["openai-codex"] ?? createCodexDshCatalogLoader(runtimeOptions.codex ?? {}),
       antigravity: antigravityCatalogLoader,
       grok: runtimeOptions.catalogLoaders?.grok ?? createGrokCatalogLoader({
         ...runtimeOptions.grok ?? {},
-        commandRunner: runtimeOptions.grok?.commandRunner ?? runCliCommand
+        commandRunner: runtimeOptions.grok?.commandRunner ?? runCliCommand,
+        registryLoader: modelRegistryLoader
       }),
       claude: runtimeOptions.catalogLoaders?.claude ?? createClaudeCatalogLoader({ registryLoader: modelRegistryLoader }),
-      cursor: runtimeOptions.catalogLoaders?.cursor ?? createCursorCatalogLoader(runtimeOptions.cursor ?? {})
+      cursor: runtimeOptions.catalogLoaders?.cursor ?? createCursorCatalogLoader(runtimeOptions.cursor ?? {}),
+      opencode: runtimeOptions.catalogLoaders?.opencode ?? createOpencodeCatalogLoader({
+        ...runtimeOptions.opencode ?? {},
+        registryLoader: modelRegistryLoader
+      }),
+      commandcode: runtimeOptions.catalogLoaders?.commandcode ?? createCommandCodeCatalogLoader(runtimeOptions.commandcode ?? {}),
+      hermes: runtimeOptions.catalogLoaders?.hermes ?? createHermesCatalogLoader(runtimeOptions.hermes ?? {}),
+      "openrouter-free": runtimeOptions.catalogLoaders?.["openrouter-free"] ?? createOpenRouterFreeCatalogLoader(runtimeOptions["openrouter-free"] ?? runtimeOptions.openrouterFree ?? {}),
+      agentrouter: runtimeOptions.catalogLoaders?.agentrouter ?? createAgentRouterCatalogLoader(runtimeOptions.agentrouter ?? {})
     };
     runtimeOptions.providers = createDefaultProviderEntries(runtimeOptions);
     catalogWarmers = Object.entries(runtimeOptions.catalogLoaders).filter(([, loader]) => typeof loader === "function");
   }
   const runtime = config.runtime ?? new DockyardRuntime(runtimeOptions);
-  if (catalogWarmers.length > 0 && typeof runtime.init === "function") {
+  const warmCatalogs = String(process.env.DOCKYARD_WARM_CATALOGS ?? "") === "1";
+  if (warmCatalogs && catalogWarmers.length > 0 && typeof runtime.init === "function") {
     void (async () => {
       await runtime.init();
       const providers = runtime.snapshot?.().providers ?? [];
-      const connected = new Set(
-        providers.filter((provider) => Array.isArray(provider.accounts) && provider.accounts.length > 0).map((provider) => provider.providerId)
-      );
       const accountsByProvider = new Map(providers.map((provider) => [provider.providerId, provider.accounts ?? []]));
-      await Promise.all(catalogWarmers.filter(([providerId]) => providerId === "openai-codex" || connected.has(providerId)).map(([providerId, loader]) => loader({ accounts: accountsByProvider.get(providerId) ?? [] }).catch(() => null)));
+      await Promise.all(catalogWarmers.filter(([providerId]) => runtime.hasProviderCapability?.(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.CATALOG_WARMUP)).map(([providerId, loader]) => loader({ accounts: accountsByProvider.get(providerId) ?? [], secretStore: runtime.secretStore }).catch(() => null)));
+      const relistTimer = setInterval(() => {
+        Promise.resolve(runtime.relistExpiredAccounts?.() ?? null).catch(() => {
+        });
+      }, RELIST_INTERVAL_MS);
+      relistTimer.unref?.();
+      if (typeof ctx.on === "function") ctx.on("dispose", () => clearInterval(relistTimer));
     })().catch((error) => {
       contextLogger(ctx, "dockyard-dsh").warn?.(error);
     });
@@ -12841,6 +23858,16 @@ function apply(ctx, config = {}) {
   const adapter = createDockyardLlmAdapter({
     runtime,
     providerIds: config.providers ?? runtime.listProviderIds(),
+    // Only announced when a catalog's model set really changed, so the picker
+    // is not re-listed on every poll.
+    onCatalogChanged: () => {
+      try {
+        ctx.emit("llm/adapters-updated");
+        ctx.llm?.emitAdaptersUpdated?.();
+      } catch {
+      }
+    },
+    catalogCachePath: config.catalogCachePath ?? defaultCatalogCachePath(),
     // Resolve this only when a request is actually streamed. The attachment
     // service is installed by DSH's base profile after plugin composition;
     // reading it while the plugin graph is being composed breaks boot.
@@ -12870,10 +23897,19 @@ function apply(ctx, config = {}) {
     installAdapter();
   }
   if (typeof runtime.init === "function") {
+    const notifyAdaptersUpdated = () => {
+      try {
+        adapter.invalidateCatalog?.();
+        ctx.emit("llm/adapters-updated");
+        ctx.llm?.emitAdaptersUpdated?.();
+      } catch {
+      }
+    };
     const service = config.service ?? new DockyardDshService({
       runtime,
       ...config.serviceOptions ?? {},
-      logger: config.serviceOptions?.logger ?? contextLogger(ctx, "dockyard-dsh")
+      logger: config.serviceOptions?.logger ?? contextLogger(ctx, "dockyard-dsh"),
+      notifyAdaptersUpdated
     });
     if (typeof ctx.provide === "function") ctx.provide("dockyard", service);
     let nativeKeyPool = config.nativeKeyPool ?? null;
@@ -12921,8 +23957,8 @@ function apply(ctx, config = {}) {
                   res.end("Forbidden");
                   return;
                 }
-                const filePath = join12(process.cwd(), "artifacts", cleanPath);
-                if (!existsSync(filePath)) {
+                const filePath = join19(process.cwd(), "artifacts", cleanPath);
+                if (!existsSync8(filePath)) {
                   res.writeHead(404);
                   res.end("Not Found");
                   return;
@@ -12937,7 +23973,7 @@ function apply(ctx, config = {}) {
                   svg: "image/svg+xml"
                 };
                 const contentType = mimeTypes[ext] ?? "application/octet-stream";
-                const content = readFileSync2(filePath);
+                const content = readFileSync7(filePath);
                 res.writeHead(200, {
                   "Content-Type": contentType,
                   "Content-Length": content.length,

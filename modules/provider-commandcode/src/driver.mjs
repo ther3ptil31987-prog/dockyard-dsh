@@ -1,0 +1,720 @@
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { createCredentialRef } from "../../../packages/vault/src/index.mjs";
+import {
+  createAccountRecord,
+  createQuotaSnapshot,
+} from "../../../packages/core/src/contracts.mjs";
+import { ValidationError } from "../../../packages/core/src/errors.mjs";
+import {
+  resolveContextWindowFromModel,
+  resolveMaxTokensFromModel,
+  resolveReasoningFromModel,
+  stringValue,
+} from "../../../packages/providers/src/provider-utils.mjs";
+import {
+  DEFAULT_COMMANDCODE_CREDITS_ENDPOINT,
+  DEFAULT_COMMANDCODE_GENERATE_ENDPOINT,
+  DEFAULT_COMMANDCODE_MODELS_ENDPOINT,
+  DEFAULT_COMMANDCODE_SUBSCRIPTIONS_ENDPOINT,
+  DEFAULT_COMMANDCODE_WHOAMI_ENDPOINT,
+  createCommandCodeNativeExecutor,
+  extractCommandCodeAuth,
+  findCommandCodeAuthFilePath,
+} from "./native-transport.mjs";
+
+const PROVIDER_ID = "commandcode";
+
+/** Stable per-key identifier so pasting the same key twice reuses one account. */
+function fingerprintApiKey(apiKey) {
+  return createHash("sha256").update(String(apiKey)).digest("hex").slice(0, 16);
+}
+
+/** Display form of a key: never echo the whole secret back into the UI. */
+function maskApiKey(apiKey) {
+  const value = String(apiKey ?? "");
+  if (value.length <= 8) return "••••";
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+}
+
+function capitalize(str) {
+  if (!str || typeof str !== "string") return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export const BUILTIN_COMMANDCODE_MODELS = Object.freeze([
+  {
+    id: "deepseek/deepseek-v4.1-flash",
+    name: "DeepSeek V4.1 Flash",
+    contextWindow: 1000000,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "max", name: "Max" },
+      ],
+      defaultEffort: "high",
+    },
+    // The live provider catalog reports ["text","image"] for this model, and a
+    // direct request proves the gateway forwards image parts to it (verified
+    // 2026-11-04: image token delta was +195 and the model read a red/green/blue
+    // test chart correctly). The builtin fallback must not be more restrictive
+    // than the catalog, or images are silently dropped whenever the live
+    // catalog is unavailable or stale.
+    inputModalities: ["text", "image"],
+  },
+  {
+    id: "deepseek/deepseek-v4-pro",
+    name: "DeepSeek V4 Pro",
+    contextWindow: 1000000,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "high", name: "High", default: true },
+        { id: "max", name: "Max" },
+      ],
+      defaultEffort: "high",
+    },
+    inputModalities: ["text"],
+  },
+  {
+    id: "claude-sonnet-5-5",
+    name: "Claude Sonnet 5.5",
+    contextWindow: 1000000,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "xhigh", name: "Extra High" },
+        { id: "max", name: "Max" },
+      ],
+      defaultEffort: "high",
+    },
+    inputModalities: ["text", "image"],
+  },
+  {
+    id: "claude-sonnet-4-6",
+    name: "Claude Sonnet 4.6",
+    contextWindow: 1000000,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "max", name: "Max" },
+      ],
+      defaultEffort: "high",
+    },
+    inputModalities: ["text", "image"],
+  },
+  {
+    id: "xai/grok-4.7",
+    name: "Grok 4.7",
+    contextWindow: 500000,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "xhigh", name: "Extra High" },
+      ],
+      defaultEffort: "high",
+    },
+    inputModalities: ["text", "image"],
+  },
+  {
+    id: "meta/muse-spark-1.2",
+    name: "Muse Spark 1.2",
+    contextWindow: 1048576,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+        { id: "xhigh", name: "Extra High" },
+      ],
+      defaultEffort: "high",
+    },
+    inputModalities: ["text", "image"],
+  },
+  {
+    id: "mistral/mistral-large-4",
+    name: "Mistral Large 4",
+    contextWindow: 524288,
+    maxTokens: 16384,
+    reasoning: {
+      efforts: [
+        { id: "low", name: "Low" },
+        { id: "medium", name: "Medium" },
+        { id: "high", name: "High", default: true },
+      ],
+      defaultEffort: "high",
+    },
+    inputModalities: ["text", "image"],
+  },
+]);
+
+export function summarizeCommandCodeCandidate(candidate) {
+  return {
+    providerId: PROVIDER_ID,
+    candidateId: candidate?.candidateId ?? "commandcode-default",
+    accountId: candidate?.accountId ?? "commandcode-default",
+    displayName: candidate?.displayName ?? "Command Code",
+    email: candidate?.email ?? "user@commandcode.ai",
+    source: candidate?.source ?? "commandcode_auth",
+    subscription: { ...candidate?.subscription },
+    quota: { ...candidate?.quota },
+  };
+}
+
+function findLocalCommandCodeCatalogFile() {
+  const dir = join(homedir(), ".commandcode", "cache", "model-catalog", "v1");
+  if (existsSync(dir)) {
+    try {
+      const files = readdirSync(dir).filter((f) => f.startsWith("catalog-") && f.endsWith(".json"));
+      if (files.length > 0) {
+        return join(dir, files[0]);
+      }
+    } catch {}
+  }
+
+  const devJson = join(homedir(), ".commandcode", "cache", "models-dev.json");
+  if (existsSync(devJson)) return devJson;
+
+  return null;
+}
+
+const KNOWN_RETIRED_COMMANDCODE_MODELS = new Set([
+  "poolside/laguna-s-2.1-free",
+]);
+
+export function parseCommandCodeCatalog(data) {
+  let rawModels = [];
+  if (Array.isArray(data?.data)) {
+    rawModels = data.data;
+  } else if (Array.isArray(data?.models)) {
+    rawModels = data.models;
+  } else if (data?.data && typeof data.data === "object") {
+    // models-dev.json structure: { data: { "model-oracle-ai": { models: { ... } } } }
+    for (const providerGroup of Object.values(data.data)) {
+      if (providerGroup?.models && typeof providerGroup.models === "object") {
+        for (const [mId, mObj] of Object.entries(providerGroup.models)) {
+          rawModels.push({ id: mId, ...mObj });
+        }
+      }
+    }
+  }
+
+  if (!rawModels || rawModels.length === 0) {
+    return { models: [...BUILTIN_COMMANDCODE_MODELS] };
+  }
+
+  const models = [];
+  const seen = new Set();
+
+  for (const item of rawModels) {
+    const id = stringValue(item?.id);
+    if (!id || seen.has(id)) continue;
+    if (item?.hidden === true || item?.deprecated === true || item?.disabled === true || KNOWN_RETIRED_COMMANDCODE_MODELS.has(id)) {
+      continue;
+    }
+    seen.add(id);
+
+    const isFree = Boolean(
+      (item?.display?.badge === "free" || (item?.pricing && item.pricing.inputCost === 0 && item.pricing.outputCost === 0) || id.endsWith(":free"))
+      && !(item?.pricing && (item.pricing.inputCost > 0 || item.pricing.outputCost > 0))
+    );
+
+    const baseName = stringValue(item?.display?.label)
+      || stringValue(item?.name)
+      || stringValue(item?.display?.name)
+      || id;
+    // The model picker already groups models by provider, so the name stays the
+    // label the provider serves instead of repeating the provider on every row.
+    const name = baseName;
+
+    const contextWindow = Number.isInteger(item?.context_length)
+      ? item.context_length
+      : resolveContextWindowFromModel(item, 131072);
+
+    const maxTokens = Number.isInteger(item?.maxOutputTokens)
+      ? Math.min(item.maxOutputTokens, 32768)
+      : resolveMaxTokensFromModel(item, 16384);
+
+    let reasoning = null;
+    if (Array.isArray(item?.reasoningEfforts) && item.reasoningEfforts.length > 0) {
+      const efforts = item.reasoningEfforts
+        .filter((e) => e && e !== "off" && e !== "none")
+        .map((e) => ({ id: e, name: capitalize(e), default: e === "high" }));
+      if (efforts.length > 0) {
+        reasoning = {
+          efforts,
+          defaultEffort: efforts.find((e) => e.default)?.id || efforts[0].id,
+        };
+      }
+    } else {
+      reasoning = resolveReasoningFromModel(item);
+    }
+
+    const inputModalities = Array.isArray(item?.inputModalities)
+      ? item.inputModalities
+      : (Array.isArray(item?.modalities?.input) ? item.modalities.input : ["text"]);
+
+    models.push({
+      id,
+      name,
+      contextWindow,
+      maxTokens,
+      inputModalities,
+      free: isFree,
+      ...(item?.display?.description ? { description: item.display.description } : {}),
+      ...(reasoning ? { reasoning } : {}),
+    });
+  }
+
+  // Ensure builtin models are included if missing
+  for (const builtin of BUILTIN_COMMANDCODE_MODELS) {
+    if (!seen.has(builtin.id)) {
+      models.unshift(builtin);
+      seen.add(builtin.id);
+    }
+  }
+
+  return { models };
+}
+
+export function createCommandCodeCatalogLoader({
+  modelsUrl = DEFAULT_COMMANDCODE_MODELS_ENDPOINT,
+  cacheTtlMs = 60_000,
+  fetchImpl = fetch,
+} = {}) {
+  let cached = null;
+  let cachedAt = 0;
+
+  return async function commandCodeCatalogLoader({ force = false, credential = null } = {}) {
+    const now = Date.now();
+    if (!force && cached && now - cachedAt < cacheTtlMs) {
+      return cached;
+    }
+
+    const auth = credential || extractCommandCodeAuth();
+    if (auth?.apiKey && typeof fetchImpl === "function") {
+      try {
+        const res = await fetchImpl(modelsUrl, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${auth.apiKey}`,
+            "User-Agent": "command-code/1.88.1",
+            "x-command-code-version": "1.88.1",
+            "x-cli-environment": "production",
+          },
+        });
+        if (res.ok) {
+          const json = await res.json();
+          cached = parseCommandCodeCatalog(json);
+          cachedAt = Date.now();
+          return cached;
+        }
+      } catch {}
+    }
+
+    const localCatalog = findLocalCommandCodeCatalogFile();
+    if (localCatalog) {
+      try {
+        const raw = readFileSync(localCatalog, "utf8");
+        const json = JSON.parse(raw);
+        cached = parseCommandCodeCatalog(json);
+        cachedAt = Date.now();
+        return cached;
+      } catch {}
+    }
+
+    cached = { models: [...BUILTIN_COMMANDCODE_MODELS] };
+    cachedAt = Date.now();
+    return cached;
+  };
+}
+
+export function formatCommandCodePlan(planId) {
+  if (!planId) return "Command Code Subscription";
+  if (planId.includes("go")) return "Command Code Go Plan";
+  if (planId.includes("goat")) return "Command Code GOAT Plan";
+  if (planId.includes("pro")) return "Command Code Pro Plan";
+  if (planId.includes("max")) return "Command Code Max Plan";
+  return `Command Code (${planId})`;
+}
+
+/**
+ * Command Code reports quota as two rolling caps plus a spendable credit
+ * balance. The balance is what actually gates requests — the rolling windows
+ * can both look comfortable while every request is rejected — so it gets its
+ * own row. The API exposes only what is left of the monthly grant, never the
+ * grant itself, so this row is a balance without a denominator.
+ */
+/**
+ * Monthly credit grant per plan, from Command Code's public pricing page
+ * (2026-11-17): Go $10, GOAT $100, Pro $110, Max 10x $150, Max 20x $300.
+ * The API only reports what is left, so the grant has to come from the plan.
+ */
+const COMMANDCODE_PLAN_MONTHLY_CREDITS = [
+  ["goat", 100],
+  ["max20", 300],
+  ["max-20", 300],
+  ["max10", 150],
+  ["max-10", 150],
+  ["pro", 110],
+  ["go", 10],
+];
+
+export function commandCodeMonthlyCreditLimit(planId) {
+  const id = String(planId ?? "").toLowerCase();
+  if (!id) return null;
+  for (const [needle, credits] of COMMANDCODE_PLAN_MONTHLY_CREDITS) {
+    if (id.includes(needle)) return credits;
+  }
+  return null;
+}
+
+export function commandCodeQuotaWindows(creditsData, { currentPeriodEnd = null, planId = null } = {}) {
+  const windows = [];
+  const fiveHour = creditsData?.windowLimits?.fiveHour;
+  if (fiveHour) {
+    windows.push({
+      id: "commandcode:5h",
+      name: "5 小时窗口额度",
+      remaining: Math.max(0, (fiveHour.cap ?? 3) - (fiveHour.used ?? 0)),
+      limit: fiveHour.cap ?? 3,
+      unit: "credits",
+      resetAt: fiveHour.resetAt ? new Date(fiveHour.resetAt).toISOString() : null,
+    });
+  }
+  const weekly = creditsData?.windowLimits?.weekly;
+  if (weekly) {
+    windows.push({
+      id: "commandcode:weekly",
+      name: "周度额度",
+      remaining: Math.max(0, (weekly.cap ?? 6) - (weekly.used ?? 0)),
+      limit: weekly.cap ?? 6,
+      unit: "credits",
+      resetAt: weekly.resetAt ? new Date(weekly.resetAt).toISOString() : null,
+    });
+  }
+  const credits = creditsData?.credits;
+  if (credits && typeof credits.monthlyCredits === "number") {
+    const remaining = Number(credits.monthlyCredits)
+      + Number(credits.purchasedCredits ?? 0)
+      + Number(credits.freeCredits ?? 0);
+    windows.push({
+      id: "commandcode:monthly",
+      name: "月度额度",
+      // A subscription grant, not a pay-as-you-go balance: it carries the plan's
+      // credit total as its denominator, so the panel and the compact indicator
+      // both draw it as a percentage bar. It is also the number that actually
+      // runs out, hence `primary`.
+      primary: true,
+      remaining: Number.isFinite(remaining) ? Math.max(0, remaining) : 0,
+      limit: commandCodeMonthlyCreditLimit(planId),
+      unit: "credits",
+      resetAt: currentPeriodEnd ? new Date(currentPeriodEnd).toISOString() : null,
+    });
+  }
+  return windows;
+}
+
+export class CommandCodeDriver {
+  constructor({
+    endpoint = DEFAULT_COMMANDCODE_GENERATE_ENDPOINT,
+    catalogLoader = null,
+    requestExecutor = null,
+    fetchImpl = fetch,
+    timeoutMs = 180_000,
+  } = {}) {
+    this.endpoint = endpoint;
+    this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
+    this.catalogLoader = catalogLoader ?? createCommandCodeCatalogLoader({ fetchImpl });
+    this.requestExecutor = requestExecutor ?? createCommandCodeNativeExecutor({
+      endpoint,
+      fetchImpl,
+      timeoutMs,
+    });
+  }
+
+  async discover() {
+    const auth = extractCommandCodeAuth();
+    if (!auth || !auth.apiKey) {
+      return {
+        candidates: [],
+        source: "commandcode_auth",
+        diagnostics: ["未在 ~/.commandcode/auth.json 检测到登录态，可在面板中配置 API Key。"],
+      };
+    }
+
+    let whoamiData = null;
+    let creditsData = null;
+    let subData = null;
+
+    try {
+      const headers = {
+        Authorization: `Bearer ${auth.apiKey}`,
+        "User-Agent": "command-code/1.88.1",
+        "x-command-code-version": "1.88.1",
+        "x-cli-environment": "production",
+      };
+
+      const [whoamiRes, creditsRes, subRes] = await Promise.all([
+        this.fetchImpl(DEFAULT_COMMANDCODE_WHOAMI_ENDPOINT, { headers }).catch(() => null),
+        this.fetchImpl(DEFAULT_COMMANDCODE_CREDITS_ENDPOINT, { headers }).catch(() => null),
+        this.fetchImpl(DEFAULT_COMMANDCODE_SUBSCRIPTIONS_ENDPOINT, { headers }).catch(() => null),
+      ]);
+
+      if (whoamiRes?.ok) whoamiData = await whoamiRes.json().catch(() => null);
+      if (creditsRes?.ok) creditsData = await creditsRes.json().catch(() => null);
+      if (subRes?.ok) subData = await subRes.json().catch(() => null);
+    } catch {}
+
+    const userId = whoamiData?.user?.id || auth.userId || "commandcode-user";
+    const userName = whoamiData?.user?.name || whoamiData?.user?.userName || auth.userName || "Command Code User";
+    const email = whoamiData?.user?.email || "user@commandcode.ai";
+    const displayName = `${userName} (${email})`;
+
+    const planId = subData?.data?.planId;
+    const planName = formatCommandCodePlan(planId);
+    const subStatus = subData?.data?.status || "active";
+    const currentPeriodEnd = subData?.data?.currentPeriodEnd || null;
+
+    const remainingCredits = typeof creditsData?.credits?.monthlyCredits === "number"
+      ? creditsData.credits.monthlyCredits
+      : 10;
+
+    const windows = commandCodeQuotaWindows(creditsData, { currentPeriodEnd, planId });
+
+    return {
+      candidates: [
+        {
+          candidateId: userId,
+          accountId: userId,
+          displayName,
+          email,
+          subscription: {
+            plan: planName,
+            status: subStatus,
+            expiresAt: currentPeriodEnd,
+          },
+          quota: {
+            remaining: remainingCredits,
+            limit: commandCodeMonthlyCreditLimit(planId),
+            unit: "credits",
+            resetAt: currentPeriodEnd,
+            updatedAt: new Date().toISOString(),
+            windows,
+          },
+          source: "commandcode_auth",
+          health: {
+            status: "healthy",
+          },
+        },
+      ],
+      source: "commandcode_auth",
+      diagnostics: [],
+    };
+  }
+
+  async importAccount(candidate, context = {}) {
+    const auth = extractCommandCodeAuth();
+    const manual = candidate?.source === "manual_api_key";
+    // A key the user just pasted must survive the auth file that is still on disk.
+    const apiKey = candidate?.apiKey || auth?.apiKey || "";
+    const accountId = candidate?.accountId
+      || (manual ? `commandcode-${fingerprintApiKey(apiKey)}` : auth?.userId)
+      || "commandcode-default";
+    const ref = createCredentialRef(PROVIDER_ID, accountId);
+
+    if (context.secretStore) {
+      await context.secretStore.write(ref, {
+        type: "commandcode_auth",
+        apiKey,
+        userId: accountId,
+        userName: candidate?.displayName || auth?.userName || null,
+        email: candidate?.email || null,
+      }).catch(() => {});
+    }
+
+    return createAccountRecord({
+      accountId,
+      providerId: PROVIDER_ID,
+      displayName: candidate?.displayName || "Command Code User",
+      email: candidate?.email || "user@commandcode.ai",
+      auth: {
+        kind: "commandcode_auth",
+        credentialRef: ref,
+      },
+      subscription: {
+        plan: candidate?.subscription?.plan || "Command Code Subscription",
+        status: candidate?.subscription?.status || "active",
+        expiresAt: candidate?.subscription?.expiresAt || null,
+      },
+      quota: createQuotaSnapshot(candidate?.quota || {
+        remaining: 10,
+        limit: 10,
+        unit: "credits",
+      }),
+      health: {
+        status: "healthy",
+      },
+    });
+  }
+
+  /**
+   * Import a manually entered API Key. Command Code authenticates with a static
+   * key (environment variable or ~/.commandcode/auth.json), never OAuth, so this
+   * is the panel's account entry point for users who have no official CLI.
+   */
+  async importSource(source, context = {}) {
+    const rawKey = typeof source === "string"
+      ? source
+      : (source?.apiKey ?? source?.key ?? source?.token ?? "");
+    const apiKey = String(rawKey ?? "").trim();
+    if (!apiKey) throw new ValidationError("请输入有效的 Command Code API Key");
+    const label = typeof source === "object" && typeof source?.label === "string"
+      ? source.label.trim()
+      : "";
+    const masked = maskApiKey(apiKey);
+    return [await this.importAccount({
+      apiKey,
+      source: "manual_api_key",
+      displayName: label || `Command Code Key (${masked})`,
+      email: masked,
+    }, context)];
+  }
+
+  async getActiveSession() {
+    return this.discover().then((res) => (Array.isArray(res?.candidates) ? res.candidates[0] : null));
+  }
+
+  async refreshAccount(account, context = {}) {
+    let apiKey = null;
+    if (context.secretStore && account?.auth?.credentialRef) {
+      try {
+        const secret = await context.secretStore.read(account.auth.credentialRef);
+        apiKey = secret?.apiKey;
+      } catch {}
+    }
+    if (!apiKey) {
+      const auth = extractCommandCodeAuth();
+      apiKey = auth?.apiKey;
+    }
+
+    if (!apiKey) {
+      return {
+        health: { status: "auth_expired" },
+      };
+    }
+
+    try {
+      const headers = {
+        Authorization: `Bearer ${apiKey}`,
+        "User-Agent": "command-code/1.88.1",
+        "x-command-code-version": "1.88.1",
+        "x-cli-environment": "production",
+      };
+
+      const [creditsRes, subRes] = await Promise.all([
+        this.fetchImpl(DEFAULT_COMMANDCODE_CREDITS_ENDPOINT, { headers }).catch(() => null),
+        this.fetchImpl(DEFAULT_COMMANDCODE_SUBSCRIPTIONS_ENDPOINT, { headers }).catch(() => null),
+      ]);
+
+      const creditsData = creditsRes?.ok ? await creditsRes.json().catch(() => null) : null;
+      const subData = subRes?.ok ? await subRes.json().catch(() => null) : null;
+
+      const remainingCredits = typeof creditsData?.credits?.monthlyCredits === "number"
+        ? creditsData.credits.monthlyCredits
+        : (account.quota?.remaining ?? 10);
+
+      const planId = subData?.data?.planId;
+      const planName = planId ? formatCommandCodePlan(planId) : account.subscription?.plan;
+      const subStatus = subData?.data?.status || account.subscription?.status || "active";
+      const currentPeriodEnd = subData?.data?.currentPeriodEnd || account.subscription?.expiresAt || null;
+
+      const windows = commandCodeQuotaWindows(creditsData, { currentPeriodEnd, planId });
+
+      return {
+        subscription: {
+          ...account.subscription,
+          plan: planName,
+          status: subStatus,
+          expiresAt: currentPeriodEnd,
+        },
+        quota: createQuotaSnapshot({
+          remaining: remainingCredits,
+          limit: commandCodeMonthlyCreditLimit(planId) ?? account.quota?.limit ?? null,
+          unit: "credits",
+          resetAt: currentPeriodEnd,
+          updatedAt: new Date().toISOString(),
+          windows,
+        }),
+        health: {
+          status: "healthy",
+          lastCheckedAt: new Date().toISOString(),
+        },
+      };
+    } catch {
+      return {
+        health: { status: "degraded", lastCheckedAt: new Date().toISOString() },
+      };
+    }
+  }
+
+  async getCatalog(context = {}) {
+    let credential = null;
+    if (context.secretStore && context.accounts?.[0]?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(context.accounts[0].auth.credentialRef);
+      } catch {}
+    }
+    return this.catalogLoader({ force: Boolean(context.force), credential });
+  }
+
+  async invoke(request, invocation, context = {}) {
+    let output = "";
+    for await (const chunk of this.stream(request, invocation, context)) {
+      if (chunk.type === "text-delta" && chunk.text) {
+        output += chunk.text;
+      }
+    }
+    return { output };
+  }
+
+  async* stream(request, invocation, context = {}) {
+    let credential = null;
+    if (context.secretStore && invocation?.account?.auth?.credentialRef) {
+      try {
+        credential = await context.secretStore.read(invocation.account.auth.credentialRef);
+      } catch {}
+    }
+
+    yield* this.requestExecutor({
+      request,
+      account: invocation?.account ?? null,
+      credential,
+      signal: context.signal ?? null,
+      sessionId: context.sessionId ?? request.sessionId ?? null,
+      // DSH passes the durable attachment service on the provider context; the
+      // transport needs it to turn opaque image references into real bytes.
+      attachments: context.attachments ?? invocation?.attachments ?? null,
+    });
+  }
+}
+
+export function createCommandCodeDriver(options = {}) {
+  return new CommandCodeDriver(options);
+}

@@ -1,4 +1,60 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { ValidationError } from "../../core/src/errors.mjs";
+import { PROVIDER_BEHAVIOR_CAPABILITIES } from "../../core/src/contracts.mjs";
+import { reconcileModelSelection } from "../../runtime/src/model-selection-store.mjs";
+
+export function defaultCatalogCachePath() {
+  const home = process.env.DOCKYARD_DSH_HOME || join(homedir(), ".dockyard-dsh");
+  return join(home, "catalog-cache.json");
+}
+
+// Bumped whenever catalog shape/semantics change, so a stale entry from an
+// older build cannot keep serving old tiers or old free flags.
+const CATALOG_CACHE_VERSION = 2;
+
+function loadDiskCatalogCache(filePath) {
+  try {
+    if (!filePath || !existsSync(filePath)) return new Map();
+    const raw = readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    const map = new Map();
+    if (parsed && typeof parsed === "object") {
+      for (const [providerId, entry] of Object.entries(parsed)) {
+        if (entry && Array.isArray(entry.value?.models) && entry.value.models.length > 0
+          && Number(entry.version) === CATALOG_CACHE_VERSION) {
+          map.set(providerId, {
+            value: entry.value,
+            fetchedAt: Number(entry.fetchedAt) || Date.now(),
+          });
+        }
+      }
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveDiskCatalogCache(filePath, map) {
+  try {
+    if (!filePath) return;
+    const obj = {};
+    for (const [providerId, entry] of map) {
+      if (entry && Array.isArray(entry.value?.models) && entry.value.models.length > 0) {
+        obj[providerId] = {
+          value: entry.value,
+          fetchedAt: entry.fetchedAt,
+        };
+      }
+    }
+    mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
+    writeFileSync(filePath, JSON.stringify(obj, null, 2), "utf8");
+  } catch {
+    // Disk write failure must not break generation or catalog discovery.
+  }
+}
 
 function effortName(id) {
   return String(id)
@@ -56,25 +112,52 @@ export function normalizeDshReasoning(reasoning) {
   };
 }
 
+function cleanModelDisplayName(name, id) {
+  if (typeof name !== "string" || name.length === 0) return id;
+  return name
+    .replace(/^\[隐秘限免\]\s*/g, "")
+    .replace(/^\[限时免费\]\s*/g, "")
+    .replace(/\s*\(智能路由全部免费\/隐秘\/限免\)\s*$/g, "")
+    .replace(/\s*\[Free\]\s*$/i, "")
+    .replace(/\s*\(free\)\s*$/i, "")
+    .trim() || id;
+}
+
 function providerCatalogModels(providerId, catalog) {
   if (!Array.isArray(catalog?.models)) return [];
   const seen = new Set();
   return catalog.models
     .filter((model) => {
-      if (!model || typeof model.id !== "string" || model.id.length === 0 || seen.has(model.id)) return false;
+      // A model the provider currently cannot serve (exhausted quota) is shown
+      // in the settings picker only; the composer must not offer it.
+      if (!model || model.unavailable === true) return false;
+      if (typeof model.id !== "string" || model.id.length === 0 || seen.has(model.id)) return false;
       seen.add(model.id);
       return true;
     })
     .map((model) => {
       const reasoning = normalizeDshReasoning(model.reasoning);
+      const contextWindow = Number.isInteger(model.contextWindow) && model.contextWindow > 0
+        ? model.contextWindow
+        : undefined;
+      // DSH reserves defaultMaxTokens from the context window (messageBudget = contextWindow - defaultMaxTokens).
+      // If defaultMaxTokens is too large, it starves the conversation budget and breaks compaction
+      // with TargetPressureConfigError. Bound defaultMaxTokens to at most 20% of contextWindow (or 16384).
+      let defaultMaxTokens = undefined;
+      if (Number.isInteger(model.maxTokens) && model.maxTokens > 0) {
+        const cap = contextWindow ? Math.max(1024, Math.min(16384, Math.floor(contextWindow * 0.2))) : 16384;
+        defaultMaxTokens = Math.min(model.maxTokens, cap);
+      } else if (contextWindow) {
+        defaultMaxTokens = Math.min(8192, Math.floor(contextWindow * 0.2));
+      }
       return {
         provider: providerId,
         id: model.id,
-        name: typeof model.name === "string" && model.name.length > 0 ? model.name : model.id,
+        name: cleanModelDisplayName(model.name, model.id),
         description: modelDescription(model),
         ...(Array.isArray(model.inputModalities) ? { inputModalities: [...model.inputModalities] } : {}),
-        ...(Number.isInteger(model.contextWindow) ? { context: { contextWindow: model.contextWindow } } : {}),
-        ...(Number.isInteger(model.maxTokens) ? { defaultMaxTokens: model.maxTokens } : {}),
+        ...(contextWindow ? { context: { contextWindow } } : {}),
+        ...(defaultMaxTokens !== undefined ? { defaultMaxTokens } : {}),
         ...(reasoning ? { reasoning } : {}),
       };
     });
@@ -92,6 +175,10 @@ function manifestFor(runtime, providerId) {
  * Test doubles that do not expose a snapshot retain the old catalog behavior.
  */
 function providerHasConnectedAccount(runtime, providerId) {
+  // Providers that auto-provision a free account expose their catalog even
+  // before the first account is imported. This is a declared capability, not
+  // a host-side provider-id exception.
+  if (runtime.hasProviderCapability?.(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT)) return true;
   if (typeof runtime.snapshot !== "function") return true;
   const snapshot = runtime.snapshot();
   if (!Array.isArray(snapshot?.providers)) return true;
@@ -123,32 +210,174 @@ function unsupportedContentError(message) {
   return error;
 }
 
+const CONTEXT_OVERFLOW_PATTERNS = [
+  /context[\s_-](?:length|window)[\s_-](?:exceed|overflow|limit)/i,
+  /maximum context length/i,
+  /max context window/i,
+  /too\s+(?:large|long)\s+for\s+(?:(?:this|the)\s+)?(?:model(?:'s)?\s+)?context/i,
+  /(?:input|prompt|request|messages?)\b.{0,40}(?:exceed|overflow|is\s+larger\s+than)\b.{0,40}\b(?:model(?:'s)?\s+)?context/i,
+];
+
+export function isContextOverflowError(errorOrMessage) {
+  if (!errorOrMessage) return false;
+  if (typeof errorOrMessage === "string") {
+    return CONTEXT_OVERFLOW_PATTERNS.some((pattern) => pattern.test(errorOrMessage));
+  }
+  const code = String(errorOrMessage.code ?? errorOrMessage.upstreamCode ?? "");
+  if (/CONTEXT_WINDOW_EXCEEDED|CONTEXT_LENGTH_EXCEEDED/i.test(code)) return true;
+  const message = String(errorOrMessage.message ?? errorOrMessage.reason ?? "");
+  return CONTEXT_OVERFLOW_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+// A gateway that drops a connection mid-request surfaces through undici as
+// `TypeError: terminated`, with the real socket fault hidden in `cause`. Nothing
+// in that shape carries a provider error code, so DSH would otherwise fall back
+// to the generic UNKNOWN code, which its retry policy never re-attempts: one
+// dropped connection then ends the whole turn with an opaque "terminated" card.
+// Recognize the transport shapes and let DSH retry them like any other blip.
+const TRANSPORT_TERMINATION_PATTERNS = [
+  /\bterminated\b/i,
+  /\bother side closed\b/i,
+  /\bsocket hang up\b/i,
+  /\bfetch failed\b/i,
+  /\b(?:UND_ERR_SOCKET|UND_ERR_CLOSED|ECONNRESET|ECONNREFUSED|EPIPE)\b/i,
+];
+
+// `terminated` is only ever undici's own wording for a torn-down stream, so a
+// message match alone is enough; these codes let a bare cause carry the signal.
+const TRANSPORT_CAUSE_CODES = new Set([
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EPIPE",
+]);
+
+function isTransportTermination(errorOrMessage) {
+  if (!errorOrMessage) return false;
+  if (typeof errorOrMessage === "string") {
+    return TRANSPORT_TERMINATION_PATTERNS.some((pattern) => pattern.test(errorOrMessage));
+  }
+  const cause = errorOrMessage.cause;
+  if (cause && typeof cause === "object") {
+    if (TRANSPORT_CAUSE_CODES.has(String(cause.code ?? "").toUpperCase())) return true;
+    if (TRANSPORT_TERMINATION_PATTERNS.some((pattern) => pattern.test(String(cause.message ?? "")))) return true;
+  }
+  if (TRANSPORT_CAUSE_CODES.has(String(errorOrMessage.code ?? "").toUpperCase())) return true;
+  return TRANSPORT_TERMINATION_PATTERNS.some((pattern) => pattern.test(String(errorOrMessage.message ?? "")));
+}
+
+/** A failure whose code is absent or the generic UNKNOWN is still unclassified. */
+function isUnclassifiedFailureCode(code) {
+  const text = String(code ?? "").trim().toUpperCase();
+  return text === "" || text === "UNKNOWN";
+}
+
 /**
- * dsh-llm-pi-ai currently leaves a Codex WebSocket close with code 1006 as
- * PI_AI_ERROR. That bypasses dsh-llm-retry, whose default policy retries
- * TRANSPORT failures at the durable agent-step boundary. Normalize only this
- * transport signature here; the bridge must not retry inside a live stream,
- * because doing so could duplicate already-emitted tool calls.
+ * Normalize provider failures (WebSocket closed 1006 -> TRANSPORT, context overflow -> CONTEXT_WINDOW_EXCEEDED).
+ * Context overflow mapping allows DSH's compaction service to intercept the error and perform
+ * automatic overflow compaction and turn retry.
  */
 function normalizeTransportFailure(chunk) {
   const failure = chunk?.type === "finish" && chunk.reason?.kind === "error"
     ? chunk.reason.failure
     : null;
-  if (!failure || failure.code === "TRANSPORT") return chunk;
-  if (!/\bWebSocket closed\s+1006\b/i.test(String(failure.message ?? ""))) return chunk;
+  if (!failure) return chunk;
+  if (failure.code !== "TRANSPORT" && isUnclassifiedFailureCode(failure.code) && isTransportTermination(failure)) {
+    const original = String(failure.message ?? "").trim();
+    return {
+      ...chunk,
+      reason: {
+        ...chunk.reason,
+        failure: {
+          ...failure,
+          code: "TRANSPORT",
+          message: original
+            ? `Provider connection dropped mid-stream (${original})`
+            : "Provider connection dropped mid-stream",
+        },
+      },
+    };
+  }
+  if (failure.code !== "TRANSPORT" && /\bWebSocket closed\s+1006\b/i.test(String(failure.message ?? ""))) {
+    return {
+      ...chunk,
+      reason: {
+        ...chunk.reason,
+        failure: {
+          ...failure,
+          code: "TRANSPORT",
+        },
+      },
+    };
+  }
+  if (failure.code !== "CONTEXT_WINDOW_EXCEEDED" && isContextOverflowError(failure)) {
+    return {
+      ...chunk,
+      reason: {
+        ...chunk.reason,
+        failure: {
+          ...failure,
+          code: "CONTEXT_WINDOW_EXCEEDED",
+        },
+      },
+    };
+  }
+  return chunk;
+}
+
+/**
+ * True once a chunk carries content that a retry must not duplicate: visible
+ * text or a tool call. Streamed reasoning is not durable conversation content,
+ * so a connection that dies during chain-of-thought can still be re-attempted.
+ */
+function chunkCarriesDurableOutput(chunk) {
+  if (!chunk || typeof chunk !== "object") return false;
+  if (chunk.type === "text-delta") return Boolean(String(chunk.text ?? ""));
+  if (chunk.type === "tool-call-delta") return true;
+  if (chunk.type === "block-end" && chunk.block?.type === "tool-call") return true;
+  return false;
+}
+
+/**
+ * A provider error that carries account-health flags must reach dsh-route as a
+ * finish chunk, because DSH's own error→failure conversion keeps only `code`
+ * and `message`. Losing `quotaExhausted` is what let a spent account keep
+ * reporting `healthy`, so the panel never showed 额度耗尽 and the pool kept
+ * selecting it for every request.
+ */
+function healthFailureFromThrownError(error) {
+  if (!error) return null;
+  const flags = {
+    ...(error.authExpired ? { authExpired: true } : {}),
+    ...(error.authForbidden ? { authForbidden: true } : {}),
+    ...(error.rateLimited ? { rateLimited: true } : {}),
+    ...(error.quotaExhausted ? { quotaExhausted: true } : {}),
+  };
+  if (Object.keys(flags).length === 0) return null;
+  const code = error.quotaExhausted
+    ? "QUOTA"
+    : error.rateLimited
+      ? "RATE_LIMIT"
+      : error.authExpired
+        ? "AUTH_EXPIRED"
+        : "AUTH_FORBIDDEN";
   return {
-    ...chunk,
+    type: "finish",
     reason: {
-      ...chunk.reason,
+      kind: "error",
       failure: {
-        ...failure,
-        code: "TRANSPORT",
+        code,
+        message: String(error.message ?? ""),
+        ...(Number.isInteger(error.status) ? { status: error.status } : {}),
+        ...flags,
       },
     },
   };
 }
 
 const RETRYABLE_THROWN_FAILURE_CODES = new Set([
+  "CONTEXT_WINDOW_EXCEEDED",
   "EMPTY_RESPONSE",
   "RATE_LIMIT",
   "SERVER",
@@ -169,21 +398,95 @@ function retryFinishFromThrownError(error) {
     code = "EMPTY_RESPONSE";
   } else if (code === "PI_AI_ERROR" && /\bWebSocket closed\s+1006\b/i.test(String(error.message ?? ""))) {
     code = "TRANSPORT";
+  } else if (isContextOverflowError(error)) {
+    code = "CONTEXT_WINDOW_EXCEEDED";
+  } else if (
+    code === "TRANSPORT" ||
+    (isUnclassifiedFailureCode(code) && isTransportTermination(error)) ||
+    /\bfetch failed\b/i.test(String(error?.message ?? "")) ||
+    error?.cause?.code === "ECONNRESET" ||
+    error?.cause?.code === "ETIMEDOUT"
+  ) {
+    code = "TRANSPORT";
   }
   if (!RETRYABLE_THROWN_FAILURE_CODES.has(code)) return null;
+  const rawMessage = String(error.message ?? "Provider stream ended without substantive output");
   return {
     type: "finish",
     reason: {
       kind: "error",
       failure: {
         code,
-        message: String(error.message ?? "Provider stream ended without substantive output"),
+        message: code === "TRANSPORT" && /^\s*terminated\s*$/i.test(rawMessage)
+          ? `Provider connection dropped mid-stream (${rawMessage.trim()})`
+          : rawMessage,
         ...(Number.isInteger(error.status) ? { status: error.status } : {}),
         ...(typeof error.providerRetryAfterMs === "number" && Number.isFinite(error.providerRetryAfterMs)
           ? { providerRetryAfterMs: error.providerRetryAfterMs }
           : {}),
       },
     },
+  };
+}
+
+export function resolveFallbackModelMetadata(provider, model) {
+  const id = String(model ?? "").toLowerCase();
+  let contextWindow = 131072;
+  let maxTokens = 8192;
+  if (id.includes("gemini")) {
+    contextWindow = 1048576;
+    maxTokens = 16384;
+  } else if (id.includes("claude-sonnet-4") || id.includes("claude-4")) {
+    contextWindow = 1000000;
+    maxTokens = 16384;
+  } else if (id.includes("claude")) {
+    contextWindow = 200000;
+    maxTokens = 8192;
+  } else if (id.includes("grok-4")) {
+    contextWindow = 256000;
+    maxTokens = 8192;
+  } else if (id.includes("qwen")) {
+    contextWindow = 262144;
+    maxTokens = 8192;
+  } else if (id.includes("glm-5")) {
+    contextWindow = 204800;
+    maxTokens = 8192;
+  } else if (id.includes("deepseek-v4") || id.includes("deepseek-v3") || id.includes("deepseek-r1")) {
+    contextWindow = 200000;
+    maxTokens = 8192;
+  } else if (id.includes("gpt-") || id.includes("codex-") || provider === "openai-codex") {
+    contextWindow = 200000;
+    maxTokens = 8192;
+  } else if (provider === "commandcode" || provider === "hermes") {
+    contextWindow = 1000000;
+    maxTokens = 16384;
+  } else if (provider === "openrouter-free") {
+    if (id === "openrouter/free" || id === "free") {
+      contextWindow = 200000;
+      maxTokens = 16384;
+    } else if (id.includes("crouton") || id.includes("inkling")) {
+      contextWindow = 1048576;
+      maxTokens = 16384;
+    } else if (id.includes("nemotron-3.5-super") || id.includes("nemotron-3.5-lightning") || id.includes("nemotron-3-ultra")) {
+      contextWindow = 1000000;
+      maxTokens = 16384;
+    } else if (id.includes("dots-3")) {
+      contextWindow = 512000;
+      maxTokens = 16384;
+    } else if (id.includes("lfm-2.5")) {
+      contextWindow = 65536;
+      maxTokens = 8192;
+    } else {
+      contextWindow = 262144;
+      maxTokens = 16384;
+    }
+  }
+  return {
+    provider,
+    id: model,
+    name: model,
+    context: { contextWindow },
+    defaultMaxTokens: maxTokens,
   };
 }
 
@@ -195,16 +498,33 @@ function retryFinishFromThrownError(error) {
  * keeping the bridge structural lets the local page and unit tests run without
  * installing DSH into Dockyard's own workspace.
  */
-export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsResolver = null } = {}) {
+export function createDockyardLlmAdapter({
+  runtime,
+  providerIds,
+  attachmentsResolver = null,
+  catalogCachePath = null,
+  onCatalogChanged = null,
+} = {}) {
   if (!runtime) throw new ValidationError("Dockyard runtime is required");
   const owned = [...(providerIds ?? runtime.listProviderIds?.() ?? [])];
   if (owned.length === 0) throw new ValidationError("At least one Dockyard provider is required");
   const catalogPromises = new Map();
-  const catalogCache = new Map();
+  const catalogCache = catalogCachePath ? loadDiskCatalogCache(catalogCachePath) : new Map();
   const STREAM_CATALOG_REFRESH_MS = 60_000;
 
   async function ensureRuntimeReady() {
     if (typeof runtime.init === "function") await runtime.init();
+  }
+
+  /**
+   * The model list only needs the account pools and injected routes, which the
+   * runtime builds before it auto-provisions free accounts. Provisioning talks
+   * to the provider, so waiting for it here would delay the picker for as long
+   * as that round-trip takes. Generation still awaits the full init.
+   */
+  async function ensurePreparedForListing() {
+    if (typeof runtime.whenPrepared === "function") await runtime.whenPrepared();
+    else await ensureRuntimeReady();
   }
 
   function abortedCallerError(signal) {
@@ -237,41 +557,89 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
     });
   }
 
-  async function providerCatalog(provider, signal) {
-    // The catalog is provider-scoped shared state. Binding the single
-    // in-flight fetch to the FIRST caller's AbortSignal meant one cancelled
-    // request killed the catalog for everyone else while later callers'
-    // signals were silently ignored. Fetch without a caller signal instead;
-    // each caller races its own signal against the shared result.
-    let promise = catalogPromises.get(provider);
+  /**
+   * The account a provider would serve with. Catalogs are per account: a paid
+   * tier and a free one expose different model lists, so caching them per
+   * provider made switching accounts look like it changed nothing.
+   */
+  function modelSignature(catalog) {
+    const ids = Array.isArray(catalog?.models) ? catalog.models.map((model) => model?.id).filter(Boolean) : [];
+    return ids.sort().join("\n");
+  }
+
+  function catalogAccountId(provider) {
+    try {
+      return runtime.getDefaultAccountId?.(provider) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function catalogKey(provider) {
+    const accountId = catalogAccountId(provider);
+    return accountId ? `${provider}::${accountId}` : provider;
+  }
+
+  async function providerCatalog(provider, signal, { force = false } = {}) {
+    if (!force) {
+      const cached = cachedProviderCatalog(provider);
+      if (cached) return cached;
+    }
+    const key = catalogKey(provider);
+    let promise = catalogPromises.get(key);
     if (!promise) {
+      const accountId = catalogAccountId(provider);
       promise = Promise.resolve()
-        .then(() => runtime.getCatalog(provider, {}))
+        .then(() => runtime.getCatalog(provider, { force, ...(accountId ? { accountId } : {}) }))
         .then((catalog) => {
-          catalogCache.set(provider, { value: catalog, fetchedAt: Date.now() });
+          if (Array.isArray(catalog?.models) && catalog.models.length > 0) {
+            const previous = catalogCache.get(key)?.value;
+            catalogCache.set(key, { value: catalog, fetchedAt: Date.now(), version: CATALOG_CACHE_VERSION });
+            saveDiskCatalogCache(catalogCachePath, catalogCache);
+            // Tell the host only when the set changed: an unchanged re-read used
+            // to re-list models in DSH's picker forever.
+            if (previous && modelSignature(previous) !== modelSignature(catalog)) {
+              try {
+                onCatalogChanged?.(provider);
+              } catch {
+                // A host that is not listening must never break discovery.
+              }
+            }
+          }
           return catalog;
         })
         .finally(() => {
-          if (catalogPromises.get(provider) === promise) catalogPromises.delete(provider);
+          if (catalogPromises.get(key) === promise) catalogPromises.delete(key);
         });
-      catalogPromises.set(provider, promise);
+      catalogPromises.set(key, promise);
     }
     return raceCallerSignal(promise, signal);
   }
 
   function cachedProviderCatalog(provider) {
-    const entry = catalogCache.get(provider);
+    const key = catalogKey(provider);
+    let entry = catalogCache.get(key);
+    if (!entry) {
+      // Entries written by an older build are keyed by provider alone; adopt one
+      // rather than treating the upgrade as a cold cache.
+      const legacy = catalogCache.get(provider);
+      if (legacy) {
+        catalogCache.set(key, { ...legacy, fetchedAt: 0, version: CATALOG_CACHE_VERSION });
+        entry = catalogCache.get(key);
+      }
+    }
     if (!entry) return null;
-    if (Date.now() - entry.fetchedAt >= STREAM_CATALOG_REFRESH_MS && !catalogPromises.has(provider)) {
+    if (Date.now() - entry.fetchedAt >= STREAM_CATALOG_REFRESH_MS && !catalogPromises.has(key)) {
       // Refresh metadata opportunistically, but never put model generation
       // behind a provider's CLI/remote catalog endpoint.
-      void providerCatalog(provider).catch(() => {});
+      void providerCatalog(provider, undefined, { force: true }).catch(() => {});
     }
     return entry.value;
   }
 
   function warmProviderCatalog(provider) {
-    if (!catalogCache.has(provider) && !catalogPromises.has(provider)) {
+    const key = catalogKey(provider);
+    if (!catalogCache.has(key) && !catalogPromises.has(key)) {
       // A cold catalog is advisory for generation. The selected model is
       // already known by DSH, so discovery can finish after the request starts.
       void providerCatalog(provider).catch(() => {});
@@ -279,13 +647,7 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
   }
 
   function fastResolveModel(provider, model) {
-    const isGemini = typeof model === "string" && model.toLowerCase().includes("gemini");
-    const fallback = {
-      provider,
-      id: model,
-      name: model,
-      ...(isGemini ? { context: { contextWindow: 1048576 }, defaultMaxTokens: 65536 } : {}),
-    };
+    const fallback = resolveFallbackModelMetadata(provider, model);
     const catalog = cachedProviderCatalog(provider);
     if (!catalog) {
       warmProviderCatalog(provider);
@@ -304,23 +666,49 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
       return undefined;
     },
 
+    imageRequestPricing(_provider, _model) {
+      return undefined;
+    },
+
+    imageRequestTarget(_provider, _model, image) {
+      return {
+        width: image?.width ?? 0,
+        height: image?.height ?? 0,
+        maxBytes: image?.bytes ?? 0,
+      };
+    },
+
     async listModels(provider, signal) {
-      await ensureRuntimeReady();
+      await ensurePreparedForListing();
       if (!providerHasConnectedAccount(runtime, provider)) return [];
-      const catalog = await providerCatalog(provider, signal);
-      return providerCatalogModels(provider, catalog);
+      const cached = cachedProviderCatalog(provider);
+      const catalog = cached ?? await providerCatalog(provider, signal);
+      const allModels = providerCatalogModels(provider, catalog);
+      // The directory lists the account that would serve a request, so its
+      // own selection applies (per-account selections fall back to the
+      // provider-wide one when an account was never configured).
+      const servingAccountId = typeof runtime.getDefaultAccountId === "function"
+        ? runtime.getDefaultAccountId(provider)
+        : null;
+      const enabled = runtime.getModelSelection?.(provider, servingAccountId);
+      // A saved id that this catalog no longer serves must not filter the
+      // directory down to nothing (see reconcileModelSelection).
+      const reconciled = reconcileModelSelection(enabled, allModels);
+      if (Array.isArray(reconciled)) {
+        const set = new Set(reconciled);
+        return allModels.filter((entry) => set.has(entry.id));
+      }
+      return allModels;
     },
 
     async resolveModel(provider, model, signal) {
-      await ensureRuntimeReady();
-      const isGemini = typeof model === "string" && model.toLowerCase().includes("gemini");
-      const fallback = {
-        provider,
-        id: model,
-        name: model,
-        ...(isGemini ? { context: { contextWindow: 1048576 }, defaultMaxTokens: 65536 } : {}),
-      };
+      await ensurePreparedForListing();
+      const fallback = resolveFallbackModelMetadata(provider, model);
       if (!providerHasConnectedAccount(runtime, provider)) return fallback;
+      const cached = cachedProviderCatalog(provider);
+      if (cached) {
+        return providerCatalogModels(provider, cached).find((entry) => entry.id === model) ?? fallback;
+      }
       const catalog = await providerCatalog(provider, signal);
       return providerCatalogModels(provider, catalog).find((entry) => entry.id === model) ?? fallback;
     },
@@ -338,7 +726,15 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
     },
 
     async *stream(options) {
-      await ensureRuntimeReady();
+      // The pools and routes are ready after the prepared phase; waiting for a
+      // provider round-trip there would sit in front of the first token. Fall
+      // back to the full init only when the account itself is still missing.
+      if (typeof runtime.whenPrepared === "function") {
+        await runtime.whenPrepared();
+        if (!providerHasConnectedAccount(runtime, options.provider)) await ensureRuntimeReady();
+      } else {
+        await ensureRuntimeReady();
+      }
       if (!providerHasConnectedAccount(runtime, options.provider)) {
         throw new ValidationError(`Provider ${options.provider} has no connected Dockyard account`);
       }
@@ -364,7 +760,15 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
               ? { modelContext: { ...(model.context ?? {}), maxTokens: model.defaultMaxTokens } }
               : {}),
           }
-        : options;
+        : { ...options };
+      if (options.purpose === "compaction") {
+        // Strip heavy reasoning effort during compaction so summarization runs swiftly
+        // without timing out or spending minutes in chain-of-thought exploration.
+        request.purpose = "compaction";
+        request.reasoningEffort = "minimal";
+        request.reasoning_effort = "minimal";
+        request.thinking = false;
+      }
       const attachments = typeof attachmentsResolver === "function"
         ? attachmentsResolver()
         : undefined;
@@ -375,23 +779,31 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
         ...(options.signal ? { signal: options.signal } : {}),
         ...(attachments ? { attachments } : {}),
       });
-      let emittedChunk = false;
+      let emittedDurableOutput = false;
       try {
         for await (const chunk of stream) {
-          emittedChunk = true;
+          if (chunkCarriesDurableOutput(chunk)) emittedDurableOutput = true;
           yield normalizeTransportFailure(chunk);
         }
       } catch (error) {
         // dsh-route buffers structural chunks before yielding them, so its
         // EMPTY_STREAM_OUTPUT marker reaches this boundary with no output
         // already committed. If another provider throws the same marker after
-        // forwarding a chunk, rethrow it to avoid replaying tool side effects.
-        if (!emittedChunk) {
+        // forwarding durable output, rethrow it to avoid replaying tool side
+        // effects or duplicating text.
+        if (!emittedDurableOutput || isContextOverflowError(error)) {
           const retryFinish = retryFinishFromThrownError(error);
           if (retryFinish) {
             yield retryFinish;
             return;
           }
+        }
+        // Health-carrying failures are reported even after partial output: the
+        // turn still fails, but the account pool must learn the account is spent.
+        const healthFailure = healthFailureFromThrownError(error);
+        if (healthFailure) {
+          yield healthFailure;
+          return;
         }
         throw error;
       }
@@ -399,6 +811,16 @@ export function createDockyardLlmAdapter({ runtime, providerIds, attachmentsReso
 
     providers() {
       return [...owned];
+    },
+
+    invalidateCatalog(provider) {
+      if (provider) {
+        catalogCache.delete(provider);
+        catalogPromises.delete(provider);
+      } else {
+        catalogCache.clear();
+        catalogPromises.clear();
+      }
     },
   };
 }

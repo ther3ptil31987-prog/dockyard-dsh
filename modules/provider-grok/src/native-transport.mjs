@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 
 import {
+  guardEmptyCompletion,
   fetchNativeResponse,
   finishReason,
   nativeProviderError,
@@ -8,6 +9,7 @@ import {
   parseToolArguments,
   readSseEvents,
   resolveImageData,
+  sanitizeToolCallId,
   textFromContent,
   validateNativeEndpoint,
 } from "../../../packages/providers/src/native-transport.mjs";
@@ -43,18 +45,17 @@ async function openAiContent(content, attachments) {
       blocks.push({ type: "text", text: `[Tool Result ${part.toolCallId ?? part.id ?? ""}]\n${textFromContent(part.content ?? part.output ?? part.result ?? part.text)}` });
       continue;
     }
-    const call = toolCallPart(part);
-    if (call) {
-      blocks.push({ type: "text", text: `[Tool Call ${call.name ?? call.function?.name ?? "tool"}] ${JSON.stringify(parseToolArguments(call.arguments ?? call.input ?? call.function?.arguments))}` });
-      continue;
-    }
+    // A tool call is sent as a real `tool_calls` entry by buildGrokMessages.
+    // Flattening it into "[Tool Call name] {...}" text as well taught the model
+    // to imitate that literal format and print it instead of calling a tool.
+    if (toolCallPart(part)) continue;
     const text = textFromContent(part);
     if (text) blocks.push({ type: "text", text });
   }
   return blocks;
 }
 
-async function buildGrokMessages(request, attachments) {
+export async function buildGrokMessages(request, attachments) {
   const result = [];
   if (typeof request.system === "string" && request.system.length > 0) {
     result.push({ role: "system", content: request.system });
@@ -64,7 +65,7 @@ async function buildGrokMessages(request, attachments) {
     if (role === "tool") {
       result.push({
         role: "tool",
-        tool_call_id: firstString(message.toolCallId, message.tool_call_id, message.id, "tool-result"),
+        tool_call_id: sanitizeToolCallId(firstString(message.toolCallId, message.tool_call_id, message.id, "tool-result")),
         content: textFromContent(message.content ?? message.text ?? message.output ?? message.result),
       });
       continue;
@@ -74,7 +75,7 @@ async function buildGrokMessages(request, attachments) {
       .map(toolCallPart)
       .filter(Boolean)
       .map((call, index) => ({
-        id: firstString(call.id, call.toolCallId, call.tool_call_id, `tool-${index}`),
+        id: sanitizeToolCallId(firstString(call.id, call.toolCallId, call.tool_call_id, `tool-${index}`)),
         type: "function",
         function: {
           name: firstString(call.name, call.function?.name, "tool"),
@@ -117,7 +118,7 @@ export async function buildGrokRequest(request = {}, context = {}) {
   if (request.temperature !== undefined) body.temperature = request.temperature;
   const maxTokens = request.maxTokens ?? request.modelContext?.maxTokens;
   if (Number.isInteger(maxTokens) && maxTokens > 0) body.max_tokens = maxTokens;
-  if (request.reasoningEffort) body.reasoning_effort = request.reasoningEffort;
+  if (request.reasoningEffort && request.purpose !== "compaction") body.reasoning_effort = request.reasoningEffort;
   const tools = buildGrokTools(request.tools);
   if (tools) body.tools = tools;
   return body;
@@ -267,7 +268,7 @@ export function createGrokNativeExecutor({
     return streamGrokResponse(response);
   };
   executor.nativeTransport = "xai-chat-completions";
-  return executor;
+  return guardEmptyCompletion(executor, { providerId: PROVIDER_ID });
 }
 
 export const grokNativeTransportConstants = Object.freeze({

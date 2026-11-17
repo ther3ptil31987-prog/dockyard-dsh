@@ -13,6 +13,7 @@ import { createCursorNativeExecutor } from "../modules/provider-cursor/src/index
 import { bytesField, encodeAgentRunRequest, frameConnectMessage, stringField } from "../modules/provider-cursor/src/native-protocol.mjs";
 import {
   fetchNativeResponse,
+  guardEmptyCompletion,
   nativeProviderError,
   readSseEvents,
   validateNativeEndpoint,
@@ -98,6 +99,31 @@ test("native auth classification distinguishes token budgets from invalid creden
   const invalidKey = nativeProviderError("test", "API key not valid. Please pass a valid API key.");
   assert.equal(budget.authExpired, false);
   assert.equal(invalidKey.authExpired, true);
+});
+
+test("native quota classification recognizes a prepaid credit floor rejection", () => {
+  // Command Code answers HTTP 400 (not 429) once the account balance is under
+  // its floor; without this mapping the account stays "healthy" and keeps being
+  // selected, and the user only sees an opaque UNKNOWN failure.
+  const error = nativeProviderError(
+    "commandcode",
+    "You have insufficient credits to make this request. Please purchase more credits to continue using the service.",
+    { status: 400, code: "BAD_REQUEST" },
+  );
+  assert.equal(error.quotaExhausted, true);
+  assert.equal(error.status, 400);
+  assert.match(error.message, /额度或上游资源已耗尽/);
+  assert.match(error.upstreamMessage, /insufficient credits/);
+});
+
+test("native quota classification ignores ordinary validation failures", () => {
+  const validation = nativeProviderError("commandcode", "Validation error: Invalid UUID at \"threadId\"", {
+    status: 400,
+    code: "BAD_REQUEST",
+  });
+  assert.equal(validation.quotaExhausted, false);
+  const tokenBudget = nativeProviderError("test", "Invalid token count in image tile");
+  assert.equal(tokenBudget.quotaExhausted, false);
 });
 
 test("Claude native transport posts Anthropic Messages and streams the first text delta", async () => {
@@ -308,102 +334,54 @@ test("Antigravity Gemini 3 history sanitizes native unsigned functionCall parts"
   ]);
 });
 
-test("Antigravity Gemini 3 history echoes thought signatures on functionCall parts", async () => {
+test("Antigravity renders signed tool calls as text instead of echoing a signature", async () => {
+  // Signatures cannot survive the host's tool-call blocks, so replaying one is
+  // eventually rejected as "Corrupted thought signature". Tool history is text.
   const native = await buildAntigravityRequest({
-    model: "gemini-3-flash",
+    model: "gemini-3.7-flash",
     messages: [
-      { role: "user", content: "check status" },
+      { role: "user", content: "read lints" },
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", id: "call-1", name: "read_lints", arguments: { paths: ["app.js"] }, thought_signature: "sig-1" }],
+      },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "call-1", name: "read_lints", content: "[]" }] },
+    ],
+  });
+  const serialized = JSON.stringify(native.contents);
+  assert.equal(serialized.includes("functionCall"), false);
+  assert.equal(serialized.includes("thoughtSignature"), false);
+  assert.equal(serialized.includes("thought_signature"), false);
+  assert.ok(serialized.includes("read_lints"), "the call is still described, as text");
+});
+
+
+test("Antigravity never puts a signature inside a functionCall", async () => {
+  const native = await buildAntigravityRequest({
+    model: "gemini-3.7-flash",
+    messages: [
       {
         role: "assistant",
         content: [
           {
             type: "tool-call",
-            id: "call-signed-1",
-            name: "read_lints",
-            arguments: { paths: ["app.js"] },
-            thoughtSignature: "sig-abc",
+            id: "call-2",
+            name: "bash",
+            arguments: '{"command":"ls"}',
+            thought_signature: "sig-2",
+            functionCall: { name: "bash", args: { command: "ls" }, thoughtSignature: "sig-2" },
           },
-        ],
-      },
-      {
-        role: "tool",
-        content: [
-          { type: "tool-result", toolCallId: "call-signed-1", name: "read_lints", content: "[]" },
         ],
       },
     ],
   });
-  assert.deepEqual(native.contents, [
-    { role: "user", parts: [{ text: "check status" }] },
-    {
-      role: "model",
-      parts: [{
-        functionCall: {
-          name: "read_lints",
-          args: { paths: ["app.js"] },
-        },
-        thoughtSignature: "sig-abc",
-        thought_signature: "sig-abc",
-      }],
-    },
-    {
-      role: "user",
-      parts: [{ functionResponse: { name: "read_lints", response: { name: "read_lints", content: "[]" } } }],
-    },
-  ]);
+  const serialized = JSON.stringify(native.contents);
+  assert.equal(serialized.includes("thoughtSignature"), false);
+  assert.equal(serialized.includes("thought_signature"), false);
 });
 
-test("Antigravity Gemini 3 history strips thought signatures from inside functionCall", async () => {
-  const native = await buildAntigravityRequest({
-    model: "gemini-3.8-flash",
-    messages: [
-      { role: "user", content: "check status" },
-      {
-        role: "assistant",
-        content: [
-          {
-            type: "tool-call",
-            id: "call-nested-1",
-            name: "read_lints",
-            arguments: { paths: ["app.js"] },
-            functionCall: {
-              name: "read_lints",
-              args: { paths: ["app.js"] },
-              thoughtSignature: "sig-nested",
-              thought_signature: "sig-nested",
-            },
-          },
-        ],
-      },
-      {
-        role: "tool",
-        content: [
-          { type: "tool-result", toolCallId: "call-nested-1", name: "read_lints", content: "[]" },
-        ],
-      },
-    ],
-  });
-  assert.deepEqual(native.contents, [
-    { role: "user", parts: [{ text: "check status" }] },
-    {
-      role: "model",
-      parts: [{
-        functionCall: {
-          name: "read_lints",
-          args: { paths: ["app.js"] },
-        },
-        thoughtSignature: "sig-nested",
-        thought_signature: "sig-nested",
-      }],
-    },
-    {
-      role: "user",
-      parts: [{ functionResponse: { name: "read_lints", response: { name: "read_lints", content: "[]" } } }],
-    },
-  ]);
-});
 
-test("Antigravity non-Gemini-3 history keeps unsigned functionCall parts", async () => {
+test("Antigravity renders unsigned tool calls as text on every model", async () => {
   const native = await buildAntigravityRequest({
     model: "gemini-2.5-flash",
     messages: [
@@ -416,11 +394,12 @@ test("Antigravity non-Gemini-3 history keeps unsigned functionCall parts", async
     ],
   });
   assert.deepEqual(native.contents, [
-    { role: "model", parts: [{ functionCall: { name: "read_lints", args: { paths: ["app.js"] } } }] },
+    { role: "model", parts: [{ text: '[tool call: read_lints] {"paths":["app.js"]}' }] },
   ]);
 });
 
-test("Antigravity Gemini 3 history supports mixed assistant content and tool_calls preserving signatures", async () => {
+
+test("Antigravity keeps mixed assistant text and renders its tool calls as text", async () => {
   const native = await buildAntigravityRequest({
     model: "gemini-3.7-flash",
     messages: [
@@ -438,24 +417,14 @@ test("Antigravity Gemini 3 history supports mixed assistant content and tool_cal
       },
     ],
   });
-  assert.deepEqual(native.contents, [
-    { role: "user", parts: [{ text: "run command" }] },
-    {
-      role: "model",
-      parts: [
-        { text: "Checking git status" },
-        {
-          functionCall: {
-            name: "default_api:bash",
-            args: { command: "git status" },
-          },
-          thoughtSignature: "sig-bash-1",
-          thought_signature: "sig-bash-1",
-        },
-      ],
-    },
-  ]);
+  const parts = native.contents[1].parts;
+  assert.equal(parts.length, 2);
+  assert.deepEqual(parts[0], { text: "Checking git status" });
+  assert.equal(typeof parts[1].text, "string", "the call is rendered as text");
+  assert.ok(parts[1].text.includes("default_api:bash"));
+  assert.equal(JSON.stringify(native.contents).includes("thoughtSignature"), false);
 });
+
 
 test("Antigravity sliding window auto-compacts long history beyond safe threshold", async () => {
   const longMessages = [
@@ -493,44 +462,27 @@ test("Antigravity sliding window preserves static prefix and milestone across tu
   assert.equal(turn50.contents[2].parts[0].text, turn51.contents[2].parts[0].text);
 });
 
-test("Antigravity Gemini 3 surgical sanitization preserves signed call prefix when an unsigned call appears", async () => {
+test("Antigravity keeps the sliding window and never re-signs a call", async () => {
+  // The old behaviour tried to keep a signed prefix structural while flattening
+  // later unsigned calls, which is what produced "Corrupted thought signature"
+  // once the signature no longer matched. Nothing is signed any more.
   const native = await buildAntigravityRequest({
-    model: "gemini-3.8-flash",
+    model: "gemini-3.7-flash",
+    maxMessages: 40,
     messages: [
-      { role: "user", content: "first step" },
-      {
-        role: "assistant",
-        content: [
-          { type: "tool-call", id: "call-signed", name: "read_file", arguments: { path: "a.js" }, thought_signature: "sig-valid" },
-        ],
-      },
-      {
-        role: "tool",
-        content: [{ type: "tool-result", toolCallId: "call-signed", name: "read_file", content: "ok" }],
-      },
-      { role: "user", content: "second step" },
-      {
-        role: "assistant",
-        parts: [
-          { functionCall: { name: "unsigned_tool", args: {} } },
-        ],
-      },
-      {
-        role: "user",
-        parts: [
-          { functionResponse: { name: "unsigned_tool", response: { content: "res" } } },
-        ],
-      },
+      { role: "user", content: "start" },
+      { role: "assistant", content: [{ type: "tool-call", id: "call-signed", name: "bash", arguments: '{"command":"ls"}', thought_signature: "sig-good" }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "call-signed", name: "bash", content: "a.js" }] },
+      { role: "assistant", content: [{ type: "tool-call", id: "call-unsigned", name: "bash", arguments: '{"command":"pwd"}' }] },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "call-unsigned", name: "bash", content: "/tmp" }] },
     ],
   });
-  // The first signed tool call MUST remain a native functionCall with thoughtSignature intact
-  assert.equal(native.contents[1].parts[0].thoughtSignature, "sig-valid");
-  assert.equal(native.contents[1].parts[0].functionCall.name, "read_file");
-  assert.equal(native.contents[2].parts[0].functionResponse.name, "read_file");
-  // Only the second unsigned tool call is converted to text
-  assert.match(native.contents[4].parts[0].text, /\[tool call: unsigned_tool\]/);
-  assert.match(native.contents[5].parts[0].text, /\[tool result: unsigned_tool\]/);
+  const serialized = JSON.stringify(native.contents);
+  assert.equal(serialized.includes("functionCall"), false);
+  assert.equal(serialized.includes("thoughtSignature"), false);
+  assert.ok(serialized.includes("a.js") && serialized.includes("/tmp"), "both results survive as text");
 });
+
 
 test("Antigravity native transport attaches thought signatures to streamed tool calls", async () => {
   const executor = createAntigravityNativeExecutor({
@@ -642,7 +594,8 @@ test("Antigravity native transport resolves a Code Assist project per selected a
   }));
   const projectCall = calls.find((call) => call.url.includes("loadCodeAssist"));
   const streamCall = calls.find((call) => call.url.includes("streamGenerateContent"));
-  assert.deepEqual(JSON.parse(projectCall.init.body), {});
+  // The enquiry carries the Antigravity identity, as the official client sends it.
+  assert.deepEqual(JSON.parse(projectCall.init.body), { metadata: { ideType: "ANTIGRAVITY" } });
   assert.equal(projectCall.init.headers.authorization, "Bearer google-token");
   assert.equal(JSON.parse(streamCall.init.body).project, "account-project");
 });
@@ -666,7 +619,11 @@ test("native HTTP errors keep the upstream rate-limit signal without leaking raw
   });
 
   await assert.rejects(
-    () => executor({ request: { model: "gemini-3.7-flash-medium", messages: [{ role: "user", content: "Hi" }] } }),
+    // Executors are guarded generators now, so the failure surfaces while the
+    // stream is drained rather than at call time.
+    async () => {
+      for await (const event of executor({ request: { model: "gemini-3.7-flash-medium", messages: [{ role: "user", content: "Hi" }] } })) void event;
+    },
     (error) => {
       assert.equal(error.status, 429);
       assert.equal(error.code, 429);
@@ -1147,4 +1104,307 @@ test("CLI abort reports ABORT_ERR semantics", { skip: process.platform === "win3
       return true;
     },
   );
+});
+
+test("Grok sends a tool call once, as tool_calls, never as marker text", async () => {
+  const { buildGrokMessages } = await import("../modules/provider-grok/src/native-transport.mjs");
+  // Flattening the call into "[Tool Call clock] {...}" text as well taught the
+  // model to imitate that format and print it instead of calling a tool.
+  const messages = await buildGrokMessages({
+    messages: [
+      { role: "user", content: "check the time" },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "One moment." },
+          { type: "tool-call", id: "c1", name: "clock", arguments: { tz: "UTC" } },
+        ],
+      },
+      { role: "tool", toolCallId: "c1", content: "12:00" },
+    ],
+  });
+  const assistant = messages.find((message) => message.role === "assistant");
+  assert.equal(assistant.content, "One moment.");
+  assert.equal(assistant.tool_calls.length, 1);
+  assert.equal(assistant.tool_calls[0].function.name, "clock");
+  assert.doesNotMatch(JSON.stringify(assistant.content), /\[Tool Call/);
+
+  const onlyCall = await buildGrokMessages({
+    messages: [{ role: "assistant", content: [{ type: "tool-call", id: "c1", name: "clock", arguments: {} }] }],
+  });
+  const second = onlyCall.find((message) => message.role === "assistant");
+  assert.equal(second.content, "");
+  assert.equal(second.tool_calls.length, 1);
+});
+
+// A completion that only thinks is not an answer. The guard wraps every native
+// executor, so these cases describe what all providers now do.
+function guardedFixture(attempts) {
+  let calls = 0;
+  const seen = [];
+  const guarded = guardEmptyCompletion(async function* (envelope = {}) {
+    const attempt = attempts[Math.min(calls, attempts.length - 1)];
+    calls += 1;
+    seen.push(envelope?.request?.messages ?? []);
+    yield* attempt;
+  }, { providerId: "fixture" });
+  return { guarded, get calls() { return calls; }, seen };
+}
+
+const thinkingOnly = [
+  { type: "block-start", index: 1, blockType: "reasoning" },
+  { type: "reasoning-delta", index: 1, text: "thinking..." },
+  { type: "block-end", index: 1, block: { type: "reasoning", text: "thinking..." } },
+  { type: "finish", reason: { kind: "stop" } },
+];
+
+const realAnswer = [
+  { type: "block-start", index: 1, blockType: "text" },
+  { type: "text-delta", index: 1, text: "answer" },
+  { type: "block-end", index: 1, block: { type: "text", text: "answer" } },
+  { type: "finish", reason: { kind: "stop" } },
+];
+
+test("the guard retries a thinking-only completion instead of ending the turn", async () => {
+  const fixture = guardedFixture([thinkingOnly, realAnswer]);
+  const events = [];
+  for await (const event of fixture.guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) {
+    events.push(event);
+  }
+  assert.equal(fixture.calls, 2);
+  // The abandoned attempt must not leak into the host stream: the answer
+  // attempt carries no reasoning at all, so nothing should arrive.
+  assert.equal(events.filter((event) => event.type === "reasoning-delta").length, 0);
+  assert.deepEqual(events.filter((event) => event.type === "text-delta").map((event) => event.text), ["answer"]);
+  // The retry explains what went wrong.
+  assert.ok(fixture.seen[1].some((message) => String(message.content).includes("只写了思考过程")));
+});
+
+test("the guard fails loudly when every attempt only thinks", async () => {
+  const fixture = guardedFixture([thinkingOnly]);
+  await assert.rejects(
+    async () => {
+      for await (const event of fixture.guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) void event;
+    },
+    (error) => {
+      assert.equal(error.code, "EMPTY_COMPLETION");
+      return true;
+    },
+  );
+  assert.equal(fixture.calls, 3, "the first attempt plus two retries");
+});
+
+test("the guard leaves a real answer untouched", async () => {
+  const fixture = guardedFixture([realAnswer]);
+  const events = [];
+  for await (const event of fixture.guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) {
+    events.push(event);
+  }
+  assert.equal(fixture.calls, 1);
+  assert.equal(events.at(-1).type, "finish");
+});
+
+test("the guard can wrap an async function that resolves to a stream", async () => {
+  let calls = 0;
+  const guarded = guardEmptyCompletion(async (envelope = {}) => {
+    calls += 1;
+    return (async function* () {
+      yield* calls === 1 ? thinkingOnly : realAnswer;
+    })();
+  }, { providerId: "fixture" });
+
+  const events = [];
+  for await (const event of guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) {
+    events.push(event);
+  }
+  assert.equal(calls, 2);
+  assert.deepEqual(events.filter((event) => event.type === "text-delta").map((event) => event.text), ["answer"]);
+});
+
+test("Antigravity renders Claude tool history as text so Anthropic cannot reject it", async () => {
+  // Two upstream rules broke long Claude histories: a tool_use needs its
+  // tool_result in the very next message, and echoed thought signatures must
+  // still be valid. Signatures are not kept in the host's blocks, so a result
+  // that could not be paired left an orphan tool_use ("tool_use ids were found
+  // without tool_result blocks") and stale signatures failed with "Corrupted
+  // thought signature". Text history sidesteps both.
+  const built = await buildAntigravityRequest({
+    model: "claude-sonnet-5-5-medium",
+    messages: [
+      { role: "user", content: [{ type: "text", text: "read the file" }] },
+      {
+        role: "assistant",
+        content: [{ type: "tool-call", id: "toolu_vrtx_1", name: "read_file", arguments: "{\"path\":\"/tmp/a\"}", thought_signature: "sig-1" }],
+      },
+      { role: "tool", content: [{ type: "tool-result", toolCallId: "toolu_vrtx_1", name: "read_file", content: "hello" }] },
+    ],
+  });
+
+  const allParts = built.contents.flatMap((content) => content.parts);
+  assert.equal(allParts.some((part) => part.functionCall || part.function_call), false, "no functionCall parts for Claude");
+  assert.equal(allParts.some((part) => part.functionResponse || part.function_response), false, "no functionResponse parts for Claude");
+  assert.equal(allParts.some((part) => part.thoughtSignature || part.thought_signature), false, "no signatures are echoed");
+  // The information is still there, just as text.
+  assert.ok(allParts.some((part) => String(part.text ?? "").includes("read_file")));
+  assert.ok(allParts.some((part) => String(part.text ?? "").includes("hello")));
+});
+
+test("Antigravity lets a Claude turn call tools natively even though history is text", async () => {
+  const built = await buildAntigravityRequest({
+    model: "claude-sonnet-5-5-medium",
+    messages: [{ role: "user", content: "go" }],
+    tools: [{ name: "read_file", description: "read", parameters: { type: "object", properties: { path: { type: "string" } } } }],
+  });
+  assert.ok(Array.isArray(built.tools) && built.tools.length > 0, "the current turn still offers native tools");
+});
+
+test("the guard retries a thinking-only completion instead of ending the turn", async () => {
+  const fixture = guardedFixture([thinkingOnly, realAnswer]);
+  const events = [];
+  for await (const event of fixture.guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) {
+    events.push(event);
+  }
+  assert.equal(fixture.calls, 2);
+  // The abandoned attempt must not leak into the host stream: the answer
+  // attempt carries no reasoning at all, so nothing should arrive.
+  assert.equal(events.filter((event) => event.type === "reasoning-delta").length, 0);
+  assert.deepEqual(events.filter((event) => event.type === "text-delta").map((event) => event.text), ["answer"]);
+  // The retry explains what went wrong.
+  assert.ok(fixture.seen[1].some((message) => String(message.content).includes("只写了思考过程")));
+});
+
+test("the guard fails loudly when every attempt only thinks", async () => {
+  const fixture = guardedFixture([thinkingOnly]);
+  await assert.rejects(
+    async () => {
+      for await (const event of fixture.guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) void event;
+    },
+    (error) => {
+      assert.equal(error.code, "EMPTY_COMPLETION");
+      return true;
+    },
+  );
+  assert.equal(fixture.calls, 3, "the first attempt plus two retries");
+});
+
+test("the guard leaves a real answer untouched", async () => {
+  const fixture = guardedFixture([realAnswer]);
+  const events = [];
+  for await (const event of fixture.guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) {
+    events.push(event);
+  }
+  assert.equal(fixture.calls, 1);
+  assert.equal(events.at(-1).type, "finish");
+});
+
+test("the guard can wrap an async function that resolves to a stream", async () => {
+  let calls = 0;
+  const guarded = guardEmptyCompletion(async (envelope = {}) => {
+    calls += 1;
+    return (async function* () {
+      yield* calls === 1 ? thinkingOnly : realAnswer;
+    })();
+  }, { providerId: "fixture" });
+
+  const events = [];
+  for await (const event of guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) {
+    events.push(event);
+  }
+  assert.equal(calls, 2);
+  assert.deepEqual(events.filter((event) => event.type === "text-delta").map((event) => event.text), ["answer"]);
+});
+
+test("Antigravity sends a long Claude tool history with nothing Anthropic can reject", async () => {
+  // The bodies the upstream validator rejected: orphan tool_use blocks and
+  // stale thought signatures. Capture the real outgoing JSON to prove neither
+  // can appear any more.
+  let sentBody = null;
+  const executor = createAntigravityNativeExecutor({
+    endpoint: "https://gemini.test/v1internal:streamGenerateContent?alt=sse",
+    project: "fixture-project",
+    tokenResolver: () => ({ token: "google-token", kind: "oauth" }),
+    fetchImpl: async (_url, init) => {
+      sentBody = JSON.parse(init.body);
+      const sse = `data: ${JSON.stringify({ response: { candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }] } })}\n\n`;
+      return new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(sse));
+          controller.close();
+        },
+      }), { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    },
+  });
+
+  const messages = [{ role: "user", content: "start" }];
+  for (let i = 0; i < 12; i += 1) {
+    messages.push({
+      role: "assistant",
+      content: [{ type: "tool-call", id: `toolu_vrtx_${i}`, name: "bash", arguments: `{"command":"echo ${i}"}`, thought_signature: `sig-${i}` }],
+    });
+    messages.push({ role: "tool", content: [{ type: "tool-result", toolCallId: `toolu_vrtx_${i}`, name: "bash", content: String(i) }] });
+  }
+  messages.push({ role: "user", content: "answer" });
+
+  for await (const _ of executor({
+    request: { model: "claude-sonnet-5-5-medium", messages, maxTokens: 64 },
+    credential: { access: "token" },
+  })) void _;
+
+  assert.ok(sentBody, "the request body should have been sent");
+  const serialized = JSON.stringify(sentBody);
+  assert.equal(serialized.includes("functionCall"), false, "no tool_use-equivalent parts");
+  assert.equal(serialized.includes("functionResponse"), false, "no tool_result-equivalent parts");
+  assert.equal(serialized.includes("thoughtSignature"), false, "no signatures are echoed");
+});
+
+test("streamReasoning releases thinking immediately instead of holding it", async () => {
+  // A thinking model that spends 20s before answering looks hung when the
+  // reasoning is buffered. With the option on, the host sees it as it arrives.
+  const order = [];
+  const guarded = guardEmptyCompletion(async function* () {
+    yield { type: "block-start", index: 0, blockType: "reasoning" };
+    yield { type: "reasoning-delta", index: 0, text: "想一想" };
+    yield { type: "block-end", index: 0, block: { type: "reasoning", text: "想一想" } };
+    yield { type: "block-start", index: 1, blockType: "text" };
+    yield { type: "text-delta", index: 1, text: "答案" };
+    yield { type: "block-end", index: 1, block: { type: "text", text: "答案" } };
+    yield { type: "finish", reason: { kind: "stop" } };
+  }, { providerId: "fixture", streamReasoning: true });
+
+  for await (const event of guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) {
+    if (event.type === "reasoning-delta" || event.type === "text-delta") order.push(event.type);
+  }
+  assert.deepEqual(order, ["reasoning-delta", "text-delta"]);
+});
+
+test("a thinking-only attempt fails instead of retrying once reasoning was shown", async () => {
+  // Retrying after the reasoning already reached the host would duplicate the
+  // thinking blocks, so this path fails loudly rather than recovering.
+  let attempts = 0;
+  const guarded = guardEmptyCompletion(async function* () {
+    attempts += 1;
+    yield { type: "block-start", index: 0, blockType: "reasoning" };
+    yield { type: "reasoning-delta", index: 0, text: "只有思考" };
+    yield { type: "block-end", index: 0, block: { type: "reasoning", text: "只有思考" } };
+    yield { type: "finish", reason: { kind: "stop" } };
+  }, { providerId: "fixture", streamReasoning: true });
+
+  await assert.rejects(async () => {
+    for await (const event of guarded({ request: { messages: [{ role: "user", content: "hi" }] } })) void event;
+  }, (error) => {
+    assert.equal(error.code, "EMPTY_COMPLETION");
+    return true;
+  });
+  assert.equal(attempts, 1, "no retry once reasoning was streamed");
+});
+
+test("the empty-completion guard keeps transport metadata on the wrapper", async () => {
+  // Drivers branch on executor.nativeTransport to decide whether to attach a
+  // credential. Dropping it here sent Grok down the CLI path with no token.
+  const executor = async function* () {
+    yield { type: "finish", reason: { kind: "stop" } };
+  };
+  executor.nativeTransport = "xai-chat-completions";
+  const guarded = guardEmptyCompletion(executor, { providerId: "fixture" });
+  assert.equal(guarded.nativeTransport, "xai-chat-completions");
 });

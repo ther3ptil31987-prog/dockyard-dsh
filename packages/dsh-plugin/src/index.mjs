@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PROVIDER_BEHAVIOR_CAPABILITIES } from "../../core/src/contracts.mjs";
 import { createDefaultProviderEntries, DockyardRuntime } from "../../runtime/src/dockyard-runtime.mjs";
-import { createDockyardLlmAdapter } from "../../dsh-bridge/src/index.mjs";
+import { createDockyardLlmAdapter, defaultCatalogCachePath } from "../../dsh-bridge/src/index.mjs";
 import {
   createAntigravityCatalogLoader,
   createAntigravityNativeExecutor,
@@ -10,7 +11,12 @@ import {
 } from "../../../modules/provider-antigravity/src/index.mjs";
 import { createGrokCatalogLoader, createGrokNativeExecutor } from "../../../modules/provider-grok/src/index.mjs";
 import { createClaudeCatalogLoader, createClaudeNativeExecutor } from "../../../modules/provider-claude/src/index.mjs";
+import { createAgentRouterCatalogLoader, createAgentRouterNativeExecutor } from "../../../modules/provider-agentrouter/src/index.mjs";
 import { createCursorCatalogLoader, createCursorNativeExecutor } from "../../../modules/provider-cursor/src/index.mjs";
+import { createOpencodeCatalogLoader, createOpencodeNativeExecutor } from "../../../modules/provider-opencode/src/index.mjs";
+import { createCommandCodeCatalogLoader, createCommandCodeNativeExecutor } from "../../../modules/provider-commandcode/src/index.mjs";
+import { createHermesCatalogLoader, createHermesNativeExecutor } from "../../../modules/provider-hermes/src/index.mjs";
+import { createOpenRouterFreeCatalogLoader, createOpenRouterFreeNativeExecutor } from "../../../modules/provider-openrouter-free/src/index.mjs";
 import { runCliCommand } from "../../providers/src/cli-agent-transport.mjs";
 import {
   createCodexDshCatalogLoader,
@@ -20,6 +26,10 @@ import {
 import { createDockyardCommand, DockyardDshService } from "./dockyard-service.mjs";
 import { createDockyardCredentialStore } from "./dockyard-credential-store.mjs";
 import { NativeKeyPoolHost } from "./native-key-pool-host.mjs";
+import { patchFakeIpVpnSupport } from "./vpn-ssrf-patch.mjs";
+
+// Ensure VPN / Fake-IP SSRF protection is patched as early as possible
+patchFakeIpVpnSupport();
 
 export const name = "dockyard-dsh";
 export const inject = ["llm", "commands", "credentials", "settings", "webServer"];
@@ -41,7 +51,11 @@ function contextLogger(ctx, name) {
  * their provider-neutral routes to DSH, so adding a future provider does not
  * require another branch in the DSH integration.
  */
+// How often parked accounts are retried, in milliseconds.
+const RELIST_INTERVAL_MS = 5 * 60 * 1000;
+
 export function apply(ctx, config = {}) {
+  patchFakeIpVpnSupport();
   const runtimeOptions = { ...(config.runtimeOptions ?? {}) };
   let catalogWarmers = [];
   if (!config.runtime && !runtimeOptions.providers) {
@@ -69,18 +83,32 @@ export function apply(ctx, config = {}) {
       }),
       claude: runtimeOptions.requestExecutors?.claude ?? createClaudeNativeExecutor(runtimeOptions.claude ?? {}),
       cursor: runtimeOptions.requestExecutors?.cursor ?? createCursorNativeExecutor(runtimeOptions.cursor ?? {}),
+      opencode: runtimeOptions.requestExecutors?.opencode ?? createOpencodeNativeExecutor(runtimeOptions.opencode ?? {}),
       grok: runtimeOptions.requestExecutors?.grok ?? createGrokNativeExecutor(runtimeOptions.grok ?? {}),
+      commandcode: runtimeOptions.requestExecutors?.commandcode ?? createCommandCodeNativeExecutor(runtimeOptions.commandcode ?? {}),
+      hermes: runtimeOptions.requestExecutors?.hermes ?? createHermesNativeExecutor(runtimeOptions.hermes ?? {}),
+      "openrouter-free": runtimeOptions.requestExecutors?.["openrouter-free"] ?? createOpenRouterFreeNativeExecutor(runtimeOptions["openrouter-free"] ?? runtimeOptions.openrouterFree ?? {}),
+      agentrouter: runtimeOptions.requestExecutors?.agentrouter ?? createAgentRouterNativeExecutor(runtimeOptions.agentrouter ?? {}),
     };
     runtimeOptions.catalogLoaders = {
       ...(runtimeOptions.catalogLoaders ?? {}),
-      "openai-codex": createCodexDshCatalogLoader(),
+      "openai-codex": runtimeOptions.catalogLoaders?.["openai-codex"] ?? createCodexDshCatalogLoader(runtimeOptions.codex ?? {}),
       antigravity: antigravityCatalogLoader,
       grok: runtimeOptions.catalogLoaders?.grok ?? createGrokCatalogLoader({
         ...(runtimeOptions.grok ?? {}),
         commandRunner: runtimeOptions.grok?.commandRunner ?? runCliCommand,
+        registryLoader: modelRegistryLoader,
       }),
       claude: runtimeOptions.catalogLoaders?.claude ?? createClaudeCatalogLoader({ registryLoader: modelRegistryLoader }),
       cursor: runtimeOptions.catalogLoaders?.cursor ?? createCursorCatalogLoader(runtimeOptions.cursor ?? {}),
+      opencode: runtimeOptions.catalogLoaders?.opencode ?? createOpencodeCatalogLoader({
+        ...(runtimeOptions.opencode ?? {}),
+        registryLoader: modelRegistryLoader,
+      }),
+      commandcode: runtimeOptions.catalogLoaders?.commandcode ?? createCommandCodeCatalogLoader(runtimeOptions.commandcode ?? {}),
+      hermes: runtimeOptions.catalogLoaders?.hermes ?? createHermesCatalogLoader(runtimeOptions.hermes ?? {}),
+      "openrouter-free": runtimeOptions.catalogLoaders?.["openrouter-free"] ?? createOpenRouterFreeCatalogLoader(runtimeOptions["openrouter-free"] ?? runtimeOptions.openrouterFree ?? {}),
+      agentrouter: runtimeOptions.catalogLoaders?.agentrouter ?? createAgentRouterCatalogLoader(runtimeOptions.agentrouter ?? {}),
     };
     runtimeOptions.providers = createDefaultProviderEntries(runtimeOptions);
     catalogWarmers = Object.entries(runtimeOptions.catalogLoaders)
@@ -88,22 +116,28 @@ export function apply(ctx, config = {}) {
   }
   const runtime = config.runtime ?? new DockyardRuntime(runtimeOptions);
 
-  // Initialize the account pools before warming only providers that are
-  // actually connected. This keeps optional vendors out of the model menu and
-  // prevents their official session sources from competing for startup/network time.
-  if (catalogWarmers.length > 0 && typeof runtime.init === "function") {
+  // Catalogs load when a provider is opened, never at boot: eagerly fetching
+  // every connected subscription's model list made startup wait on the network
+  // for vendors the user is not looking at. DOCKYARD_WARM_CATALOGS=1 restores
+  // the old eager behaviour for diagnostics.
+  const warmCatalogs = String(process.env.DOCKYARD_WARM_CATALOGS ?? "") === "1";
+  if (warmCatalogs && catalogWarmers.length > 0 && typeof runtime.init === "function") {
     void (async () => {
       await runtime.init();
       const providers = runtime.snapshot?.().providers ?? [];
-      const connected = new Set(
-        providers
-          .filter((provider) => Array.isArray(provider.accounts) && provider.accounts.length > 0)
-          .map((provider) => provider.providerId),
-      );
       const accountsByProvider = new Map(providers.map((provider) => [provider.providerId, provider.accounts ?? []]));
       await Promise.all(catalogWarmers
-        .filter(([providerId]) => providerId === "openai-codex" || connected.has(providerId))
-        .map(([providerId, loader]) => loader({ accounts: accountsByProvider.get(providerId) ?? [] }).catch(() => null)));
+        .filter(([providerId]) => runtime.hasProviderCapability?.(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.CATALOG_WARMUP))
+        .map(([providerId, loader]) => loader({ accounts: accountsByProvider.get(providerId) ?? [], secretStore: runtime.secretStore }).catch(() => null)));
+
+      // An account whose authorization expired is parked, not deleted: an
+      // official client may have rotated the token in the meantime. Retry those
+      // on a slow timer so the panel is not the only thing that revives one.
+      const relistTimer = setInterval(() => {
+        Promise.resolve(runtime.relistExpiredAccounts?.() ?? null).catch(() => {});
+      }, RELIST_INTERVAL_MS);
+      relistTimer.unref?.();
+      if (typeof ctx.on === "function") ctx.on("dispose", () => clearInterval(relistTimer));
     })().catch((error) => {
       contextLogger(ctx, "dockyard-dsh").warn?.(error);
     });
@@ -112,6 +146,15 @@ export function apply(ctx, config = {}) {
   const adapter = createDockyardLlmAdapter({
     runtime,
     providerIds: config.providers ?? runtime.listProviderIds(),
+    // Only announced when a catalog's model set really changed, so the picker
+    // is not re-listed on every poll.
+    onCatalogChanged: () => {
+      try {
+        ctx.emit("llm/adapters-updated");
+        ctx.llm?.emitAdaptersUpdated?.();
+      } catch {}
+    },
+    catalogCachePath: config.catalogCachePath ?? defaultCatalogCachePath(),
     // Resolve this only when a request is actually streamed. The attachment
     // service is installed by DSH's base profile after plugin composition;
     // reading it while the plugin graph is being composed breaks boot.
@@ -144,10 +187,18 @@ export function apply(ctx, config = {}) {
   // The runtime is the source of truth for DSH itself. Commands, the native
   // control surface, and generation all consume this same in-process runtime.
   if (typeof runtime.init === "function") {
+    const notifyAdaptersUpdated = () => {
+      try {
+        adapter.invalidateCatalog?.();
+        ctx.emit("llm/adapters-updated");
+        ctx.llm?.emitAdaptersUpdated?.();
+      } catch {}
+    };
     const service = config.service ?? new DockyardDshService({
       runtime,
       ...(config.serviceOptions ?? {}),
       logger: config.serviceOptions?.logger ?? contextLogger(ctx, "dockyard-dsh"),
+      notifyAdaptersUpdated,
     });
     if (typeof ctx.provide === "function") ctx.provide("dockyard", service);
     // Cordis only makes the injected credential/settings services available

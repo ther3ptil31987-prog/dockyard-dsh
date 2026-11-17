@@ -1,0 +1,536 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Dockyard DSH Marketplace",
+    "zh": "Dockyard DSH 插件市场"
+  },
+  "description": {
+    "en": "Official plugin marketplace catalog for Dockyard DSH and multi-account provider bundles.",
+    "zh": "Dockyard DSH 官方插件市场索引，提供多账号与原生 Provider 扩展组合包。"
+  },
+  "metadata": {
+    "categories": {
+      "providers": {
+        "title": {
+          "en": "Providers & Models",
+          "zh": "模型与 Provider"
+        }
+      }
+    },
+    "labels": {
+      "macos": {
+        "title": {
+          "en": "macOS",
+          "zh": "macOS 原生"
+        }
+      },
+      "windows": {
+        "title": {
+          "en": "Windows",
+          "zh": "Windows 原生"
+        }
+      },
+      "oauth": {
+        "title": {
+          "en": "Official OAuth",
+          "zh": "官方 OAuth"
+        }
+      },
+      "account-pool": {
+        "title": {
+          "en": "Account Pool",
+          "zh": "多账号池"
+        }
+      },
+      "free-tier": {
+        "title": {
+          "en": "Free Models",
+          "zh": "免费模型"
+        }
+      }
+    },
+    "sortKeys": {}
+  },
+  "plugins": [
+    {
+      "name": "@dockyard-dsh/plugin",
+      "title": {
+        "en": "Dockyard DSH",
+        "zh": "Dockyard 账号池与原生 Provider"
+      },
+      "description": {
+        "en": "Native account-pool and provider plugin for DeepSeek Harness — Codex, Antigravity, Grok, Claude, Cursor, Command Code, Hermes, OpenRouter Free and AgentRouter, on macOS and Windows.",
+        "zh": "DeepSeek Harness 原生账号池与官方 Provider 插件——支持 Codex、Antigravity、Grok、Claude、Cursor、Command Code、Hermes、OpenRouter Free 与 AgentRouter，macOS 与 Windows 均可使用。"
+      },
+      "icon": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAIAAABMXPacAAASFklEQVR42u1deVDU5f//7MnCbstyKCwMfT1BCAcP8BonUDJrM7XGDAG1wascscNowErKtDiijEotREdtKrJB0yyPxisdU5BF0FxxXcADlF3lWASWPT6/P97TM58+e/DZZT/s0u95/eGsn12efZ7363097+dYgsDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMBwO3j/P4fN4XD4fD6HwyFJEiuB60LkcDjYAgZU4lwul8vlgtxBeTkcDo/HY67LQJtUKl22bNmwYcOuXbuGVZmR3N2l7FwulyCINWvWkCRpNBqnT59OEASP5zFF5HtKprQn1vqLPIzFYoF3JRLJyJEjY2JiYmJiwsPDfX19fXx8mpub6+vrjx07VlNT06cdcDgci8Xi6+ubkZFhNpv5fL5CoTh79ux/ORIgv4FgU5etP4beCgwMVCgUxcXFSqWyra2NtIXff/+dz+fbpPZfDpfHIwhi4cKFRqPRbDaTJFlZWSkSif4b4cS2QG2+K5FI/P39pVKpv7+/j4+PzcH7+fklJSVt2bKlpqbGZDIhWVssFpPJZDabTSaT0WgkSbKsrGzixIn2vsvaqn744QeSJE0mk8Vi6e3tnTt3LkEQAoHAXWN3MPCBcEHw3chviESi4cOHh4WFRUZGRkdHS6XSxx57LDQ0VCgUWiwWLper1+u7uro6Ojru3r2rVquvX7/O5XKTk5MTExMnT54Meg0NIgmCIpMkyeFw8vLyPvzww56eHibSJ0lSJpNFR0ej/woEgo0bN9bW1tbX1/N4PCC4n5rXzxb6q/XwWiqVzpgx4+OPPz5z5syDBw9IxrBYLEAewGw2m81m6hP0nCTJQ4cOCYVChlEU+hYbG6vVauGLUDvnz5+fNGkS+pjL7gj+cOLEiQwtkhXRjx49Ojs7+9KlSz09PTTJmv6BmQITBUjQ9uSOmiJJsqura/LkycxzGPjYk08+CUKncfngwYMPPvggNjaWypZTEoD209LSOjo69Hr9888/P9ApTVBQ0BtvvNHY2Gitv/ZE2acFOCCgpaVFLpdTuWdCwNy5c1ELNA5IktTpdPn5+aGhoX1ywKEAJiIg/c7OTmjqo48+GgjpQy85HE56evqVK1eY6G//AS13dnaOHz+eOQHwsfT0dGsC4Ami4fLly7NmzbLmwEFmweVyly5dCtLv7e21WCwDQQB0ZejQobt27UIulT25W+vsJ598QhAEVHUYWsDTTz/tmFrIuNra2l566SWqhtHkLhQKRSKRr69vSEjICy+88Ouvv0JKhojMyclhNwvicrkWi2Xy5Mnbt28fN24cfPeARR7IYV577bWjR4+eOnUKIieT9KO3txfSJweu3GQy+fv7b9q06fz583fu3OHxeCDTwMDAKVOmzJw5MyIiQiaTCQQCLpcrl8sjIyPRdBK13NLSwmYJiccjCGLatGng8al5+oABTE2j0SxatIjaK8f2OmbMmHv37tn0QlTAiEpKSkCgUqn07bffrq6upgVwqkVCg/Bvb2+vQqFg1/N4VvpUDiwWy44dO/73v/85jpxIlFVVVdTA60CgKpVKLBbHx8efOXOGyg0tkaNyCa/r6+tHjRrFrvQbGho8K32a6lVVVU2dOtVxmRqef/XVV30SANDr9bm5ufX19cwzC2j2yJEjaArJStStra31BunTEpjW1taVK1faq/chH7VgwQKG+a51nsrQKN966y22Zlsikej777/3HunTZGQymTZs2GCPA3gil8tv3rxJzTuZyJS5OTY1NQ0bNowt9V+9erVTGjHwIYEkyfz8fJC1dUiAJ++99x4bowCl/Pbbb/usy7oo/djY2KamJqeUwlPuqKCgAMpENEFAwhoWFnbr1i33cgA+7f79+3FxcS4UM/r2P76+vgcOHPBa9bcuZpSVlQUEBNic0BIEsXjxYjfO2NEMbs2aNe6XPjSXkZExkHNdt3iDb775BlVsrEuHpaWl7gpm0MjPP/8sFArduID6r/S5srLS+9XfWiULCgpscsDhcAICAvbv348WZ/r5RcePHw8JCWHL+y9btox52uBtvig/P996fgDjCggIKC8vdzbbsa7fHT16FKTPSjGGw+GA9/e21NOpmGxdU4PXEokkLy8PakQMOaCKXq/XFxYW2gw2bsP48eMfPnzozckPEzsADmhiQjbxyiuvtLa2OpidWRceDAbDyZMnk5KSHEz93IOsrCx73h90Aa26eCdDqGOlpaUymYxWtkMx8/DhwwyDXFNTU0lJSXJysq+vbz9XMfuuVwgEgmeffZa2c4a6RE77btRLm+96arEaaMjIyIiIiFi+fPmtW7d4PB5VXYYOHTpy5Eh7LZAkqVar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",
+      "author": "AITabby",
+      "homepage": "https://github.com/AITabby/dockyard-dsh",
+      "repository": {
+        "url": "https://github.com/AITabby/dockyard-dsh"
+      },
+      "metadata": {
+        "category": "providers",
+        "labels": [
+          "macos",
+          "windows",
+          "oauth",
+          "account-pool",
+          "free-tier"
+        ],
+        "keywords": [
+          "dsh",
+          "deepseek-harness",
+          "dockyard",
+          "account-pool",
+          "providers",
+          "codex",
+          "antigravity",
+          "grok",
+          "claude",
+          "cursor",
+          "commandcode",
+          "command-code",
+          "hermes",
+          "nous",
+          "free-tier",
+          "agentrouter"
+        ],
+        "sortKeys": {}
+      },
+      "versions": [
+        {
+          "version": "0.1.41",
+          "publishTimestamp": 1794852704,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "32348b0e69541d67d7199609797ecb9a368c3a06"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.40",
+          "publishTimestamp": 1794840691,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "85a8a59c9bb035bc046ee0cff9645b5801490eca"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.39",
+          "publishTimestamp": 1794825319,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "e062beafd031c28433e242bcae3e5842155684c9"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.38",
+          "publishTimestamp": 1794823803,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "d74e6b863ad994bede1f407f24497b8d30b0f551"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.37",
+          "publishTimestamp": 1794823028,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "8fe6a0675f90f72c08704a299e27fffcd70d71b2"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.36",
+          "publishTimestamp": 1794685562,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "8637dca82b70b37045c72a76f6d281e3d00747b3"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.35",
+          "publishTimestamp": 1794558223,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "704fd9e1ee21139b4bb9dba0e466e1548b708af4"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.34",
+          "publishTimestamp": 1794466766,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "120b9dc1d00ccc5a567a7e785748a2636a7b0583"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.33",
+          "publishTimestamp": 1794192598,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "b5d4d511f6d3fa1cb2e7c7ff265ac4d284ffc019"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.32",
+          "publishTimestamp": 1794144750,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "dc0c09be91984a28ab35106c2e1d3c4e6015861a"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.31",
+          "publishTimestamp": 1794144248,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "102b13c321894fe18a036509f93eaaf0e3771b04"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.30",
+          "publishTimestamp": 1794143148,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "373582a4341897cf134bc48b6429cd916a9fc240"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.29",
+          "publishTimestamp": 1794140952,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "aaa203c808cc72b412764cb3a22639c16b37fdac"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.28",
+          "publishTimestamp": 1794043352,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "642e974f4dd09a6c85114464b0d6604d00b8401e"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.27",
+          "publishTimestamp": 1794040160,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "ebf3c3b44bbbf05c027f0405b0f4bf0ee170beda"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.26",
+          "publishTimestamp": 1794030302,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "426a4923387e558db92781699e16f2697054146b"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.25",
+          "publishTimestamp": 1793976223,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "0ae37da8b8b6c5401ec9e9961d4ddde3b4f81c55"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.24",
+          "publishTimestamp": 1793975079,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "78b05a0d7bbc3cdb787110bdf103c69348256d88"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.23",
+          "publishTimestamp": 1793973526,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "414a742e9333271a0f591858951f8af81d612854"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.22",
+          "publishTimestamp": 1793970828,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "dfea0a9f8e79d309e505ab53c987076a7f635f3e"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.21",
+          "publishTimestamp": 1793951130,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "3344f18ea5892a4fc888dde26986b4c57b8a0b8d"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.20",
+          "publishTimestamp": 1793916000,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "c37d664ed1c13c3fac1866fd311beab3a2b235ed"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.19",
+          "publishTimestamp": 1793914032,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "9f3ec105f660076887540a47e9b343844970be9e"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.18",
+          "publishTimestamp": 1793875877,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "0946249978067bea1bed0c0ae350512d9e1ab762"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.16",
+          "publishTimestamp": 1793776800,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "28ef85a09aff6cd0f2077e2681f8b8f2d6f06408"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.15",
+          "publishTimestamp": 1793629755,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "c4a6d34ce823d6f93b0539e1b58b2b73114330d5"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.11",
+          "publishTimestamp": 1793547152,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "62e4ee0e4f6891e3788a4872b67e057e0c41253f"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.10",
+          "publishTimestamp": 1793545916,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "c7db0594420fe491445a243fab3ff4ec49393951"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.9",
+          "publishTimestamp": 1793545166,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "bbd66239eedba9e9e4e29dd09c1ba4b2e99f8fcd"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.8",
+          "publishTimestamp": 1793514548,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "ff39f7c643b6e22c6a791884b76ddfd37eefcaf2"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.7",
+          "publishTimestamp": 1793475442,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "8c49cdac8a3fad23e829d938e992f7d40dcf6a59"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.6",
+          "publishTimestamp": 1793421167,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "32af138d0d60027fe1d518f4f722c9b7b35c853b"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.5",
+          "publishTimestamp": 1793417682,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "8279e8d41803262b3e3403a55fb2ba1ffa656f56"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.4",
+          "publishTimestamp": 1793416447,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "ee5136e45c38cdd271813e2d680c26df053cb1e1"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.2",
+          "publishTimestamp": 1793187638,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "f9af7d99dc501d0489200d16cd1dcd177016fce3"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        },
+        {
+          "version": "0.1.1",
+          "publishTimestamp": 1787059239,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/AITabby/dockyard-dsh",
+            "commit": "f2d4642bbe4815d8b7d0c4cdc95652c8ff62477e"
+          },
+          "engines": {
+            "dsh": ">=0.1.0"
+          }
+        }
+      ]
+    }
+  ]
+}

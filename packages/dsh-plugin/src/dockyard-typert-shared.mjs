@@ -32,6 +32,8 @@ const authorizationCodeRequest = z.object({
 const addRequest = z.object({
   providerId: z.string().min(1),
   candidateId: z.string().min(1).optional(),
+  apiKey: z.string().min(1).optional(),
+  label: z.string().max(120).optional(),
 });
 
 const policyRequest = z.object({
@@ -81,6 +83,24 @@ const contextWindowSetRequest = contextWindowRequest.extend({
   value: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable(),
 });
 
+const modelSelectionRequest = z.object({
+  providerId: z.string().min(1),
+  // The model list is per account: omitted means the provider's default account.
+  accountId: z.string().min(1).optional(),
+});
+
+const modelSelectionSetRequest = z.object({
+  providerId: z.string().min(1),
+  enabledModelIds: z.array(z.string()).nullable(),
+  accountId: z.string().min(1).optional(),
+});
+
+const testModelConnectionRequest = z.object({
+  providerId: z.string().min(1),
+  modelId: z.string().min(1),
+  timeoutMs: z.number().int().positive().optional(),
+});
+
 function requestParameter(schema, name) {
   return {
     name: "request",
@@ -121,6 +141,9 @@ export const TYPERT_DESCRIPTORS = Object.freeze([
   descriptor("nativeKeySetPolicy", requestParameter(nativeKeyPolicyRequest, "DockyardNativeKeyPolicyRequest"), "DockyardNativeKeySetPolicy"),
   descriptor("getContextWindowOverride", requestParameter(contextWindowRequest, "DockyardContextWindowRequest"), "DockyardContextWindowOverride"),
   descriptor("setContextWindowOverride", requestParameter(contextWindowSetRequest, "DockyardContextWindowSetRequest"), "DockyardContextWindowOverride"),
+  descriptor("getModelSelection", requestParameter(modelSelectionRequest, "DockyardModelSelectionRequest"), "DockyardModelSelectionResult"),
+  descriptor("setModelSelection", requestParameter(modelSelectionSetRequest, "DockyardModelSelectionSetRequest"), "DockyardModelSelectionResult"),
+  descriptor("testModelConnection", requestParameter(testModelConnectionRequest, "DockyardTestModelConnectionRequest"), "DockyardTestModelConnectionResult"),
 ]);
 
 export const TYPERT_MODEL = Object.freeze({

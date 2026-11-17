@@ -8,6 +8,22 @@ importers:
 
   .:
     dependencies:
+      '@earendil-works/pi-ai':
+        specifier: ^0.82.1
+        version: 0.82.1(ws@8.21.3)(zod@4.4.3)
+      immer:
+        specifier: ^10.1.1
+        version: 10.2.0
+      ipaddr.js:
+        specifier: ^2.5.0
+        version: 2.5.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+      zustand:
+        specifier: ~4.4.7
+        version: 4.4.7(immer@10.2.0)(react@18.3.1)
+    devDependencies:
       '@deepseek-ai/dsh-api-remotes':
         specifier: ^0.1.7-alpha.2
         version: 0.1.7-alpha.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-scope@0.1.7-alpha.2(@deepseek-ai/cordis@4.0.4)(@deepseek-ai/dsh-invariants@0.1.7-alpha.2(@deepseek-ai/cordis@4.0.4)))
@@ -29,25 +45,12 @@ importers:
       '@deepseek-ai/dsh-typert-protocol':
         specifier: ^0.1.7-alpha.2
         version: 0.1.7-alpha.2(@deepseek-ai/cordis@4.0.4)
-      '@earendil-works/pi-ai':
-        specifier: ^0.82.1
-        version: 0.82.1(ws@8.21.3)(zod@4.4.3)
-      immer:
-        specifier: ^10.1.1
-        version: 10.2.0
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-      zustand:
-        specifier: ~4.4.7
-        version: 4.4.7(immer@10.2.0)(react@18.3.1)
-    devDependencies:
       esbuild:
         specifier: ^0.25.0
         version: 0.25.12
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
 
 packages:
 
@@ -669,6 +672,10 @@ packages:
 
   immer@10.2.0:
     resolution: {integrity: sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw==}
+
+  ipaddr.js@2.5.0:
+    resolution: {integrity: sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==}
+    engines: {node: '>= 10'}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -1526,6 +1533,8 @@ snapshots:
       - supports-color
 
   immer@10.2.0: {}
+
+  ipaddr.js@2.5.0: {}
 
   js-tokens@4.0.0: {}
 

@@ -53,7 +53,14 @@ export class DockyardRemoteService extends TypertRemoteService {
   }
 
   async add(request = {}) {
-    const result = await this.dockyard.add(request?.providerId ?? null, request?.candidateId ?? null);
+    const result = await this.dockyard.add(
+      request?.providerId ?? null,
+      request?.candidateId ?? null,
+      {
+        apiKey: request?.apiKey ?? null,
+        label: request?.label ?? "",
+      },
+    );
     return envelope(result, await this.dockyard.snapshot());
   }
 
@@ -130,6 +137,24 @@ export class DockyardRemoteService extends TypertRemoteService {
   async setContextWindowOverride(request = {}) {
     return this.dockyard.setContextWindowOverride(request, request.value);
   }
+
+  async getModelSelection(request = {}) {
+    return this.dockyard.getModelSelection(request.providerId, request.accountId ?? null);
+  }
+
+  async setModelSelection(request = {}) {
+    return this.dockyard.setModelSelection(
+      request.providerId,
+      request.enabledModelIds,
+      request.accountId ?? null,
+    );
+  }
+
+  async testModelConnection(request = {}) {
+    return this.dockyard.testModelConnection(request.providerId, request.modelId, {
+      timeoutMs: request.timeoutMs ?? 15_000,
+    });
+  }
 }
 
 function markRemoteMethods() {
@@ -138,6 +163,7 @@ function markRemoteMethods() {
     "snapshot", "refresh", "scan", "add", "login", "poll", "submitAuthorizationCode", "cancel", "setPolicy", "use", "removeAccount",
     "nativeKeyStatus", "nativeKeyRefresh", "nativeKeyRegister", "nativeKeyUnregister", "nativeKeySetPolicy",
     "getContextWindowOverride", "setContextWindowOverride",
+    "getModelSelection", "setModelSelection", "testModelConnection",
   ]) {
     let initializer;
     Remote(name)(undefined, {

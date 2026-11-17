@@ -1,9 +1,10 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
 
 import {
+  guardEmptyCompletion,
   cleanupNativeResponse,
   fetchNativeResponse,
   finishReason,
@@ -24,7 +25,11 @@ import {
 const PROVIDER_ID = "antigravity";
 const DEFAULT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
 const DEFAULT_QUOTA_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary";
-const DEFAULT_PROJECT_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
+// The account's tier and project are asked for on the product host; only
+// generation uses the daily host. Mixing the two was one reason the project
+// never resolved.
+const DEFAULT_PROJECT_ENDPOINT = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
+const DEFAULT_ONBOARD_ENDPOINT = "https://daily-cloudcode-pa.googleapis.com/v1internal:onboardUser";
 const MACOS_SECURITY_BIN = "/usr/bin/security";
 const AGY_KEYCHAIN_SERVICE = "gemini";
 const AGY_KEYCHAIN_ACCOUNT = "antigravity";
@@ -50,6 +55,157 @@ function detectAntigravityUserAgent() {
       if (version) return `antigravity/hub/${version} ${process.platform}/${process.arch}`;
     } catch {
       // CodexSplit omits User-Agent when the desktop bundle is unavailable.
+    }
+  }
+  return `antigravity/hub/2.29.0 ${process.platform}/${process.arch}`;
+}
+
+// Google client secrets are exactly "GOCSPX-" plus 28 characters. The bound
+// matters: binary string pools concatenate adjacent literals, so an open-ended
+// quantifier swallows the next literal ("...ZtsXhttps") and Google rejects the
+// pair with 401 invalid_client.
+const GOOGLE_CLIENT_SECRET_PATTERN = /GOCSPX-[A-Za-z0-9_-]{28}/g;
+const SCAN_CHUNK_BYTES = 8 * 1024 * 1024;
+const SCAN_OVERLAP_BYTES = 512;
+// The official builds ship the client secret the Antigravity OAuth client needs.
+// It is read from the copy installed on this machine — the repository never
+// carries it — and cached next to the other Dockyard state.
+function antigravityClientScanPaths({ env = process.env, home = homedir(), platform = process.platform } = {}) {
+  if (platform === "win32") {
+    // The desktop build keeps its sidecar under resources\bin; the CLI lands in
+    // the npm prefix or the user's .local\bin, the same places `agy` is found.
+    const localAppData = env.LOCALAPPDATA || join(home, "AppData", "Local");
+    const appData = env.APPDATA || join(home, "AppData", "Roaming");
+    return [
+      join(localAppData, "Programs", "Antigravity", "resources", "bin", "language_server.exe"),
+      join(localAppData, "Programs", "Antigravity", "resources", "bin", "language_server"),
+      join(appData, "npm", "agy.cmd"),
+      join(home, ".local", "bin", "agy.exe"),
+      join(home, ".local", "bin", "agy.cmd"),
+    ];
+  }
+  return [
+    "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+    join(home, "Applications/Antigravity.app/Contents/Resources/bin/language_server"),
+    join(home, ".local", "bin", "agy"),
+  ];
+}
+
+const ANTIGRAVITY_CLIENT_SCAN_PATHS = antigravityClientScanPaths();
+
+const scannedSecrets = new Map();
+
+/** Every Google client secret the locally installed official build ships. */
+export function scanAntigravityClientSecrets({ paths = null, env = process.env, home = homedir(), platform = process.platform } = {}) {
+  const resolved = Array.isArray(paths) ? paths : antigravityClientScanPaths({ env, home, platform });
+  const cacheKey = resolved.join("|");
+  const memoized = scannedSecrets.get(cacheKey);
+  if (memoized) return memoized;
+  const secrets = [];
+  for (const file of resolved) {
+    if (!existsSync(file)) continue;
+    let descriptor;
+    try {
+      descriptor = openSync(file, "r");
+      const buffer = Buffer.allocUnsafe(SCAN_CHUNK_BYTES);
+      let carry = "";
+      while (true) {
+        const bytes = readSync(descriptor, buffer, 0, SCAN_CHUNK_BYTES, null);
+        if (bytes <= 0) break;
+        const text = carry + buffer.subarray(0, bytes).toString("latin1");
+        for (const match of text.match(GOOGLE_CLIENT_SECRET_PATTERN) ?? []) {
+          if (!secrets.includes(match)) secrets.push(match);
+        }
+        carry = text.slice(-SCAN_OVERLAP_BYTES);
+      }
+    } catch {
+      // An unreadable bundle is not fatal: the operator can configure a client.
+    } finally {
+      if (descriptor !== undefined) {
+        try { closeSync(descriptor); } catch { /* already closed */ }
+      }
+    }
+    if (secrets.length > 0) break;
+  }
+  scannedSecrets.set(cacheKey, secrets);
+  return secrets;
+}
+
+function antigravityClientCachePath({ env = process.env, home = homedir() } = {}) {
+  const root = env.DOCKYARD_DSH_HOME || join(home, ".dockyard-dsh");
+  return join(root, "antigravity-oauth-client.json");
+}
+
+function readClientSecretCache(clientId, file) {
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    const secret = parsed?.clients?.[clientId];
+    return typeof secret === "string" && secret.startsWith("GOCSPX-") ? secret : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeClientSecretCache(clientId, file, secret) {
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    let parsed = {};
+    try { parsed = JSON.parse(readFileSync(file, "utf8")) ?? {}; } catch { parsed = {}; }
+    parsed.clients = { ...(parsed.clients ?? {}), [clientId]: secret };
+    writeFileSync(file, `${JSON.stringify(parsed, null, 2)}\n`, { mode: 0o600 });
+  } catch {
+    // Caching is an optimisation; a read-only home still works, just slower.
+  }
+}
+
+/**
+ * Pair `clientId` with the secret that belongs to it.
+ *
+ * The installed build ships several Google clients, and the string pool does not
+ * keep a secret next to its id. Rather than guess, each candidate secret is
+ * tried against Google's token endpoint with a throwaway authorization code: a
+ * matching pair answers `invalid_grant` (the code is bad), a mismatched pair
+ * answers `invalid_client`. The winner is cached locally.
+ *
+ * @returns {Promise<string | null>} The secret, or null when none matched.
+ */
+export async function resolveAntigravityClientSecret({
+  clientId,
+  env = process.env,
+  home = homedir(),
+  fetchImpl = fetch,
+  paths,
+  tokenUrl = "https://oauth2.googleapis.com/token",
+} = {}) {
+  if (!clientId) return null;
+  const cacheFile = antigravityClientCachePath({ env, home });
+  const cached = readClientSecretCache(clientId, cacheFile);
+  if (cached) return cached;
+
+  const candidates = scanAntigravityClientSecrets(paths ? { paths } : {});
+  for (const secret of candidates) {
+    let response;
+    try {
+      response = await fetchImpl(tokenUrl, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: secret,
+          code: "dockyard-client-probe",
+          grant_type: "authorization_code",
+          redirect_uri: "http://localhost",
+        }).toString(),
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch {
+      continue;
+    }
+    let body = {};
+    try { body = await response.json(); } catch { body = {}; }
+    if (body?.error === "invalid_grant") {
+      writeClientSecretCache(clientId, cacheFile, secret);
+      return secret;
     }
   }
   return null;
@@ -346,8 +502,9 @@ export function readAntigravityKeychainToken({ home = homedir() } = {}) {
     }
     return parsed;
   } catch {
-    // A locked or unavailable Keychain must fall through to the official file
-    // and eventually produce the normal "authorize again" diagnostic.
+    // Cache negative result too so a missing Keychain item does not repeatedly
+    // invoke `/usr/bin/security` on every poll or refresh.
+    lastKeychainReadTime = now;
     return null;
   }
 }
@@ -392,9 +549,257 @@ function projectIdFromLoadCodeAssist(value, depth = 0) {
   return null;
 }
 
+
+/**
+ * Provision a Code Assist project for an account the official client has never
+ * onboarded. Mirrors the client's own sequence — onboardUser for the tier the
+ * server advertises, then read the project out of the operation result. Every
+ * failure is non-fatal: the caller keeps its "no project" error.
+ */
+/**
+ * Provision a Code Assist project the way the official Antigravity client does:
+ * ask loadCodeAssist first, and when the account has no project yet, run
+ * onboardUser for the tier the server advertises and poll the long-running
+ * operation until it reports the project.
+ *
+ * The shapes here follow the official client rather than the Gemini CLI: the
+ * enquiry carries `metadata.ideType = ANTIGRAVITY`, onboarding sends
+ * `tier_id` with an `ide_*` metadata block and the node-client headers, and the
+ * operation is polled on the daily host.
+ */
+async function onboardCodeAssistProject({
+  metadata,
+  tierId,
+  base,
+  headers,
+  signal,
+  timeoutMs,
+  fetchImpl,
+}) {
+  const deadline = Date.now() + Math.min(timeoutMs, 20_000);
+  const pollDelayMs = 2_000;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (Date.now() > deadline) break;
+    const operation = await callCodeAssist(base, "onboardUser", {
+      tier_id: tierId,
+      metadata,
+    }, { headers, signal, timeoutMs, fetchImpl });
+    const project = projectIdFromLoadCodeAssist(operation);
+    if (project) return project;
+    if (operation?.done === true) return null;
+    await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
+  }
+  return null;
+}
+
+/** One v1internal POST, returning the parsed JSON body. */
+async function callCodeAssist(base, method, body, { headers, signal, timeoutMs, fetchImpl }) {
+  const response = await fetchNativeResponse(`${base}/v1internal:${method}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal,
+  }, { providerId: PROVIDER_ID, timeoutMs, fetchImpl });
+  try {
+    return typeof response.json === "function" ? await response.json() : JSON.parse(await response.text());
+  } finally {
+    cleanupNativeResponse(response);
+  }
+}
+
+/** Explain why no project came back, in terms of what the user can do. */
+function describeMissingProject(raw) {
+  const tiers = Array.isArray(raw?.allowedTiers) ? raw.allowedTiers.filter(Boolean) : [];
+  const ineligible = Array.isArray(raw?.ineligibleTiers) ? raw.ineligibleTiers.filter(Boolean) : [];
+  const needsOwnProject = tiers.some((tier) => tier?.userDefinedCloudaicompanionProject === true);
+  const reason = ineligible.find((tier) => typeof tier?.reasonMessage === "string" && tier.reasonMessage.trim());
+  if (needsOwnProject && reason) {
+    return `Antigravity 未返回 Code Assist 项目：${reason.reasonMessage.trim()}`;
+  }
+  if (needsOwnProject) {
+    return "Antigravity 未返回 Code Assist 项目：该账号的档位要求自带 Google Cloud 项目。";
+  }
+  if (reason) return `Antigravity 未返回 Code Assist 项目：${reason.reasonMessage.trim()}`;
+  return "Antigravity did not return a Code Assist project for the selected account";
+}
+
+/**
+ * Ask Code Assist which models *this account* has.
+ *
+ * The local CLI's `models` command answers for whoever the CLI is signed in as,
+ * so every dual-account setup showed the same list — switching accounts changed
+ * nothing. The account's own token against `v1internal:fetchAvailableModels`
+ * answers per account, which is what the picker needs.
+ *
+ * @returns {Promise<Array<{id: string, name: string, maxTokens: number|null, contextWindow: number|null}> | null>}
+ */
+export async function fetchAntigravityAvailableModels({
+  token,
+  project,
+  endpoint = process.env.DOCKYARD_ANTIGRAVITY_MODELS_ENDPOINT
+    || "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+  fetchImpl = fetch,
+  timeoutMs = 20_000,
+  signal,
+  userAgent = process.env.DOCKYARD_ANTIGRAVITY_USER_AGENT || detectAntigravityUserAgent(),
+} = {}) {
+  if (!token) return null;
+  const safeEndpoint = validateNativeEndpoint(endpoint, { providerId: PROVIDER_ID });
+  const headers = {
+    authorization: `Bearer ${token}`,
+    "content-type": "application/json",
+    accept: "application/json",
+  };
+  if (userAgent) headers["user-agent"] = userAgent;
+  const response = await fetchNativeResponse(safeEndpoint, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(project ? { project } : {}),
+    signal,
+  }, { providerId: PROVIDER_ID, timeoutMs, fetchImpl });
+  let raw;
+  try {
+    raw = typeof response.json === "function" ? await response.json() : JSON.parse(await response.text());
+  } finally {
+    cleanupNativeResponse(response);
+  }
+  return modelsFromFetchAvailableModels(raw);
+}
+
+/**
+ * Antigravity serves a tiered model as one row per reasoning tier
+ * (`<family>-low`, `<family>-high`, ...), while the official picker shows a
+ * single "Gemini 3.8 Flash" entry and lets the caller choose the tier. Collapse
+ * each family back into one row that carries the tiers as reasoning efforts, so
+ * the model list matches the official client and the tier is chosen in the UI.
+ * A family that only serves one tier keeps its own id (the tier is part of that
+ * model's name, e.g. "GPT-OSS 120B (Medium)").
+ */
+function antigravityModelTier(model) {
+  const id = typeof model?.id === "string" ? model.id : "";
+  const match = /^(.*)-(minimal|low|medium|high|xhigh|max)$/u.exec(id);
+  if (!match || !match[1]) return null;
+  return { familyId: match[1], tierId: match[2] };
+}
+
+function tierLabel(id) {
+  return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+/** "Gemini 3.8 Flash (High)" -> "Gemini 3.8 Flash"; ids without the suffix -> null. */
+function stripTierLabel(name) {
+  if (typeof name !== "string") return null;
+  const stripped = name.replace(/\s*\((minimal|low|medium|high|xhigh|max)\)\s*$/iu, "").trim();
+  return stripped && stripped !== name ? stripped : null;
+}
+
+export function collapseAntigravityTierFamilies(models, { defaultModelId = null } = {}) {
+  const rows = (Array.isArray(models) ? models : []).filter(
+    (model) => model && typeof model.id === "string" && model.id.length > 0,
+  );
+  const families = new Map();
+  for (const model of rows) {
+    const tier = antigravityModelTier(model);
+    if (!tier) continue;
+    const members = families.get(tier.familyId) ?? [];
+    members.push({ model, tierId: tier.tierId });
+    families.set(tier.familyId, members);
+  }
+
+  const collapsed = new Map();
+  for (const [familyId, members] of families) {
+    const tiers = [...new Set(members.map((member) => member.tierId))];
+    // One tier only: the id itself is the model, keep the provider's row.
+    if (tiers.length < 2) continue;
+    const preferred = members.find((member) => member.model.id === defaultModelId)
+      ?? members.find((member) => member.tierId === "medium")
+      ?? members[0];
+    const name = stripTierLabel(preferred.model.name)
+      ?? stripTierLabel(members[0].model.name)
+      ?? familyId;
+    const familyRow = {
+      ...preferred.model,
+      id: preferred.model.id,
+      name,
+      reasoning: {
+        efforts: tiers.map((tierId) => ({ id: tierId, name: tierLabel(tierId) })),
+        defaultEffort: preferred.tierId,
+      },
+    };
+    // The family is usable again as soon as one tier is served.
+    if (!members.every((member) => member.model.unavailable === true)) delete familyRow.unavailable;
+    collapsed.set(familyId, familyRow);
+  }
+  if (collapsed.size === 0) return rows;
+
+  const result = [];
+  const emitted = new Set();
+  for (const model of rows) {
+    const tier = antigravityModelTier(model);
+    if (!tier || !collapsed.has(tier.familyId)) {
+      result.push(model);
+      continue;
+    }
+    if (emitted.has(tier.familyId)) continue;
+    emitted.add(tier.familyId);
+    result.push(collapsed.get(tier.familyId));
+  }
+  return result;
+}
+
+/**
+ * Flatten fetchAvailableModels' map into catalog rows.
+ *
+ * The reply's `models` table is a superset of what the official client offers:
+ * it also carries editor-only rows (`chat_*` buffers, `tab_*` previews), image
+ * generators and legacy aliases whose `displayName` is borrowed from another
+ * model (so several ids render as the same label). `agentModelSorts` is the
+ * account's own model picker, so when it is present it decides both which rows
+ * are selectable and in what order; ids outside it are not agent models.
+ */
+export function modelsFromFetchAvailableModels(raw) {
+  const table = raw?.models;
+  if (!table || typeof table !== "object") return null;
+  const order = [];
+  for (const sort of Array.isArray(raw?.agentModelSorts) ? raw.agentModelSorts : []) {
+    for (const group of Array.isArray(sort?.groups) ? sort.groups : []) {
+      for (const id of Array.isArray(group?.modelIds) ? group.modelIds : []) {
+        if (typeof id === "string" && id.length > 0 && !order.includes(id)) order.push(id);
+      }
+    }
+  }
+  // Rows the account cannot use right now (an exhausted quota, a model the
+  // official client greys out as "Unavailable") stay in the list so the picker
+  // can show them, but they are never selectable.
+  const agentRows = Object.entries(table).filter(([id, info]) => (
+    typeof id === "string" && id.length > 0 && info && info.isInternal !== true
+  ));
+  const enabledRows = agentRows.filter(([, info]) => info.disabled !== true);
+  const picked = order.length > 0 ? agentRows.filter(([id]) => order.includes(id)) : enabledRows;
+  const entries = picked.length > 0 ? picked : enabledRows;
+  if (entries.length === 0) return null;
+  const models = entries.map(([id, info]) => ({
+    id,
+    name: typeof info.displayName === "string" && info.displayName.trim() ? info.displayName.trim() : id,
+    ...(info.disabled === true ? { unavailable: true } : {}),
+    ...(Number.isFinite(info.maxTokens) && info.maxTokens > 0 ? { contextWindow: info.maxTokens } : {}),
+    ...(Number.isFinite(info.maxOutputTokens) && info.maxOutputTokens > 0 ? { maxTokens: info.maxOutputTokens } : {}),
+    ...(info.supportsImages === true ? { inputModalities: ["text", "image"] } : {}),
+  }));
+  const rank = (id) => {
+    const index = order.indexOf(id);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  models.sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id));
+  return collapseAntigravityTierFamilies(models, {
+    defaultModelId: typeof raw?.defaultAgentModelId === "string" ? raw.defaultAgentModelId : null,
+  });
+}
+
 /** Resolve the Code Assist project for the selected OAuth session. */
 export function createAntigravityProjectResolver({
   endpoint = process.env.DOCKYARD_ANTIGRAVITY_PROJECT_ENDPOINT || DEFAULT_PROJECT_ENDPOINT,
+  onboardEndpoint = process.env.DOCKYARD_ANTIGRAVITY_ONBOARD_ENDPOINT || DEFAULT_ONBOARD_ENDPOINT,
   env = process.env,
   home = homedir(),
   timeoutMs = 20_000,
@@ -404,6 +809,7 @@ export function createAntigravityProjectResolver({
   userAgent = process.env.DOCKYARD_ANTIGRAVITY_USER_AGENT || detectAntigravityUserAgent(),
 } = {}) {
   const safeEndpoint = validateNativeEndpoint(endpoint, { providerId: PROVIDER_ID });
+  const safeOnboard = validateNativeEndpoint(onboardEndpoint, { providerId: PROVIDER_ID });
   const configuredProject = typeof project === "string" && project.trim() ? project.trim() : null;
   const cache = new Map();
   return async ({ credential = null, account = null, context = {} } = {}) => {
@@ -427,30 +833,59 @@ export function createAntigravityProjectResolver({
       accept: "application/json",
     };
     if (userAgent) headers["user-agent"] = userAgent;
-    const response = await fetchNativeResponse(safeEndpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({}),
-      signal: context.signal,
-    }, { providerId: PROVIDER_ID, timeoutMs, fetchImpl });
-    let raw;
-    try {
-      raw = typeof response.json === "function"
-        ? await response.json()
-        : JSON.parse(await response.text());
-    } finally {
-      cleanupNativeResponse(response);
-    }
-    const resolved = projectIdFromLoadCodeAssist(raw);
+
+    const load = await callCodeAssist(safeEndpoint.replace(/\/v1internal:.*$/u, ""), "loadCodeAssist", {
+      metadata: { ideType: "ANTIGRAVITY" },
+    }, { headers, signal: context.signal, timeoutMs, fetchImpl });
+
+    let resolved = projectIdFromLoadCodeAssist(load);
     if (!resolved) {
-      throw nativeProviderError(PROVIDER_ID, "Antigravity did not return a Code Assist project for the selected account", { body: raw });
+      const tier = defaultCodeAssistTier(load);
+      if (tier?.id && !tier.userDefinedCloudaicompanionProject) {
+        resolved = await onboardCodeAssistProject({
+          metadata: {
+            ide_type: "ANTIGRAVITY",
+            ide_name: "antigravity",
+            ide_version: antigravityIdeVersion(),
+          },
+          tierId: tier.id,
+          base: safeOnboard.replace(/\/v1internal:.*$/u, ""),
+          headers: {
+            ...headers,
+            "user-agent": `${userAgent ?? "antigravity/hub/2.29.0"} google-api-nodejs-client/10.3.0`,
+            "x-goog-api-client": "gl-node/22.21.1",
+          },
+          signal: context.signal,
+          timeoutMs,
+          fetchImpl,
+        }).catch(() => null);
+      }
+      if (!resolved) throw nativeProviderError(PROVIDER_ID, describeMissingProject(load), { body: load });
     }
     cache.set(cacheKey, resolved);
     return resolved;
   };
 }
 
-async function geminiParts(content, attachments, { signedToolCallIds = new Set(), requireThoughtSignatures = false } = {}) {
+/** The tier the server says this account may use. */
+function defaultCodeAssistTier(load) {
+  const tiers = Array.isArray(load?.allowedTiers) ? load.allowedTiers.filter(Boolean) : [];
+  const current = load?.currentTier && typeof load.currentTier === "object" ? load.currentTier : null;
+  return current ?? tiers.find((tier) => tier?.isDefault === true) ?? tiers[0] ?? null;
+}
+
+/** Antigravity's IDE version string, as its own onboarding sends it. */
+function antigravityIdeVersion() {
+  return process.env.DOCKYARD_ANTIGRAVITY_IDE_VERSION || "2.9.1";
+}
+
+async function geminiParts(content, attachments, {
+  signedToolCallIds = new Set(),
+  requireThoughtSignatures = false,
+  toolIds = null,
+  requireToolIds = false,
+  textToolHistory = false,
+} = {}) {
   const values = Array.isArray(content) ? content : [content];
   const parts = [];
   for (const part of values) {
@@ -466,13 +901,24 @@ async function geminiParts(content, attachments, { signedToolCallIds = new Set()
       continue;
     }
     if (isToolResultPart(part)) {
+      if (textToolHistory) {
+        parts.push({ text: toolResultText(part) });
+        continue;
+      }
       const callName = toolCallNameOf(part);
       const callId = toolCallIdOf(part);
-      const keepFunctionResponse = !requireThoughtSignatures || Boolean(callId && signedToolCallIds.has(callId));
+      // Claude models are served through an Anthropic translation, which
+      // requires tool_result.tool_use_id to name the call it answers. Pair the
+      // response with the id handed to the matching functionCall.
+      const pairedId = requireToolIds ? (callId ?? toolIds?.take(callName) ?? null) : null;
+      const gateId = callId ?? pairedId;
+      const keepFunctionResponse = !requireThoughtSignatures
+        || Boolean(gateId && signedToolCallIds.has(gateId));
       if (keepFunctionResponse) {
         parts.push({
           functionResponse: {
             name: callName,
+            ...(pairedId ? { id: pairedId } : {}),
             response: {
               name: callName,
               content: textFromContent(part.content ?? part.output ?? part.result ?? part.text),
@@ -485,19 +931,28 @@ async function geminiParts(content, attachments, { signedToolCallIds = new Set()
       continue;
     }
     if (isToolCallPart(part)) {
+      if (textToolHistory) {
+        parts.push({ text: toolCallText(toolCallNameOf(part), toolCallArgsOf(part)) });
+        continue;
+      }
       const name = toolCallNameOf(part);
       const args = toolCallArgsOf(part);
       const signature = thoughtSignatureForToolPart(part);
       const callId = toolCallIdOf(part);
+      // Every call needs an id: the Anthropic translation used for Claude
+      // models rejects a tool_use without one ("tool_use.id: Field required").
+      const callIdForPart = requireToolIds ? (callId ?? (toolIds?.issue(name) ?? null)) : null;
+      if (callIdForPart && toolIds && requireToolIds) toolIds.remember(name, callIdForPart);
       if (signature) {
-        if (callId) {
-          rememberThoughtSignature(callId, signature);
-          signedToolCallIds.add(callId);
+        if (callIdForPart) {
+          rememberThoughtSignature(callIdForPart, signature);
+          signedToolCallIds.add(callIdForPart);
         }
         parts.push({
           functionCall: {
             name,
             args,
+            ...(callIdForPart ? { id: callIdForPart } : {}),
           },
           thoughtSignature: signature,
           thought_signature: signature,
@@ -505,7 +960,13 @@ async function geminiParts(content, attachments, { signedToolCallIds = new Set()
       } else if (requireThoughtSignatures) {
         parts.push({ text: toolCallText(name, args) });
       } else {
-        parts.push({ functionCall: { name, args } });
+        parts.push({
+          functionCall: {
+            name,
+            args,
+            ...(callIdForPart ? { id: callIdForPart } : {}),
+          },
+        });
       }
       continue;
     }
@@ -513,6 +974,58 @@ async function geminiParts(content, attachments, { signedToolCallIds = new Set()
     if (extracted) parts.push({ text: extracted });
   }
   return parts;
+}
+
+/**
+ * Hands out stable call ids for history that lost them, so every functionCall
+ * carries one and its functionResponse can point back at it.
+ */
+/**
+ * Claude models are served through an Anthropic translation that requires
+ * every tool_use to carry an id. Gemini models pair calls by name and order,
+ * so they keep the historical shape without ids.
+ */
+function modelNeedsToolCallIds(model) {
+  return /claude/iu.test(String(model ?? ""));
+}
+
+/**
+ * Claude models reach us through an Anthropic translation that enforces two
+ * extra rules: every tool_use needs a tool_result in the very next message,
+ * and echoed thought signatures must still be valid. Neither survives a long
+ * local history — signatures are not kept in the host's tool-call blocks, and
+ * a result we cannot pair becomes text — which leaves orphan tool_use blocks
+ * and corrupt signatures. Rendering tool history as text sidesteps both, while
+ * the current turn still offers native tools.
+ */
+function modelUsesTextToolHistory() {
+  // Applies to every model on this channel, not just Claude. Gemini 3 also
+  // validates the thought signatures we echo back, and the host's tool-call
+  // blocks do not keep them, so a replayed history eventually fails with
+  // "Corrupted thought signature" — the same dead end Claude had.
+  return true;
+}
+
+function createToolIdAllocator() {
+  let counter = 0;
+  const pendingByToolName = new Map();
+  return {
+    issue(name) {
+      counter += 1;
+      return `call_${counter}_${String(name ?? "tool").replace(/[^A-Za-z0-9_]/gu, "_").slice(0, 24)}`;
+    },
+    remember(name, id) {
+      const key = String(name ?? "tool");
+      const queue = pendingByToolName.get(key) ?? [];
+      queue.push(id);
+      pendingByToolName.set(key, queue);
+    },
+    take(name) {
+      const queue = pendingByToolName.get(String(name ?? "tool"));
+      if (!queue || queue.length === 0) return null;
+      return queue.shift() ?? null;
+    },
+  };
 }
 
 function modelRequiresThoughtSignatures(model) {
@@ -661,12 +1174,22 @@ async function buildGeminiContents(request, attachments) {
   const maxMessages = resolveMaxMessages(request);
   const messages = compactMessagesForContext(rawMessages, { maxMessages });
   const signedToolCallIds = collectSignedToolCallIds(messages);
-  const requireThoughtSignatures = modelRequiresThoughtSignatures(request.model);
+  // Call ids are invented here only for history that lost them; explicit ids
+  // from the host always win, and responses are paired with calls in order.
+  const requireToolIds = modelNeedsToolCallIds(request.model);
+  // Claude goes fully textual for tool history (see modelUsesTextToolHistory),
+  // which also makes thought signatures irrelevant for it.
+  const textToolHistory = modelUsesTextToolHistory();
+  const requireThoughtSignatures = !textToolHistory && modelRequiresThoughtSignatures(request.model);
+  const toolIds = createToolIdAllocator();
   const contents = [];
   for (const message of messages) {
     const parts = await geminiParts(messageContentValues(message), attachments, {
       signedToolCallIds,
       requireThoughtSignatures,
+      toolIds,
+      requireToolIds,
+      textToolHistory,
     });
     if (parts.length === 0) continue;
     contents.push({
@@ -678,12 +1201,33 @@ async function buildGeminiContents(request, attachments) {
   return sanitizeContentsForThoughtSignatures(contents, requireThoughtSignatures);
 }
 
-function sanitizeSchema(value) {
+const UNSUPPORTED_GEMINI_SCHEMA_KEYS = new Set([
+  "$schema",
+  "additionalProperties",
+  "strict",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "patternProperties",
+  "unevaluatedProperties",
+  "dependentRequired",
+  "dependentSchemas",
+  "if",
+  "then",
+  "else",
+  "const",
+  "contentMediaType",
+  "examples",
+]);
+
+export function sanitizeSchema(value) {
   if (Array.isArray(value)) return value.map(sanitizeSchema);
   if (!value || typeof value !== "object") return value;
   const result = {};
   for (const [key, child] of Object.entries(value)) {
-    if (["$schema", "additionalProperties", "strict"].includes(key)) continue;
+    // Gemini's function-declaration schema is a JSON-Schema subset: numeric
+    // exclusion bounds and the other keywords below make the whole request fail
+    // with "Unknown name ... Cannot find field".
+    if (UNSUPPORTED_GEMINI_SCHEMA_KEYS.has(key)) continue;
     result[key] = sanitizeSchema(child);
   }
   return result;
@@ -715,7 +1259,7 @@ export function resolveAntigravityThinkingConfig(request = {}) {
       ?? ""
   ).toLowerCase().trim();
 
-  if (effort === "none" || effort === "off" || request.thinking === false) {
+  if (request.purpose === "compaction" || effort === "none" || effort === "off" || request.thinking === false) {
     return {
       includeThoughts: false,
       thinkingBudget: 0,
@@ -1164,7 +1708,13 @@ export function createAntigravityNativeExecutor({
     return streamAntigravityResponse(response, context);
   };
   executor.nativeTransport = "gemini-stream-generate-content";
-  return executor;
+  // Gemini thinking is streamed: buffering it makes a 20s think look like a
+  // hung request. DOCKYARD_STREAM_REASONING=0 restores the old behaviour where
+  // a thinking-only attempt could be retried instead.
+  return guardEmptyCompletion(executor, {
+    providerId: PROVIDER_ID,
+    streamReasoning: process.env.DOCKYARD_STREAM_REASONING !== "0",
+  });
 }
 
 /**

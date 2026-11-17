@@ -14,6 +14,10 @@ export const ACCOUNT_SELECTION_POLICY = Object.freeze({
   STICKY_SESSION: "sticky_session",
   ROUND_ROBIN: "round_robin",
   FAILOVER: "failover",
+  // Spread work towards the account with the most headroom left, so accounts
+  // whose windows reset later are not drained first. Falls back to round robin
+  // when no account reports quota windows.
+  ALLOWANCE_FULLEST: "allowance_fullest",
 });
 
 export const PROVIDER_CAPABILITIES = Object.freeze([
@@ -26,6 +30,18 @@ export const PROVIDER_CAPABILITIES = Object.freeze([
   "invoke",
   "stream",
 ]);
+
+// Host-behavior switches. A host must consult these through the runtime
+// (`runtime.hasProviderCapability`) instead of branching on provider ids.
+// Declaring them on the module keeps host code provider-neutral when a new
+// provider with the same behavior is added.
+export const PROVIDER_BEHAVIOR_CAPABILITIES = Object.freeze({
+  AUTO_PROVISION_FREE_ACCOUNT: "auto_provision_free_account",
+  FORCE_LIVE_CATALOG: "force_live_catalog",
+  CATALOG_WARMUP: "catalog_warmup",
+  API_KEY_AUTH: "api_key_auth",
+  REPAIR_LEGACY_CREDENTIAL: "repair_legacy_credential",
+});
 
 function isoOrNull(value, fieldName) {
   if (value === undefined || value === null || value === "") return null;
@@ -56,6 +72,14 @@ function createQuotaWindow(input = {}, now = new Date()) {
   return {
     id: stringOrNull(input.id),
     name: stringOrNull(input.name),
+    // `balance` marks a spendable amount rather than a percentage window; the
+    // client renders and ranks it differently, so it must survive this
+    // whitelist. Only emitted when a provider declares it, to keep every other
+    // window's shape unchanged.
+    ...(input.kind ? { kind: String(input.kind) } : {}),
+    // A provider may name the window that actually gates usage; the compact
+    // indicator shows that one instead of ranking by reset time.
+    ...(input.primary === true ? { primary: true } : {}),
     remaining: numberOrNull(input.remaining, "quota.windows.remaining"),
     limit: numberOrNull(input.limit, "quota.windows.limit"),
     unit: stringOrNull(input.unit),
@@ -115,6 +139,7 @@ export function createAccountRecord(input, now = new Date()) {
       expiresAt: isoOrNull(input.subscription?.expiresAt, "subscription.expiresAt"),
     },
     quota: createQuotaSnapshot(input.quota ?? {}, now),
+    balance: input.balance ? createBalanceSnapshot(input.balance, now) : null,
     refresh: createRefreshState(input.refresh ?? {}),
     resources: objectOrEmpty(input.resources),
     health: {
@@ -129,6 +154,16 @@ export function createAccountRecord(input, now = new Date()) {
   };
 }
 
+/** What a pay-as-you-go provider says is left to spend. */
+export function createBalanceSnapshot(input = {}, now = new Date()) {
+  return {
+    amount: numberOrNull(input.amount, "balance.amount"),
+    unit: stringOrNull(input.unit),
+    updatedAt: isoOrNull(input.updatedAt, "balance.updatedAt") ?? now.toISOString(),
+    source: stringOrNull(input.source) ?? "unknown",
+  };
+}
+
 export function accountSummary(account) {
   return {
     providerId: account.providerId,
@@ -137,6 +172,7 @@ export function accountSummary(account) {
     email: account.email,
     subscription: { ...account.subscription },
     quota: structuredClone(account.quota ?? {}),
+    balance: account.balance ? structuredClone(account.balance) : null,
     refresh: { ...account.refresh },
     resources: structuredClone(account.resources ?? {}),
     health: { ...account.health },

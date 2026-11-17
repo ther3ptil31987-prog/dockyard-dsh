@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { stripVendorPrefix } from "../packages/providers/src/provider-utils.mjs";
 import { dirname, join } from "node:path";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,7 +11,12 @@ import { createBrowserOAuthAuthorizer } from "../packages/oauth/src/browser-oaut
 import { createCliOAuthAuthorizer } from "../packages/oauth/src/cli-oauth-authorizer.mjs";
 import { createCliStatusAuthorizer } from "../packages/oauth/src/cli-status-authorizer.mjs";
 import { createOfficialSessionAuthorizer } from "../packages/oauth/src/official-session-authorizer.mjs";
-import { createCodexDriver, createCodexPiAiExecutor } from "../modules/provider-codex/src/index.mjs";
+import {
+  createCodexCatalogLoader,
+  createCodexDriver,
+  createCodexPiAiExecutor,
+  parseCodexModelCatalog,
+} from "../modules/provider-codex/src/index.mjs";
 import {
   createAntigravityCatalogLoader,
   createAntigravityCliExecutor,
@@ -28,9 +34,11 @@ import {
   resolveAntigravityNativeInvocationModel,
 } from "../modules/provider-antigravity/src/index.mjs";
 import {
+  BUILTIN_GROK_MODELS,
   createGrokCatalogLoader,
   createGrokCliExecutor,
   createGrokDriver,
+  grokPlanFromTier,
   grokRequestPromptBlocks,
   parseGrokAuth,
   parseGrokCreditsConfig,
@@ -50,7 +58,7 @@ import {
   parseCursorAuthStatus,
 } from "../modules/provider-cursor/src/index.mjs";
 import { frameConnectMessage, decodeCursorConnectTrailer } from "../modules/provider-cursor/src/native-protocol.mjs";
-import { codexModelToDshCatalog } from "../packages/dsh-plugin/src/codex-transport.mjs";
+import { codexModelToDshCatalog, createCodexDshRequestExecutor } from "../packages/dsh-plugin/src/codex-transport.mjs";
 import { cliEventText } from "../packages/providers/src/cli-agent-transport.mjs";
 
 function jwt(payload) {
@@ -72,6 +80,17 @@ const antigravityTestEnv = {
   DOCKYARD_ANTIGRAVITY_CLIENT_SECRET: "test-google-client-secret",
 };
 
+
+test("vendor prefixes are stripped from aggregator model names", () => {
+  assert.equal(stripVendorPrefix("DeepSeek: DeepSeek V4.1 Flash"), "DeepSeek V4.1 Flash");
+  assert.equal(stripVendorPrefix("OpenAI: GPT-6 Luna"), "GPT-6 Luna");
+  assert.equal(stripVendorPrefix("Anthropic: Claude Haiku 5.5"), "Claude Haiku 5.5");
+  // A name without a vendor prefix is returned unchanged.
+  assert.equal(stripVendorPrefix("Gemini 3.8 Flash"), "Gemini 3.8 Flash");
+  // A prefix that is not a plain vendor label is part of the model name.
+  assert.equal(stripVendorPrefix("GPT-4: 32k context variant"), "GPT-4: 32k context variant");
+  assert.equal(stripVendorPrefix(""), "");
+});
 test("Codex driver imports local OAuth and parses live multi-window quota", async () => {
   const home = await mkdtemp(join(tmpdir(), "dockyard-codex-"));
   try {
@@ -153,6 +172,157 @@ test("Codex PiAI transport forwards DSH durable attachments", async () => {
   assert.equal(adapterOptions.resolveAttachments(), attachments);
 });
 
+test("Codex PiAI transport supplies image request budgets so history images do not fail with INVALID_ATTACHMENT_REF", async () => {
+  const { PiAiAdapter } = await import("@deepseek-ai/dsh-llm-pi-ai");
+  const { createProvider } = await import("@earendil-works/pi-ai");
+  const seenTargets = [];
+  const executor = createCodexPiAiExecutor({
+    PiAiAdapter,
+    createProvider,
+    openAICodexResponsesApi: () => ({
+      async *streamSimple() {
+        yield { type: "start" };
+        yield { type: "text_delta", contentIndex: 0, delta: "ok" };
+        yield {
+          type: "done",
+          reason: "stop",
+          message: { role: "assistant", content: [{ type: "text", text: "ok" }], usage: { input: 1, output: 1 } },
+        };
+      },
+      stream() {
+        throw new Error("unexpected stream() call");
+      },
+    }),
+    modelResolver: () => ({
+      id: "gpt-6-luna",
+      name: "GPT-6-Luna",
+      inputModalities: ["text", "image"],
+      contextWindow: 272_000,
+      maxTokens: 8192,
+    }),
+  });
+
+  const attachments = {
+    async readImageRequest(_ref, target) {
+      seenTargets.push(target);
+      for (const [field, value] of [["width", target.width], ["height", target.height], ["maxBytes", target.maxBytes]]) {
+        if (!Number.isSafeInteger(value) || value <= 0) {
+          const error = new Error(`Image request ${field} must be a positive integer.`);
+          error.code = "INVALID_ATTACHMENT_REF";
+          throw error;
+        }
+      }
+      return {
+        data: new Uint8Array([1, 2, 3]),
+        mediaType: "image/png",
+        width: target.width,
+        height: target.height,
+        bytes: 3,
+      };
+    },
+  };
+
+  const stream = await executor({
+    request: {
+      provider: "openai-codex",
+      model: "gpt-6-luna",
+      reasoningEffort: "high",
+      messages: [
+        {
+          role: "tool",
+          toolCallId: "call_img_1",
+          content: [
+            {
+              type: "image",
+              attachment: {
+                attachmentId: "sha256:52eb9ce00e4abea0d5cc463906dbc1b5d365a3feb18cd1ec9413553d39050292",
+                mediaType: "image/png",
+                width: 1200,
+                height: 2029,
+                bytes: 132944,
+              },
+            },
+          ],
+        },
+        { role: "user", content: [{ type: "text", text: "测试一条消息" }] },
+      ],
+    },
+    credential: { access: "oauth-access" },
+    context: { attachments },
+  });
+
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  assert.deepEqual(seenTargets, [{ width: 1200, height: 2029, maxBytes: 1048576 }]);
+  assert.equal(chunks[0]?.type, "text-delta");
+  assert.equal(chunks[0]?.text, "ok");
+  assert.equal(chunks.at(-1)?.type, "finish");
+  assert.equal(chunks.at(-1)?.reason, undefined);
+});
+
+test("Codex DSH transport pairs dsh-llm-pi-ai with the co-located host pi-ai install", async () => {
+  const dshRoot = await mkdtemp(join(tmpdir(), "dockyard-codex-host-"));
+  try {
+    const dshLlmDir = join(dshRoot, "node_modules", "@deepseek-ai", "dsh-llm-pi-ai");
+    const piAiDir = join(dshRoot, "node_modules", "@earendil-works", "pi-ai");
+    await mkdir(join(dshLlmDir, "lib"), { recursive: true });
+    await mkdir(join(piAiDir, "dist", "api"), { recursive: true });
+    await mkdir(join(piAiDir, "dist", "providers"), { recursive: true });
+
+    await writeFile(join(dshLlmDir, "package.json"), JSON.stringify({
+      name: "@deepseek-ai/dsh-llm-pi-ai",
+      type: "module",
+      main: "./lib/index.js",
+    }));
+    await writeFile(join(dshLlmDir, "lib", "index.js"), `
+      export class PiAiAdapter {
+        constructor(config) { this.config = config; }
+        stream(request) {
+          const profile = this.config.profiles().get("openai-codex");
+          return (async function* () {
+            yield { type: "text-delta", index: 0, text: profile.piProvider.hostTag + ":" + request.model };
+          })();
+        }
+      }
+    `);
+
+    await writeFile(join(piAiDir, "package.json"), JSON.stringify({
+      name: "@earendil-works/pi-ai",
+      type: "module",
+      exports: {
+        ".": { import: "./dist/index.js" },
+        "./api/*": { import: "./dist/api/*.js" },
+        "./providers/*": { import: "./dist/providers/*.js" },
+      },
+    }));
+    await writeFile(join(piAiDir, "dist", "index.js"), `
+      export function createProvider(input) { return { ...input, hostTag: "host-pi-ai" }; }
+    `);
+    await writeFile(join(piAiDir, "dist", "api", "openai-codex-responses.lazy.js"), `
+      export function openAICodexResponsesApi() { return {}; }
+    `);
+    await writeFile(join(piAiDir, "dist", "providers", "openai-codex.js"), `
+      export function openaiCodexProvider() { return { getModels: () => [] }; }
+    `);
+    await writeFile(join(piAiDir, "dist", "providers", "all.js"), `
+      export function getBuiltinModels() { return []; }
+      export function getBuiltinProviders() { return []; }
+    `);
+
+    const executor = createCodexDshRequestExecutor({ moduleAnchor: join(dshRoot, "entry.mjs") });
+    const stream = await executor({
+      request: { model: "gpt-6-luna", messages: [] },
+      credential: { access: "oauth-token" },
+      context: {},
+    });
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    assert.deepEqual(chunks, [{ type: "text-delta", index: 0, text: "host-pi-ai:gpt-6-luna" }]);
+  } finally {
+    await rm(dshRoot, { recursive: true, force: true });
+  }
+});
+
 test("Codex preserves a 401 OAuth signal across quota endpoint fallback", async () => {
   const access = jwt({
     exp: Math.floor(Date.now() / 1000) + 3600,
@@ -179,6 +349,39 @@ test("Codex preserves a 401 OAuth signal across quota endpoint fallback", async 
       return true;
     },
   );
+});
+
+test("Codex quota sends Codex user-agent and surfaces network cause on fetch failure", async () => {
+  const access = jwt({
+    exp: Math.floor(Date.now() / 1000) + 3600,
+    "https://api.openai.com/auth": { chatgpt_account_id: "acct-net", chatgpt_plan_type: "free" },
+  });
+  let seenHeaders = null;
+  const driver = createCodexDriver({
+    usageUrls: ["https://provider.test/usage"],
+    clientVersion: "0.163.0",
+    fetchImpl: async (_url, init) => {
+      seenHeaders = init?.headers;
+      const cause = Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
+      throw new TypeError("fetch failed", { cause });
+    },
+  });
+  const secretStore = new MemorySecretStore();
+  const [account] = await driver.importSource({
+    content: JSON.stringify({
+      tokens: { access_token: access, refresh_token: "refresh-net", account_id: "acct-net" },
+    }),
+  }, { secretStore });
+
+  await assert.rejects(
+    driver.getQuota(account, { secretStore }),
+    (error) => {
+      assert.match(error.message, /fetch failed \(ECONNRESET: read ECONNRESET\)/);
+      return true;
+    },
+  );
+  assert.equal(seenHeaders?.["user-agent"], "Codex/0.163.0");
+  assert.equal(seenHeaders?.accept, "application/json");
 });
 
 test("Codex does not classify an unrelated 400 refresh failure as expired OAuth", async () => {
@@ -511,7 +714,7 @@ test("Antigravity driver uses official CLI data without requiring token storage"
     if (args[0] === "models") return { output: "Fetching available models...\nmodel-from-provider\tLive model\n", errorOutput: "" };
     throw new Error("unexpected command");
   };
-  const driver = createAntigravityDriver({ commandRunner, tokenResolver: () => null });
+  const driver = createAntigravityDriver({ commandRunner, tokenResolver: () => null, cacheFilePath: null });
   const secretStore = new MemorySecretStore();
   const discovered = await driver.discover({ now: new Date("2026-08-14T12:00:00.000Z") });
   assert.equal(discovered.candidates.length, 1);
@@ -630,7 +833,7 @@ test("Antigravity refreshAccount reuses the live quota response", async () => {
     }
     throw new Error(`unexpected command: ${command}`);
   };
-  const driver = createAntigravityDriver({ commandRunner, tokenResolver: () => null });
+  const driver = createAntigravityDriver({ commandRunner, tokenResolver: () => null, cacheFilePath: null });
   const discovered = await driver.discover({ now: new Date("2026-08-14T12:00:00.000Z") });
   const account = await driver.importAccount(discovered.candidates[0], { secretStore: new MemorySecretStore() });
   calls.length = 0;
@@ -732,7 +935,7 @@ test("Antigravity agy browser sessions refresh captured and legacy credentials t
   let quotaCredential = null;
   const driver = createAntigravityDriver({
     cliPath: "agy",
-    env: { HOME: home, DOCKYARD_ANTIGRAVITY_TOKEN_FILE: tokenPath },
+    env: { DOCKYARD_ANTIGRAVITY_DISABLE_BROWSER: "1", HOME: home, DOCKYARD_ANTIGRAVITY_TOKEN_FILE: tokenPath },
     commandRunner: async (_command, args, options) => {
       refreshCalls += 1;
       assert.deepEqual(args, ["models"]);
@@ -917,7 +1120,7 @@ test("Antigravity catalog stays mounted when the optional CLI is unavailable", a
   assert.equal(calls, 1);
 });
 
-test("provider model metadata exposes only returned reasoning tiers", () => {
+test("provider model metadata folds the returned reasoning tiers into one model", () => {
   assert.deepEqual(parseAntigravityModelCatalog([
     "Fetching available models...",
     "gemini-live-low\tGemini Live (Low)",
@@ -925,21 +1128,11 @@ test("provider model metadata exposes only returned reasoning tiers", () => {
     "gemini-live-high\tGemini Live (High)",
     "claude-live\tClaude Live (Thinking)",
   ].join("\n")), [
-    {
-      id: "gemini-live-low",
-      name: "Gemini Live (Low)",
-      reasoning: {
-        efforts: [
-          { id: "low", name: "Low" },
-          { id: "medium", name: "Medium" },
-          { id: "high", name: "High" },
-        ],
-        defaultEffort: "low",
-      },
-    },
+    // The three tiered rows fold into one model whose tiers are the efforts,
+    // the way the official picker shows a single "Gemini Live" entry.
     {
       id: "gemini-live-medium",
-      name: "Gemini Live (Medium)",
+      name: "Gemini Live",
       reasoning: {
         efforts: [
           { id: "low", name: "Low" },
@@ -947,18 +1140,6 @@ test("provider model metadata exposes only returned reasoning tiers", () => {
           { id: "high", name: "High" },
         ],
         defaultEffort: "medium",
-      },
-    },
-    {
-      id: "gemini-live-high",
-      name: "Gemini Live (High)",
-      reasoning: {
-        efforts: [
-          { id: "low", name: "Low" },
-          { id: "medium", name: "Medium" },
-          { id: "high", name: "High" },
-        ],
-        defaultEffort: "high",
       },
     },
     { id: "claude-live", name: "Claude Live (Thinking)" },
@@ -977,6 +1158,99 @@ test("provider model metadata exposes only returned reasoning tiers", () => {
   });
 });
 
+test("Codex catalog loader parses live endpoint models and respects visibility and priority", async () => {
+  const home = await mkdtemp(join(tmpdir(), "dockyard-codex-catalog-"));
+  try {
+    const rawApiData = {
+      models: [
+        {
+          slug: "gpt-reserve",
+          display_name: "GPT-Reserve",
+          visibility: "hide",
+          priority: 4,
+          supported_reasoning_levels: [{ effort: "low" }, { effort: "medium" }],
+        },
+        {
+          slug: "gpt-6-luna",
+          display_name: "GPT-6-Luna",
+          visibility: "list",
+          priority: 5,
+          default_reasoning_level: "medium",
+          supported_reasoning_levels: [
+            { effort: "low", description: "Fast" },
+            { effort: "medium", description: "Balanced" },
+            { effort: "high", description: "Deep" },
+          ],
+          context_window: 272000,
+          input_modalities: ["text", "image"],
+        },
+        {
+          slug: "gpt-5.6-terra",
+          display_name: "GPT-5.6-Terra",
+          visibility: "list",
+          priority: 8,
+          default_reasoning_level: "medium",
+          supported_reasoning_levels: [{ effort: "low" }, { effort: "high" }],
+          context_window: 272000,
+        },
+      ],
+    };
+
+    let fetchCalled = false;
+    const fetchImpl = async (url, options) => {
+      fetchCalled = true;
+      assert.ok(url.includes("client_version=0.163.0"));
+      assert.equal(options.headers.authorization, "Bearer test-access-token");
+      assert.equal(options.headers["chatgpt-account-id"], "test-account-id");
+      return {
+        ok: true,
+        json: async () => rawApiData,
+      };
+    };
+
+    const loader = createCodexCatalogLoader({
+      home,
+      fetchImpl,
+    });
+
+    const liveResult = await loader({
+      credential: { access: "test-access-token", accountId: "test-account-id" },
+    });
+
+    assert.equal(fetchCalled, true);
+    assert.equal(liveResult.source, "official_codex_models_api");
+    assert.equal(liveResult.models.length, 2);
+    assert.equal(liveResult.models[0].id, "gpt-6-luna");
+    assert.equal(liveResult.models[0].name, "GPT-6-Luna");
+    assert.equal(liveResult.models[0].contextWindow, 272000);
+    assert.equal(liveResult.models[0].reasoning.defaultEffort, "medium");
+    assert.deepEqual(liveResult.models[0].reasoning.efforts.map((e) => e.id), ["low", "medium", "high"]);
+    assert.equal(liveResult.models[1].id, "gpt-5.6-terra");
+
+    // Local cache fallback when fetch fails
+    const failingLoader = createCodexCatalogLoader({
+      home,
+      modelsCachePath: join(home, "models_cache.json"),
+      fetchImpl: async () => { throw new Error("Network down"); },
+    });
+
+    await writeFile(join(home, "models_cache.json"), JSON.stringify({
+      models: [
+        { slug: "cached-model", display_name: "Cached Model", visibility: "list", priority: 1 },
+      ],
+    }));
+
+    const cacheResult = await failingLoader({
+      credential: { access: "test-access-token", accountId: "test-account-id" },
+    });
+    assert.equal(cacheResult.source, "official_codex_models_cache");
+    assert.equal(cacheResult.models.length, 1);
+    assert.equal(cacheResult.models[0].id, "cached-model");
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
 test("Antigravity capacity metadata is enriched only from a live-compatible registry family", () => {
   const live = parseAntigravityModelCatalog([
     "gemini-3.6-flash-high\tGemini 3.6 Flash (High)",
@@ -989,22 +1263,8 @@ test("Antigravity capacity metadata is enriched only from a live-compatible regi
     input: ["text", "image"],
   }]), [
     {
-      id: "gemini-3.6-flash-high",
-      name: "Gemini 3.6 Flash (High)",
-      reasoning: {
-        efforts: [
-          { id: "high", name: "High" },
-          { id: "medium", name: "Medium" },
-        ],
-        defaultEffort: "high",
-      },
-      contextWindow: 1048576,
-      maxTokens: 65536,
-      inputModalities: ["text", "image"],
-    },
-    {
       id: "gemini-3.6-flash-medium",
-      name: "Gemini 3.6 Flash (Medium)",
+      name: "Gemini 3.6 Flash",
       reasoning: {
         efforts: [
           { id: "high", name: "High" },
@@ -1037,7 +1297,6 @@ test("Antigravity catalog supplies the published Gemini 3.7 capacity fallback", 
     contextWindow: model.contextWindow,
     maxTokens: model.maxTokens,
   })), [
-    { id: "gemini-3.7-flash-high", contextWindow: 1_048_576, maxTokens: 65_536 },
     { id: "gemini-3.7-flash-medium", contextWindow: 1_048_576, maxTokens: 65_536 },
   ]);
   assert.equal(catalog.source, "official_antigravity_cli+model_registry");
@@ -1141,8 +1400,39 @@ test("Antigravity maps a native run_command event into DSH bash", async () => {
   ]);
 });
 
-test("Antigravity maps a selected effort to the exact returned model row", async () => {
-  const catalogLoader = async () => ({
+test("Antigravity maps a selected effort to the exact tier id", async () => {
+  // Folded catalog: one row per family, the tiers are the reasoning efforts.
+  const collapsed = async () => ({
+    models: [{
+      id: "gemini-live-medium",
+      name: "Gemini Live",
+      reasoning: {
+        efforts: [{ id: "high", name: "High" }, { id: "medium", name: "Medium" }],
+        defaultEffort: "medium",
+      },
+    }],
+  });
+  assert.deepEqual(await resolveAntigravityInvocationModel({
+    catalogLoader: collapsed,
+    model: "gemini-live-medium",
+    reasoningEffort: "high",
+  }), { model: "gemini-live-high", reasoningEffort: undefined });
+  // The chosen tier is encoded in the id, so the transport derives the
+  // thinking budget from it and no separate effort is sent.
+  assert.deepEqual(await resolveAntigravityNativeInvocationModel({
+    catalogLoader: collapsed,
+    model: "gemini-live-medium",
+    reasoningEffort: "medium",
+  }), { model: "gemini-live-medium", reasoningEffort: undefined });
+  // A tier the family does not declare is left untouched.
+  assert.deepEqual(await resolveAntigravityInvocationModel({
+    catalogLoader: collapsed,
+    model: "gemini-live-medium",
+    reasoningEffort: "xhigh",
+  }), { model: "gemini-live-medium", reasoningEffort: "xhigh" });
+
+  // Catalogs that still list one row per tier keep resolving through the row.
+  const perTier = async () => ({
     models: [
       {
         id: "gemini-live-high",
@@ -1157,15 +1447,10 @@ test("Antigravity maps a selected effort to the exact returned model row", async
     ],
   });
   assert.deepEqual(await resolveAntigravityInvocationModel({
-    catalogLoader,
+    catalogLoader: perTier,
     model: "gemini-live-medium",
     reasoningEffort: "high",
   }), { model: "gemini-live-high", reasoningEffort: undefined });
-  assert.deepEqual(await resolveAntigravityNativeInvocationModel({
-    catalogLoader,
-    model: "gemini-live-medium",
-    reasoningEffort: "medium",
-  }), { model: "gemini-live-medium", reasoningEffort: "medium" });
 
   let calls = 0;
   const cachedLoader = createAntigravityCatalogLoader({
@@ -1208,7 +1493,6 @@ test("Antigravity catalog persists an account-scoped last-known result", async (
     });
     const restored = await restoredLoader({ accounts });
     assert.deepEqual(restored.models.map((model) => model.id), [
-      "gemini-3.7-flash-high",
       "gemini-3.7-flash-medium",
     ]);
     assert.match(restored.source, /persistent_cache/);
@@ -1413,9 +1697,174 @@ test("Grok catalog loader caches a local provider response", async () => {
   });
   const first = await loader();
   const second = await loader();
-  assert.deepEqual(first.models, [{ id: "grok-live", name: "grok-live" }]);
+  assert.ok(first.models.some((m) => m.id === "grok-live"));
   assert.strictEqual(first, second);
   assert.equal(reads, 1);
+});
+
+test("Grok catalog loader provides built-in models with reasoning efforts when CLI and cache are missing", async () => {
+  const loader = createGrokCatalogLoader({
+    grokHome: "/provider/grok-empty",
+    readJson: async () => null,
+    commandRunner: async () => {
+      const err = new Error("spawn grok ENOENT");
+      err.code = "ENOENT";
+      throw err;
+    },
+  });
+  const result = await loader();
+  assert.equal(result.source, "official_grok_builtin");
+  assert.ok(result.models.length >= 4);
+  const grok3 = result.models.find((m) => m.id === "grok-3");
+  assert.ok(grok3);
+  assert.equal(grok3.name, "Grok 3");
+  assert.equal(grok3.reasoning?.defaultEffort, "medium");
+  assert.deepEqual(grok3.reasoning?.efforts.map((e) => e.id), ["low", "medium", "high"]);
+});
+
+test("Grok refreshAccount succeeds for browser OAuth account without requiring grok CLI", async () => {
+  const secretStore = new MemorySecretStore();
+  const credentialRef = "keychain://grok/browser-account";
+  await secretStore.write(credentialRef, {
+    access: "valid-browser-access",
+    refresh: "valid-browser-refresh",
+    accountId: "grok-browser-user",
+    email: "user@example.test",
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+  });
+
+  let commandRunnerCalled = false;
+  const driver = createGrokDriver({
+    cliPath: "grok-not-installed",
+    commandRunner: async () => {
+      commandRunnerCalled = true;
+      const err = new Error("spawn grok ENOENT");
+      err.code = "ENOENT";
+      throw err;
+    },
+  });
+
+  const refreshed = await driver.refreshAccount({
+    accountId: "grok-browser-user",
+    email: "user@example.test",
+    auth: { credentialRef },
+    resources: {
+      authSource: "official_grok_browser_oauth",
+      sessionSource: "browser",
+    },
+  }, { secretStore });
+
+  assert.equal(commandRunnerCalled, false);
+  assert.equal(refreshed.email, "user@example.test");
+  assert.equal(refreshed.refresh.refreshable, true);
+  assert.ok(refreshed.refresh.lastRefreshedAt);
+});
+
+test("Grok builtin catalog includes grok-4.7, grok-4.6, grok-4.5 with authentic reasoning efforts", () => {
+  const grok47 = BUILTIN_GROK_MODELS.find((m) => m.id === "grok-4.7");
+  assert.ok(grok47);
+  assert.equal(grok47.name, "Grok 4.7");
+  assert.equal(grok47.contextWindow, 256000);
+  assert.equal(grok47.reasoning?.defaultEffort, "high");
+  assert.deepEqual(grok47.reasoning?.efforts.map((e) => e.id), ["xhigh", "high", "medium", "low"]);
+
+  const grok46 = BUILTIN_GROK_MODELS.find((m) => m.id === "grok-4.6");
+  assert.ok(grok46);
+  assert.equal(grok46.name, "Grok 4.6");
+  assert.equal(grok46.reasoning?.defaultEffort, "high");
+
+  const grok45 = BUILTIN_GROK_MODELS.find((m) => m.id === "grok-4.5");
+  assert.ok(grok45);
+  assert.equal(grok45.name, "Grok 4.5");
+  assert.deepEqual(grok45.reasoning?.efforts.map((e) => e.id), ["high", "medium", "low"]);
+});
+
+test("Grok parseGrokModelCatalog supports data list from official proxy", () => {
+  const parsed = parseGrokModelCatalog("", {
+    data: [
+      {
+        id: "grok-4.7",
+        name: "Grok 4.7",
+        context_window: 256000,
+        reasoning_effort: "high",
+        reasoning_efforts: [
+          { id: "xhigh", value: "xhigh", label: "Extra High" },
+          { id: "high", value: "high", label: "High", default: true },
+        ],
+      },
+    ],
+  });
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].id, "grok-4.7");
+  assert.equal(parsed[0].name, "Grok 4.7");
+  assert.equal(parsed[0].reasoning?.defaultEffort, "high");
+  assert.deepEqual(parsed[0].reasoning?.efforts.map((e) => e.id), ["xhigh", "high"]);
+});
+
+test("Grok grokPlanFromTier maps tier numbers to subscription plan names", () => {
+  assert.equal(grokPlanFromTier(3), "Premium");
+  assert.equal(grokPlanFromTier(4), "Premium+");
+  assert.equal(grokPlanFromTier(2), "Basic");
+  assert.equal(grokPlanFromTier(1), "Free");
+  assert.equal(grokPlanFromTier("Enterprise"), "Enterprise");
+  assert.equal(grokPlanFromTier(null), null);
+});
+
+test("Grok refreshAccount resolves userinfo and tier 3 Premium plan for accounts with missing email or UUID displayName", async () => {
+  const secretStore = new MemorySecretStore();
+  const credentialRef = "keychain://grok/browser-uuid-account";
+  const userUuid = "37460f42-f0cb-45f3-ad14-faf1a4fb24a0";
+  const mockJwt = `header.${Buffer.from(JSON.stringify({ sub: userUuid, tier: 3 })).toString("base64url")}.sig`;
+  await secretStore.write(credentialRef, {
+    access: mockJwt,
+    refresh: "mock-refresh",
+    accountId: userUuid,
+    displayName: userUuid,
+    email: null,
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+  });
+
+  let userinfoCalled = false;
+  const driver = createGrokDriver({
+    cliPath: "grok-not-installed",
+    fetchImpl: async (url, init) => {
+      if (String(url).includes("/userinfo")) {
+        userinfoCalled = true;
+        assert.equal(init.headers.authorization, `Bearer ${mockJwt}`);
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            sub: userUuid,
+            name: "Ryanxlll2",
+            email: "1957670520@qq.com",
+          }),
+        };
+      }
+      return { ok: false, status: 404 };
+    },
+  });
+
+  const refreshed = await driver.refreshAccount({
+    accountId: userUuid,
+    displayName: userUuid,
+    email: null,
+    auth: { credentialRef },
+    subscription: { plan: null },
+    resources: {
+      authSource: "official_grok_browser_oauth",
+      sessionSource: "browser",
+    },
+  }, { secretStore });
+
+  assert.equal(userinfoCalled, true);
+  assert.equal(refreshed.displayName, "Ryanxlll2");
+  assert.equal(refreshed.email, "1957670520@qq.com");
+  assert.equal(refreshed.subscription.plan, "Premium");
+
+  const stored = await secretStore.read(credentialRef);
+  assert.equal(stored.displayName, "Ryanxlll2");
+  assert.equal(stored.email, "1957670520@qq.com");
 });
 
 test("Claude subscription status rejects API keys and maps live registry metadata", async () => {
@@ -1683,7 +2132,10 @@ test("subscription drivers start browser OAuth without a local CLI", async () =>
   const antigravityUrl = new URL(antigravityStarted.authorizationUrl);
   assert.equal(antigravityUrl.origin, "https://accounts.google.com");
   assert.equal(antigravityUrl.pathname, "/o/oauth2/v2/auth");
-  assert.equal(antigravityUrl.searchParams.get("redirect_uri"), "http://localhost:51121/oauth-callback");
+  // The loopback listener falls back to an ephemeral port when 51121 is taken
+  // (a running DSH Web instance holding an auth session does that), and the URL
+  // then carries the port actually bound.
+  assert.match(antigravityUrl.searchParams.get("redirect_uri"), /^http:\/\/localhost:\d+\/oauth-callback$/);
   assert.equal(antigravityUrl.searchParams.get("code_challenge_method"), "S256");
   await antigravity.cancelAuthorization(antigravityStarted.sessionId);
 
@@ -2168,6 +2620,65 @@ test("Cursor browser OAuth loads the official account model catalog without the 
   assert.equal(JSON.parse(request.init.body).useReactModelPicker, true);
 });
 
+test("Cursor browser OAuth extracts reasoning efforts from parameterDefinitions and supportsThinking", async () => {
+  const secretStore = new MemorySecretStore();
+  const credentialRef = "keychain://cursor/browser-reasoning";
+  await secretStore.write(credentialRef, { access: "cursor-access" });
+  const loader = createCursorCatalogLoader({
+    cliPath: "missing-cursor-agent",
+    commandRunner: async () => { throw new Error("CLI must not be used"); },
+    fetchImpl: async () => response(200, {
+      models: [
+        {
+          name: "grok-4.7",
+          clientDisplayName: "Grok 4.7",
+          supportsThinking: true,
+          parameterDefinitions: [
+            {
+              id: "reasoning_effort",
+              parameterType: {
+                enumParameter: {
+                  values: [
+                    { value: "low", displayName: "Low" },
+                    { value: "medium", displayName: "Medium" },
+                    { value: "high", displayName: "High" },
+                    { value: "xhigh", displayName: "Extra High" },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+        {
+          name: "composer-2.5",
+          clientDisplayName: "Composer 2.5",
+          supportsThinking: true,
+        },
+      ],
+    }),
+  });
+  const catalog = await loader({
+    accounts: [{
+      auth: { credentialRef },
+      resources: { sessionSource: "browser", authSource: "official_cursor_browser_oauth" },
+    }],
+    secretStore,
+  });
+  assert.equal(catalog.models[0].reasoning.defaultEffort, "medium");
+  assert.deepEqual(catalog.models[0].reasoning.efforts, [
+    { id: "low", name: "Low" },
+    { id: "medium", name: "Medium" },
+    { id: "high", name: "High" },
+    { id: "xhigh", name: "Extra High" },
+  ]);
+  assert.equal(catalog.models[1].reasoning.defaultEffort, "medium");
+  assert.deepEqual(catalog.models[1].reasoning.efforts, [
+    { id: "low", name: "Low" },
+    { id: "medium", name: "Medium" },
+    { id: "high", name: "High" },
+  ]);
+});
+
 test("Cursor official CLI executor passes the selected model and normalizes stream-json", async () => {
   const calls = [];
   const executor = createCursorCliExecutor({
@@ -2299,4 +2810,33 @@ test("Grok official CLI executor keeps streaming-json and live model selection",
   assert.ok(calls[0].args.includes("--model") && calls[0].args.includes("grok-live"));
   assert.ok(calls[0].args.includes("--reasoning-effort") && calls[0].args.includes("high"));
   assert.deepEqual(chunks.filter((chunk) => chunk.type === "text-delta").map((chunk) => chunk.text), ["Grok response"]);
+});
+
+test("Claude catalog keeps Anthropic's own rows and drops other gateways", async () => {
+  // Every row below speaks the Anthropic messages protocol, but only the first
+  // two are Anthropic models. A real registry has 276 such rows (192 of them
+  // from Vercel AI Gateway), and they used to fill the Claude panel with models
+  // that could never authenticate — poolside/laguna-s-2.1-free was one.
+  const loader = createClaudeCatalogLoader({
+    registryLoader: async () => [
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", provider: "anthropic", api: "anthropic-messages", contextWindow: 1_000_000 },
+      { id: "claude-fable-5", name: "Claude Fable 5", provider: "anthropic", api: "anthropic-messages", contextWindow: 1_000_000 },
+      { id: "poolside/laguna-s-2.1-free", name: "Laguna S 2.1 Free", provider: "vercel-ai-gateway", api: "anthropic-messages", contextWindow: 250_000 },
+      { id: "anthropic/claude-sonnet-4-6", name: "Claude Sonnet 4.6", provider: "openrouter", api: "anthropic-messages" },
+    ],
+  });
+  const catalog = await loader({});
+  assert.deepEqual(catalog.models.map((model) => model.id), ["claude-sonnet-4-6", "claude-fable-5"]);
+});
+
+test("Claude catalog falls back to ids when the registry has no provider field", async () => {
+  const loader = createClaudeCatalogLoader({
+    registryLoader: async () => [
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6", api: "anthropic-messages", contextWindow: 1_000_000 },
+      { id: "some-other-model", name: "Other", api: "anthropic-messages" },
+      { id: "claude-not-messages-api", api: "openai-responses" },
+    ],
+  });
+  const catalog = await loader({});
+  assert.deepEqual(catalog.models.map((model) => model.id), ["claude-opus-4-6"]);
 });

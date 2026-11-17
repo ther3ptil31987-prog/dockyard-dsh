@@ -1,9 +1,11 @@
-import { ACCOUNT_HEALTH, ACCOUNT_SELECTION_POLICY, ModuleRuntime } from "../../core/src/index.mjs";
+import { ACCOUNT_HEALTH, ACCOUNT_SELECTION_POLICY, ModuleRuntime, PROVIDER_BEHAVIOR_CAPABILITIES } from "../../core/src/index.mjs";
+import { evaluateQuotaAlerts } from "../../core/src/quota-alerts.mjs";
 import { AccountPool } from "../../account-pool/src/index.mjs";
 import { DshInjectionBridge } from "../../dsh-bridge/src/index.mjs";
 import { createDefaultSecretStore } from "../../vault/src/index.mjs";
 import { JsonStateStore } from "./state-store.mjs";
 import { ContextWindowOverrideStore } from "./context-window-overrides.mjs";
+import { ModelSelectionStore } from "./model-selection-store.mjs";
 import { createCodexDriver, createCodexModule, summarizeCodexCandidate } from "../../../modules/provider-codex/src/index.mjs";
 import {
   createAntigravityDriver,
@@ -13,6 +15,25 @@ import {
 import { createGrokDriver, createGrokModule, summarizeGrokCandidate } from "../../../modules/provider-grok/src/index.mjs";
 import { createClaudeDriver, createClaudeModule, summarizeClaudeCandidate } from "../../../modules/provider-claude/src/index.mjs";
 import { createCursorDriver, createCursorModule, summarizeCursorCandidate } from "../../../modules/provider-cursor/src/index.mjs";
+import { createOpencodeDriver, createOpencodeModule, summarizeOpencodeCandidate } from "../../../modules/provider-opencode/src/index.mjs";
+import { createKiloDriver, createKiloModule, summarizeKiloCandidate } from "../../../modules/provider-kilo/src/index.mjs";
+import {
+  createCommandCodeDriver,
+  createCommandCodeModule,
+  summarizeCommandCodeCandidate,
+} from "../../../modules/provider-commandcode/src/index.mjs";
+import {
+  createHermesDriver,
+  createHermesModule,
+  summarizeHermesCandidate,
+} from "../../../modules/provider-hermes/src/index.mjs";
+import {
+  createOpenRouterFreeDriver,
+  createOpenRouterFreeModule,
+  summarizeOpenRouterFreeCandidate,
+} from "../../../modules/provider-openrouter-free/src/index.mjs";
+import { createTraeCnDriver, createTraeCnModule, summarizeTraeCnCandidate } from "../../../modules/provider-trae-cn/src/index.mjs";
+import { createAgentRouterDriver, createAgentRouterModule, summarizeAgentRouterCandidate } from "../../../modules/provider-agentrouter/src/index.mjs";
 import { redactError } from "../../providers/src/provider-utils.mjs";
 
 const candidateSummarizers = new Map([
@@ -21,6 +42,13 @@ const candidateSummarizers = new Map([
   ["grok", summarizeGrokCandidate],
   ["claude", summarizeClaudeCandidate],
   ["cursor", summarizeCursorCandidate],
+  ["opencode", summarizeOpencodeCandidate],
+  ["kilo", summarizeKiloCandidate],
+  ["commandcode", summarizeCommandCodeCandidate],
+  ["hermes", summarizeHermesCandidate],
+  ["openrouter-free", summarizeOpenRouterFreeCandidate],
+  ["trae-cn", summarizeTraeCnCandidate],
+  ["agentrouter", summarizeAgentRouterCandidate],
 ]);
 
 // Official provider CLIs may need a network round-trip to rotate OAuth
@@ -49,10 +77,19 @@ function refreshTimeoutError(providerId, accountId, timeoutMs) {
  * that the selected account's native transport was authenticated; a CLI
  * metadata check alone must not clear a real transport failure.
  */
-function reportPostRefreshHealth(pool, accountId, { allowExpiredRecovery = false } = {}) {
+function reportPostRefreshHealth(pool, accountId, { allowExpiredRecovery = false, previousRemaining = null } = {}) {
   const account = pool.get(accountId);
   if (!account || (account.health?.status === ACCOUNT_HEALTH.EXPIRED && !allowExpiredRecovery)) return;
   const remaining = account.quota?.remaining;
+  const grew = typeof remaining === "number"
+    && typeof previousRemaining === "number"
+    && remaining > previousRemaining;
+  // A provider that meters a spendable balance can be exhausted while the
+  // number is still positive: Command Code rejects every request once the
+  // balance falls under its floor, yet reports the leftover cents. Only a
+  // larger balance proves the account recovered; a successful request clears
+  // the status through the request path.
+  if (account.health?.status === ACCOUNT_HEALTH.EXHAUSTED && !grew) return;
   if (typeof remaining === "number" && remaining <= 0) {
     pool.report(accountId, {
       status: "quota_exhausted",
@@ -221,6 +258,60 @@ export function createDefaultProviderEntries(options = {}) {
       }),
       driver: options.cursorDriver,
     },
+    {
+      module: createOpencodeModule({
+        driver: options.opencodeDriver ?? createOpencodeDriver({
+          ...withRequestExecutor("opencode", options.opencode, requestExecutors),
+          ...(catalogLoaders.opencode ? { catalogLoader: catalogLoaders.opencode } : {}),
+        }),
+      }),
+      driver: options.opencodeDriver,
+    },
+    {
+      module: createCommandCodeModule({
+        driver: options.commandcodeDriver ?? createCommandCodeDriver({
+          ...withRequestExecutor("commandcode", options.commandcode, requestExecutors),
+          ...(catalogLoaders.commandcode ? { catalogLoader: catalogLoaders.commandcode } : {}),
+        }),
+      }),
+      driver: options.commandcodeDriver,
+    },
+    {
+      module: createHermesModule({
+        driver: options.hermesDriver ?? createHermesDriver({
+          ...withRequestExecutor("hermes", options.hermes, requestExecutors),
+          ...(catalogLoaders.hermes ? { catalogLoader: catalogLoaders.hermes } : {}),
+        }),
+      }),
+      driver: options.hermesDriver,
+    },
+    {
+      module: createOpenRouterFreeModule({
+        driver: options.openrouterFreeDriver ?? createOpenRouterFreeDriver({
+          ...withRequestExecutor("openrouter-free", options["openrouter-free"] ?? options.openrouterFree, requestExecutors),
+          ...(catalogLoaders["openrouter-free"] ? { catalogLoader: catalogLoaders["openrouter-free"] } : {}),
+        }),
+      }),
+      driver: options.openrouterFreeDriver,
+    },
+    {
+      module: createAgentRouterModule({
+        driver: options.agentrouterDriver ?? createAgentRouterDriver({
+          ...withRequestExecutor("agentrouter", options.agentrouter, requestExecutors),
+          ...(catalogLoaders.agentrouter ? { catalogLoader: catalogLoaders.agentrouter } : {}),
+        }),
+      }),
+      driver: options.agentrouterDriver,
+    },
+    {
+      module: createTraeCnModule({
+        driver: options.traeCnDriver ?? createTraeCnDriver({
+          ...withRequestExecutor("trae-cn", options.traeCn, requestExecutors),
+          ...(catalogLoaders["trae-cn"] ? { catalogLoader: catalogLoaders["trae-cn"] } : {}),
+        }),
+      }),
+      driver: options.traeCnDriver,
+    },
   ];
 }
 
@@ -270,6 +361,11 @@ export class DockyardRuntime {
   #providerImportQueues = new Map();
   #initialized = false;
   #initPromise = null;
+  // Phase 1 (pools, module registration, injection bridge) resolves here. The
+  // model picker only needs phase 1: auto-provisioning a free account can wait
+  // on a provider round-trip and must not hold the picker hostage.
+  #prepared = false;
+  #preparePromise = null;
 
   constructor({
     providers = createDefaultProviderEntries(),
@@ -283,10 +379,12 @@ export class DockyardRuntime {
     this.stateStore = stateStore;
     this.secretStore = secretStore;
     this.contextWindowOverrides = new ContextWindowOverrideStore({ stateStore });
+    this.modelSelection = new ModelSelectionStore({ stateStore });
     this.bridge = new DshInjectionBridge({
       runtime,
       adapter: dshAdapter,
       contextWindowOverrides: this.contextWindowOverrides,
+      modelSelection: this.modelSelection,
     });
     this.providers = providers;
     this.refreshTimeoutMs = refreshTimeoutMs;
@@ -300,12 +398,32 @@ export class DockyardRuntime {
     return this;
   }
 
-  async init() {
-    if (this.#initialized) return this;
-    if (this.#initPromise) return this.#initPromise;
-    this.#initPromise = (async () => {
+  /**
+   * Phase 1 of startup: build every account pool, register the provider
+   * modules, and mount the DSH injection bridge. Disk-bound and fast. The
+   * account auto-provisioning in {@link init} is deliberately not part of this
+   * phase, because it can wait on a provider's network round-trip.
+   *
+   * @returns The runtime, once the pools and routes exist.
+   */
+  async whenPrepared() {
+    if (this.#prepared) return this;
+    if (this.#preparePromise) return this.#preparePromise;
+    this.#preparePromise = (async () => {
       const state = await this.stateStore.load();
+      // Kilo stays retired; OpenCode is registered again, so only its old
+      // credentials are cleared out of the state file.
+      if (state?.pools?.kilo || state?.modelSelection?.providers?.kilo) {
+        if (typeof this.stateStore.update === "function") {
+          await this.stateStore.update((latest) => {
+            if (latest?.pools) delete latest.pools.kilo;
+            if (latest?.modelSelection?.providers) delete latest.modelSelection.providers.kilo;
+            return latest;
+          }).catch(() => {});
+        }
+      }
       await this.contextWindowOverrides.ready();
+      await this.modelSelection.ready();
       for (const entry of this.providers) {
         const providerId = entry.module.manifest.id;
         const stored = state.pools?.[providerId] ?? {};
@@ -333,6 +451,71 @@ export class DockyardRuntime {
         if (!this.runtime.has(providerId)) await this.runtime.register(entry.module);
         await this.bridge.mountProvider(entry.module, pool);
       }
+      this.#prepared = true;
+      return this;
+    })();
+    try {
+      return await this.#preparePromise;
+    } finally {
+      this.#preparePromise = null;
+    }
+  }
+
+  async init() {
+    if (this.#initialized) return this;
+    if (this.#initPromise) return this.#initPromise;
+    this.#initPromise = (async () => {
+      await this.whenPrepared();
+      const autoImported = new Set();
+      for (const [providerId, entry] of this.#entries) {
+        const pool = entry.pool;
+        const hasExpiredOfficialSession = pool.list().some((a) => a.resources?.accountScope === "active_official_session" && a.health?.status === ACCOUNT_HEALTH.EXPIRED);
+        const hasNoEligible = pool.list().filter((a) => a.health?.status !== ACCOUNT_HEALTH.EXPIRED).length === 0;
+        const autoProvision = this.hasProviderCapability(providerId, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT)
+          && pool.list().length === 0;
+        if (autoProvision || (hasExpiredOfficialSession && hasNoEligible)) {
+          try {
+            const discovery = await (entry.module?.discover?.(providerContext(this)) ?? entry.driver?.discover?.(providerContext(this)));
+            const candidates = Array.isArray(discovery?.candidates)
+              ? discovery.candidates
+              : (Array.isArray(discovery) ? discovery : []);
+            for (const candidate of candidates) {
+              if (candidate && candidate.status !== "unavailable" && typeof entry.module?.importAccount === "function") {
+                if (!pool.get(candidate.accountId)) {
+                  const account = await entry.module.importAccount(candidate, providerContext(this));
+                  const obsoleteOfficial = pool.list().find((a) => (
+                    a.resources?.accountScope === "active_official_session"
+                    && candidate.resources?.accountScope === "active_official_session"
+                    && a.accountId !== account.accountId
+                  ));
+                  if (obsoleteOfficial) {
+                    pool.remove(obsoleteOfficial.accountId);
+                  }
+                  pool.upsert(account, { resetHealth: true });
+                  if (!pool.getDefaultAccountId()) {
+                    pool.setDefaultAccount(account.accountId);
+                  }
+                  autoImported.add(providerId);
+                }
+              }
+            }
+          } catch {
+            // best-effort auto-import
+          }
+        }
+      }
+      // Free/zero-config providers start with an auto-provisioned account; make
+      // sure that initial state is persisted even when no new import happened
+      // during this boot. The set of such providers is declared, not hardcoded.
+      for (const [id, entry] of this.#entries) {
+        if (this.hasProviderCapability(id, PROVIDER_BEHAVIOR_CAPABILITIES.AUTO_PROVISION_FREE_ACCOUNT)
+          && entry.pool?.list()?.length > 0) {
+          autoImported.add(id);
+        }
+      }
+      if (autoImported.size > 0) {
+        await this.#saveState([...autoImported]).catch(() => {});
+      }
       this.#initialized = true;
       return this;
     })();
@@ -353,8 +536,35 @@ export class DockyardRuntime {
     return this.providers.map(({ module }) => ({ ...module.manifest }));
   }
 
+  // Host code should ask the module what it supports instead of branching on
+  // provider ids. Capabilities are declared once in each provider module.
+  getProviderCapabilities(providerId) {
+    const manifest = this.providers.find(({ module }) => module.manifest.id === providerId)?.module.manifest;
+    return new Set(Array.isArray(manifest?.capabilities) ? manifest.capabilities : []);
+  }
+
+  hasProviderCapability(providerId, capability) {
+    return this.getProviderCapabilities(providerId).has(capability);
+  }
+
   listProviderIds() {
     return this.providers.map(({ module }) => module.manifest.id);
+  }
+
+  /**
+   * Ask a provider what the user has to do when it has no authorization entry
+   * point of its own (a desktop-session provider, for example). The host keeps
+   * one generic message for every provider that answers null.
+   */
+  async authorizationInstructions(providerId) {
+    const module = this.providers.find((entry) => entry.module.manifest.id === providerId)?.module;
+    if (typeof module?.authorizationInstructions !== "function") return null;
+    try {
+      const text = await module.authorizationInstructions(providerContext(this, {}));
+      return typeof text === "string" && text.trim().length > 0 ? text.trim() : null;
+    } catch {
+      return null;
+    }
   }
 
   async scan(providerId = null) {
@@ -379,7 +589,28 @@ export class DockyardRuntime {
         const existing = entry.pool.get(candidate.accountId);
         const candidateIdentity = candidate.resources ?? {};
         const existingIdentity = existing?.resources ?? {};
-        if (!existing) continue;
+        if (!existing) {
+          const obsoleteOfficial = entry.pool.list().find((a) => (
+            a.resources?.accountScope === "active_official_session"
+            && candidate.resources?.accountScope === "active_official_session"
+            && a.accountId !== candidate.accountId
+            && a.health?.status === ACCOUNT_HEALTH.EXPIRED
+          ));
+          if (obsoleteOfficial && typeof entry.module.importAccount === "function") {
+            try {
+              const imported = await entry.module.importAccount(candidate, providerContext(this));
+              entry.pool.remove(obsoleteOfficial.accountId);
+              entry.pool.upsert(imported, { resetHealth: true });
+              if (entry.pool.getDefaultAccountId() === obsoleteOfficial.accountId) {
+                entry.pool.setDefaultAccount(imported.accountId);
+              }
+              changedProviderIds.add(currentProviderId);
+            } catch {
+              // best-effort auto-import on official session switch
+            }
+          }
+          continue;
+        }
 
         const identityChanged = candidate.email !== existing.email
           || candidate.displayName !== existing.displayName
@@ -421,11 +652,14 @@ export class DockyardRuntime {
         // (or without email metadata) from that source during discovery;
         // otherwise the UI can show a UUID while quota requests keep using a
         // stale Keychain credential.
-        const shouldRepairGrokCredential = currentProviderId === "grok"
+        const shouldRepairLegacyCredential = this.hasProviderCapability(
+          currentProviderId,
+          PROVIDER_BEHAVIOR_CAPABILITIES.REPAIR_LEGACY_CREDENTIAL,
+        )
           && typeof entry.module.importAccount === "function"
           && ((candidate.email && !existing.email)
             || (candidate.source && candidate.source !== existingIdentity.authSource));
-        if (shouldRepairGrokCredential) {
+        if (shouldRepairLegacyCredential) {
           try {
             const repaired = await entry.module.importAccount(candidate, providerContext(this));
             entry.pool.upsert(repaired, { resetHealth: true });
@@ -591,6 +825,7 @@ export class DockyardRuntime {
     await this.init();
     const entry = this.#entry(providerId);
     providerAccount(entry.pool, accountId);
+    const previousRemaining = entry.pool.get(accountId)?.quota?.remaining ?? null;
     const diagnostics = [];
     let authorizationFailure = null;
     let refresh = null;
@@ -628,6 +863,7 @@ export class DockyardRuntime {
       if (refresh && Object.hasOwn(refresh, "quota")) {
         reportPostRefreshHealth(entry.pool, accountId, {
           allowExpiredRecovery: refresh.resources?.quotaSource === "antigravity_native",
+          previousRemaining,
         });
         await this.#saveState([providerId]);
         return { account: entry.pool.get(accountId), diagnostics };
@@ -644,6 +880,7 @@ export class DockyardRuntime {
       // that explicitly clears an expired transport credential.
       reportPostRefreshHealth(entry.pool, accountId, {
         allowExpiredRecovery: quota.resources?.quotaSource === "antigravity_native",
+        previousRemaining,
       });
     } catch (error) {
       if (signal?.aborted) throw error;
@@ -657,6 +894,32 @@ export class DockyardRuntime {
     }
     await this.#saveState([providerId]);
     return { account: entry.pool.get(accountId), diagnostics };
+  }
+
+  /**
+   * Retry accounts parked by an expired authorization once their cooldown has
+   * passed. Cheap when nothing is parked, so a host may call it on a timer.
+   *
+   * @returns {Promise<Array<{providerId: string, accountId: string}>>} Accounts
+   *   that were retried (whether or not they came back healthy).
+   */
+  async relistExpiredAccounts(providerId = null) {
+    await this.whenPrepared();
+    const providerIds = providerId ? [providerId] : [...this.#entries.keys()];
+    const relisted = [];
+    for (const id of providerIds) {
+      const pool = this.#entries.get(id)?.pool;
+      if (typeof pool?.relistable !== "function") continue;
+      for (const account of pool.relistable()) {
+        try {
+          await this.refreshAccount(id, account.accountId, { tolerateFailure: true });
+          relisted.push({ providerId: id, accountId: account.accountId });
+        } catch {
+          // Still parked; the next pass will try again.
+        }
+      }
+    }
+    return relisted;
   }
 
   async refreshAll(providerId = null) {
@@ -740,11 +1003,32 @@ export class DockyardRuntime {
     return this.contextWindowOverrides.set(input, value);
   }
 
+  getModelSelection(providerId, accountId = null) {
+    return this.modelSelection.get(providerId, accountId);
+  }
+
+  async setModelSelection(providerId, enabledModelIds, accountId = null) {
+    await this.init();
+    return this.modelSelection.set(providerId, enabledModelIds, accountId);
+  }
+
   async getCatalog(providerId, context = {}) {
     await this.init();
     const entry = this.#entry(providerId);
     const accounts = entry.pool.list().map((account) => providerAccount(entry.pool, account.accountId));
-    return entry.module.getCatalog(providerContext(this, { ...context, accounts }));
+    // A provider serves a different model list per account (a paid tier and a
+    // free one differ), so discovery resolves the account that would serve the
+    // request instead of asking "the provider" in the abstract.
+    const accountId = context.accountId
+      ?? entry.pool.getDefaultAccountId()
+      ?? (accounts.length === 1 ? accounts[0].accountId : null);
+    return entry.module.getCatalog(providerContext(this, { ...context, accounts, accountId }));
+  }
+
+  /** The account a provider would use by default, if it has one. */
+  getDefaultAccountId(providerId) {
+    const pool = this.#entries.get(providerId)?.pool;
+    return typeof pool?.getDefaultAccountId === "function" ? pool.getDefaultAccountId() : null;
   }
 
   async invoke(providerId, request, context = {}) {
@@ -792,7 +1076,12 @@ export class DockyardRuntime {
         manifest: { ...entry.module.manifest },
         policy: entry.pool.policy,
         defaultAccountId: entry.pool.getDefaultAccountId(),
-        accounts: entry.pool.list(),
+        // Advisory warnings derived from what the provider already reported: a
+        // window nearly spent, or one that resets soon while mostly unused.
+        accounts: entry.pool.list().map((account) => ({
+          ...account,
+          alerts: evaluateQuotaAlerts(account),
+        })),
       })),
       routes: this.bridge.listRoutes(),
     };
@@ -801,7 +1090,7 @@ export class DockyardRuntime {
   #applyPatch(pool, accountId, patch = {}) {
     if (!patch || typeof patch !== "object") return;
     const input = { accountId };
-    for (const key of ["email", "displayName", "subscription", "quota", "refresh", "resources"]) {
+    for (const key of ["email", "displayName", "subscription", "quota", "balance", "refresh", "resources"]) {
       if (patch[key] !== undefined) input[key] = patch[key];
     }
     if (patch.identity?.email !== undefined) input.email = patch.identity.email;

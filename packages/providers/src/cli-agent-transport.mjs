@@ -1,5 +1,6 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { spawnCli } from "./win32-command.mjs";
 
 const MAX_CLI_OUTPUT_BYTES = 4 * 1024 * 1024;
 // POSIX CLIs fork helper processes; only killing the direct pid turns those
@@ -53,10 +54,25 @@ function cliAbortError(providerId, output, errorOutput) {
 /**
  * Signal a CLI and everything it spawned. When the child is a detached group
  * leader, signal the negative pid first so grandchildren die with it; ESRCH
- * means the group is already gone. The direct pid always gets a fallback kill.
+ * means the group is already gone. Windows has no process groups, so the tree
+ * is walked with taskkill instead. The direct pid always gets a fallback kill.
  */
 function killProcessTree(child, sig, { detached = PROCESS_GROUP_PLATFORM } = {}) {
   const pid = child?.pid;
+  if (process.platform === "win32") {
+    if (Number.isFinite(pid)) {
+      try {
+        execFileSync("taskkill", ["/pid", String(pid), "/t", "/f"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+      } catch {
+        // The tree is already gone, or taskkill is unavailable.
+      }
+    }
+    try { child.kill(sig); } catch { /* process is already gone */ }
+    return;
+  }
   if (detached && Number.isFinite(pid)) {
     try {
       process.kill(-pid, sig);
@@ -95,7 +111,7 @@ export function runCliCommand(command, args, {
 } = {}) {
   return new Promise((resolve, reject) => {
     const detached = PROCESS_GROUP_PLATFORM;
-    const child = spawn(command, args, {
+    const child = spawnCli(command, args, {
       env,
       ...(cwd ? { cwd } : {}),
       stdio: ["ignore", "pipe", "pipe"],
@@ -184,7 +200,7 @@ export function runCliStreamingCommand(command, args, {
 } = {}) {
   return (async function* streamLines() {
     const detached = PROCESS_GROUP_PLATFORM;
-    const child = spawn(command, args, {
+    const child = spawnCli(command, args, {
       env,
       ...(cwd ? { cwd } : {}),
       stdio: ["ignore", "pipe", "pipe"],
@@ -413,6 +429,13 @@ export function cliEventResult(payload) {
 export function cliEventUsage(payload) {
   const usage = payload?.usage ?? payload?.message?.usage ?? payload?.result?.usage;
   if (!usage || typeof usage !== "object") return null;
+  const rawCacheRead = usage.cache_read_input_tokens
+    ?? usage.cacheReadInputTokens
+    ?? usage.cacheReadTokens
+    ?? usage.cachedInputTokens
+    ?? usage.cached_tokens
+    ?? usage.prompt_tokens_details?.cached_tokens;
+  const cacheReadTokens = Number(rawCacheRead);
   const inputTokens = Number(usage.input_tokens ?? usage.inputTokens ?? usage.input);
   const outputTokens = Number(usage.output_tokens ?? usage.outputTokens ?? usage.output);
   const totalTokens = Number(usage.total_tokens ?? usage.totalTokens ?? usage.total);
@@ -421,9 +444,7 @@ export function cliEventUsage(payload) {
     ...(Number.isFinite(inputTokens) ? { inputTokens } : {}),
     ...(Number.isFinite(outputTokens) ? { outputTokens } : {}),
     ...(Number.isFinite(totalTokens) ? { totalTokens } : {}),
-    ...(Number.isFinite(Number(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens))
-      ? { cacheReadInputTokens: Number(usage.cache_read_input_tokens ?? usage.cacheReadInputTokens) }
-      : {}),
+    ...(Number.isFinite(cacheReadTokens) ? { cacheReadTokens, cacheReadInputTokens: cacheReadTokens } : {}),
   };
 }
 
@@ -574,12 +595,13 @@ export function createAcpAgentExecutor({
     const args = await buildArgs({ request, invocation, context });
     const prompt = await promptBuilder({ request, invocation, context });
     return (async function* responseStream() {
-      const child = spawnImpl(cliPath, args, {
+      const child = spawnCli(cliPath, args, {
         env: resolvedEnv,
         cwd: context.cwd ?? cwd,
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
         detached: PROCESS_GROUP_PLATFORM,
+        spawnImpl,
         ...(transportSignal ? { signal: transportSignal } : {}),
       });
       const reader = createInterface({ input: child.stdout });

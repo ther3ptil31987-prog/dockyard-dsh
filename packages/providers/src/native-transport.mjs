@@ -135,7 +135,16 @@ export function nativeProviderError(providerId, message, { status, body, code } 
   const quotaExhausted = codeText === "RESOURCE_EXHAUSTED"
     || /\bresources?\b[\s\S]{0,80}\bexhausted\b/.test(exhaustionText)
     || /\bquota\b[\s\S]{0,80}\b(?:exhausted|depleted|exceeded)\b/.test(exhaustionText)
-    || /\bcapacity\b[\s\S]{0,80}\bexhausted\b/.test(exhaustionText);
+    || /\busage limit\b[\s\S]{0,80}\breached\b/.test(exhaustionText)
+    || /\bfree[\s\S]{0,40}limit reached\b/.test(exhaustionText)
+    || /\bcapacity\b[\s\S]{0,80}\bexhausted\b/.test(exhaustionText)
+    // Prepaid-balance gateways (Command Code) reject every paid model once the
+    // account balance falls under their floor, using HTTP 400 rather than a 429.
+    // Treat it as exhausted credit so the pool stops selecting the account and
+    // the user sees an actionable message instead of a bare UNKNOWN code.
+    || /\binsufficient (?:credits?|funds?|balance)\b/.test(exhaustionText)
+    || /\b(?:credits?|balance)\b[\s\S]{0,60}\b(?:exhausted|depleted|exceeded|insufficient)\b/.test(exhaustionText)
+    || /\bpurchase more credits?\b/.test(exhaustionText);
   const rateLimited = statusCode === 429
     || numericStatus(resolvedCode) === 429
     || numericStatus(upstreamStatus) === 429
@@ -267,6 +276,13 @@ export async function fetchNativeResponse(url, init = {}, {
   } catch (error) {
     if (error?.name === "AbortError" && timedOut && !error.providerId) {
       throw timeoutError;
+    }
+    if (/\bfetch failed\b/i.test(String(error?.message ?? "")) || error?.cause?.code === "ECONNRESET" || error?.cause?.code === "ETIMEDOUT") {
+      const err = nativeProviderError(providerId, `网络连接异常 (${error.message})，可能由于网络抖动或代理断开`, {
+        code: "TRANSPORT",
+      });
+      err.cause = error;
+      throw err;
     }
     throw error;
   } finally {
@@ -458,21 +474,74 @@ export async function* readSseEvents(response) {
 
 export function normalizeUsage(value) {
   if (!value || typeof value !== "object") return null;
-  const inputTokens = Number(value.input_tokens
+
+  const rawCacheRead = value.cache_read_input_tokens
+    ?? value.cacheReadInputTokens
+    ?? value.cachedInputTokens
+    ?? value.inputTokenDetails?.cacheReadTokens
+    ?? value.prompt_tokens_details?.cached_tokens
+    ?? value.prompt_tokens_details?.cache_read_tokens
+    ?? value.prompt_cache_hit_tokens
+    ?? value.cached_tokens
+    ?? value.cachedContentTokenCount
+    ?? value.cacheReadTokens;
+
+  const rawCacheWrite = value.cache_creation_input_tokens
+    ?? value.cacheCreationInputTokens
+    ?? value.inputTokenDetails?.cacheCreationInputTokens
+    ?? value.prompt_tokens_details?.cache_write_tokens
+    ?? value.prompt_tokens_details?.cache_creation_tokens
+    ?? value.cacheWriteTokens;
+
+  const cacheReadTokens = Number(rawCacheRead);
+  const cacheWriteTokens = Number(rawCacheWrite);
+
+  const rawInput = Number(
+    value.inputTokenDetails?.noCacheTokens
+    ?? value.input_tokens
     ?? value.inputTokens
     ?? value.prompt_tokens
     ?? value.promptTokens
-    ?? value.promptTokenCount);
-  const outputTokens = Number(value.output_tokens
+    ?? value.promptTokenCount
+  );
+
+  const outputTokens = Number(
+    value.output_tokens
     ?? value.outputTokens
     ?? value.completion_tokens
     ?? value.completionTokens
-    ?? value.candidatesTokenCount);
+    ?? value.candidatesTokenCount
+  );
+
   const totalTokens = Number(value.total_tokens ?? value.totalTokens ?? value.totalTokenCount);
-  const cacheReadTokens = Number(value.cache_read_input_tokens
-    ?? value.cacheReadInputTokens
-    ?? value.cachedContentTokenCount);
-  const cacheWriteTokens = Number(value.cache_creation_input_tokens ?? value.cacheCreationInputTokens);
+
+  let inputTokens = rawInput;
+  if (value.inputTokenDetails?.noCacheTokens !== undefined) {
+    inputTokens = Number(value.inputTokenDetails.noCacheTokens);
+  } else if (Number.isFinite(inputTokens) && (Number.isFinite(cacheReadTokens) || Number.isFinite(cacheWriteTokens))) {
+    const hasOpenAiStyleCache = value.prompt_tokens_details?.cached_tokens !== undefined
+      || value.prompt_tokens_details?.cache_read_tokens !== undefined
+      || value.prompt_cache_hit_tokens !== undefined
+      || value.cached_tokens !== undefined
+      || value.cachedInputTokens !== undefined;
+
+    const totalEqualsPromptPlusOutput = Number.isFinite(totalTokens)
+      && Number.isFinite(outputTokens)
+      && totalTokens === inputTokens + outputTokens;
+
+    const isAnthropicStyle = (value.cache_read_input_tokens !== undefined || value.cache_creation_input_tokens !== undefined)
+      && !hasOpenAiStyleCache
+      && !totalEqualsPromptPlusOutput;
+
+    if ((hasOpenAiStyleCache || (totalEqualsPromptPlusOutput && !value.cachedContentTokenCount)) && !isAnthropicStyle) {
+      const read = Number.isFinite(cacheReadTokens) ? cacheReadTokens : 0;
+      const write = Number.isFinite(cacheWriteTokens) ? cacheWriteTokens : 0;
+      if (inputTokens >= read + write) {
+        inputTokens = Math.max(0, inputTokens - read - write);
+      }
+    }
+  }
+
   const result = {};
   if (Number.isFinite(inputTokens)) result.inputTokens = inputTokens;
   if (Number.isFinite(outputTokens)) result.outputTokens = outputTokens;
@@ -486,8 +555,8 @@ export function textFromContent(content) {
   if (typeof content === "string") return content;
   if (Array.isArray(content)) return content.map((part) => textFromContent(part)).filter(Boolean).join("");
   if (!content || typeof content !== "object") return "";
-  if (content.type === "image") return "";
-  if (content.type === "tool-result") {
+  if (content.type === "image" || content.type === "reasoning" || content.type === "thinking") return "";
+  if (content.type === "tool-result" || content.type === "tool_result") {
     return textFromContent(content.content ?? content.output ?? content.result ?? content.text);
   }
   return content.text ?? content.value ?? content.content ?? content.delta ?? "";
@@ -559,3 +628,297 @@ export function finishReason(value, fallback = "stop") {
   if (reason.includes("error") || reason.includes("cancel")) return { kind: "error" };
   return { kind: "stop" };
 }
+
+/**
+ * A completion that carries only reasoning and never produces text or a tool
+ * call is not an answer. Without this guard the host sees a well-formed stream,
+ * marks the turn complete, and the agent appears to stop mid-thought with
+ * nothing to show for it. Wrap a provider executor with this to retry such an
+ * attempt before anything reaches the host, and to fail loudly if it persists.
+ */
+export const EMPTY_COMPLETION_NUDGE = "上一次回复只写了思考过程，没有给出回答也没有调用工具。"
+  + "请直接用正文回答，或直接调用需要的工具，不要再输出思考过程。";
+
+function isEmptyCompletionOutput(event) {
+  // Only text and tool calls count as output. Reasoning, usage and the finish
+  // marker alone mean the model never actually answered.
+  if (event?.type === "text-delta" || event?.type === "tool-call-delta") return true;
+  if (event?.type === "block-start") return event.blockType !== "reasoning";
+  if (event?.type === "block-end") return event.block?.type !== "reasoning";
+  return false;
+}
+
+function withEmptyCompletionNudge(envelope, nudge) {
+  const base = (envelope && typeof envelope === "object" && "request" in envelope)
+    ? envelope
+    : { request: envelope ?? {} };
+  const request = base.request ?? {};
+  if (Array.isArray(request.messages)) {
+    return { ...base, request: { ...request, messages: [...request.messages, { role: "system", content: nudge }] } };
+  }
+  const system = typeof request.system === "string" && request.system.length > 0
+    ? `${request.system}\n\n${nudge}`
+    : nudge;
+  return { ...base, request: { ...request, system } };
+}
+
+function isReasoningEvent(event) {
+  if (event?.type === "reasoning-delta") return true;
+  if (event?.type === "block-start" && event.blockType === "reasoning") return true;
+  if (event?.type === "block-end" && event.block?.type === "reasoning") return true;
+  return false;
+}
+
+export function guardEmptyCompletion(executor, {
+  providerId = "provider",
+  nudge = EMPTY_COMPLETION_NUDGE,
+  maxEmptyAttempts = 2,
+  // Holding reasoning back until an answer arrives hides the whole thinking
+  // phase from the user, which reads as dead air on slow thinking models.
+  // Streaming it live means an attempt can no longer be retried once its
+  // reasoning reached the host, so an empty finish then fails loudly instead.
+  streamReasoning = false,
+} = {}) {
+  // Transports are called either with a single envelope object or with
+  // positional arguments; forward whatever came in so both keep working.
+  const guardedExecutor = async function* runGuardedExecutor(...args) {
+    const envelope = args[0] ?? {};
+    const signal = envelope?.signal ?? envelope?.request?.signal;
+    // Only a wrapped envelope can carry the nudge; a bare request is retried
+    // unchanged rather than being reshaped underneath the caller.
+    const canNudge = Boolean(nudge)
+      && envelope && typeof envelope === "object"
+      && ("request" in envelope || "credential" in envelope);
+    for (let attempt = 0; ; attempt += 1) {
+      if (signal?.aborted) {
+        const abort = new Error("aborted");
+        abort.name = "AbortError";
+        throw abort;
+      }
+
+      const attemptArgs = attempt === 0 || !canNudge
+        ? args
+        : [withEmptyCompletionNudge(envelope, nudge), ...args.slice(1)];
+      const buffered = [];
+      let sawOutput = false;
+      let streamedReasoning = false;
+
+      // Some transports are generator functions, others are async functions
+      // that resolve to an async iterable. Accept both.
+      const attemptResult = executor(...attemptArgs);
+      const attemptStream = (attemptResult && typeof attemptResult[Symbol.asyncIterator] === "function")
+        ? attemptResult
+        : await attemptResult;
+      if (!attemptStream || typeof attemptStream[Symbol.asyncIterator] !== "function") {
+        throw nativeProviderError(providerId, "provider executor did not return a stream");
+      }
+      for await (const event of attemptStream) {
+        if (sawOutput) {
+          yield event;
+          continue;
+        }
+        if (streamReasoning && isReasoningEvent(event)) {
+          streamedReasoning = true;
+          yield event;
+          continue;
+        }
+        buffered.push(event);
+        if (isEmptyCompletionOutput(event)) {
+          sawOutput = true;
+          for (const pending of buffered) yield pending;
+          buffered.length = 0;
+        }
+      }
+
+      if (sawOutput) return;
+      // Reasoning already reached the host, so a retry would duplicate it and
+      // leave orphaned thinking blocks behind.
+      if (streamedReasoning) {
+        throw nativeProviderError(
+          providerId,
+          "模型只输出了思考内容，没有给出回答或工具调用；请重试或换一个模型",
+          { code: "EMPTY_COMPLETION" },
+        );
+      }
+      if (attempt >= maxEmptyAttempts) {
+        throw nativeProviderError(
+          providerId,
+          "模型只输出了思考内容，没有给出回答或工具调用；已自动重试仍无结果，请重试或换一个模型",
+          { code: "EMPTY_COMPLETION" },
+        );
+      }
+    }
+  };
+  // Transport metadata lives on the executor (drivers branch on
+  // executor.nativeTransport to decide whether a credential must be attached).
+  // Returning a bare wrapper used to drop it, which silently sent Grok down the
+  // CLI path without a token.
+  for (const key of Object.keys(executor)) {
+    if (!(key in guardedExecutor)) guardedExecutor[key] = executor[key];
+  }
+  return guardedExecutor;
+}
+
+export function buildOpenAiTools(tools) {
+  if (!Array.isArray(tools)) return undefined;
+  const result = tools.map((tool) => ({
+    type: "function",
+    function: {
+      name: tool?.name ?? tool?.function?.name ?? "tool",
+      ...(tool?.description ? { description: String(tool.description) } : {}),
+      parameters: tool?.parameters ?? tool?.input_schema ?? tool?.function?.parameters ?? { type: "object" },
+    },
+  }));
+  return result.length > 0 ? result : undefined;
+}
+
+export function parseDsmlCalls(text) {
+  if (typeof text !== "string" || !text.includes("DSML")) return null;
+  const callsRe = /[<＜][ |｜]*DSML[ |｜]*calls[>＞]([\s\S]*?)(?:[<＜][\/／][ |｜]*DSML[ |｜]*calls[>＞]|$)/i;
+  const match = text.match(callsRe);
+  if (!match) return null;
+
+  const inner = match[1];
+  const invokeRe = /[<＜][ |｜]*DSML[ |｜]*invoke\s+name=["']?([^"'>＞\s]+)["']?[>＞]([\s\S]*?)(?:[<＜][\/／][ |｜]*DSML[ |｜]*invoke[>＞]|$)/gi;
+  const paramRe = /[<＜][ |｜]*DSML[ |｜]*parameter\s+name=["']?([^"'>＞\s]+)["']?[^>＞]*[>＞]([\s\S]*?)(?:[<＜][\/／][ |｜]*DSML[ |｜]*parameter[>＞]|$)/gi;
+
+  const toolCalls = [];
+  let invokeMatch;
+  while ((invokeMatch = invokeRe.exec(inner)) !== null) {
+    const name = invokeMatch[1];
+    const paramsBody = invokeMatch[2];
+    const args = {};
+    let paramMatch;
+    while ((paramMatch = paramRe.exec(paramsBody)) !== null) {
+      const paramName = paramMatch[1];
+      const paramVal = paramMatch[2].trim();
+      let parsedVal = paramVal;
+      if (paramVal === "true") parsedVal = true;
+      else if (paramVal === "false") parsedVal = false;
+      else if (!isNaN(Number(paramVal)) && paramVal !== "") parsedVal = Number(paramVal);
+      else {
+        try { parsedVal = JSON.parse(paramVal); } catch {}
+      }
+      args[paramName] = parsedVal;
+    }
+    toolCalls.push({
+      name,
+      arguments: JSON.stringify(args),
+    });
+  }
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+export function stripDsmlCalls(text) {
+  if (typeof text !== "string") return "";
+  return text.replace(/[<＜][ |｜]*DSML[ |｜]*calls[>＞][\s\S]*?(?:[<＜][\/／][ |｜]*DSML[ |｜]*calls[>＞]|$)/gi, "").trim();
+}
+
+export function sanitizeToolCallId(rawId, maxLength = 64) {
+  if (!rawId || typeof rawId !== "string") return "call_tool";
+  if (rawId.includes("|")) {
+    const separatorIndex = rawId.indexOf("|");
+    const callPart = rawId.slice(0, separatorIndex);
+    const itemPart = rawId.slice(separatorIndex + 1);
+    const cleanCall = callPart.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const cleanItem = itemPart.replace(/[^a-zA-Z0-9_-]/g, "_");
+    if (!cleanItem) return cleanCall.slice(0, maxLength) || "call_tool";
+    const itemSuffix = cleanItem.slice(-16);
+    const callPrefix = cleanCall.slice(0, Math.max(1, maxLength - 1 - itemSuffix.length));
+    return `${callPrefix}_${itemSuffix}`;
+  }
+  const clean = rawId.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return clean.slice(0, maxLength) || "call_tool";
+}
+
+export class DsmlStreamFilter {
+  constructor({ onTextDelta, onTextBlockStart, onTextBlockEnd } = {}) {
+    this.onTextDelta = onTextDelta;
+    this.onTextBlockStart = onTextBlockStart;
+    this.onTextBlockEnd = onTextBlockEnd;
+    this.textIndex = 0;
+    this.textOpen = false;
+    this.cleanText = "";
+    this.pending = "";
+    this.inDsml = false;
+    this.dsmlBuffer = "";
+  }
+
+  push(content, getNextIndex) {
+    if (!content) return;
+    if (this.inDsml) {
+      this.dsmlBuffer += content;
+      return;
+    }
+
+    const combined = this.pending + content;
+    this.pending = "";
+
+    const dsmlMatch = combined.match(/[<＜][ |｜]*DSML/i);
+    if (dsmlMatch) {
+      const matchIndex = dsmlMatch.index;
+      const textPart = combined.slice(0, matchIndex);
+      if (textPart) {
+        this.#emitText(textPart, getNextIndex);
+      }
+      if (this.textOpen) {
+        this.onTextBlockEnd?.(this.textIndex, this.cleanText);
+        this.textOpen = false;
+      }
+      this.inDsml = true;
+      this.dsmlBuffer = combined.slice(matchIndex);
+      return;
+    }
+
+    const prefixMatch = combined.match(/[<＜][ |｜]*(?:D(?:S(?:M(?:L)?)?)?)?$/i);
+    if (prefixMatch) {
+      const safeText = combined.slice(0, prefixMatch.index);
+      if (safeText) {
+        this.#emitText(safeText, getNextIndex);
+      }
+      this.pending = prefixMatch[0];
+    } else {
+      this.#emitText(combined, getNextIndex);
+    }
+  }
+
+  #emitText(text, getNextIndex) {
+    if (!text) return;
+    if (!this.textOpen) {
+      this.textIndex = getNextIndex();
+      this.textOpen = true;
+      this.onTextBlockStart?.(this.textIndex);
+    }
+    this.cleanText += text;
+    this.onTextDelta?.(this.textIndex, text);
+  }
+
+  closeText() {
+    if (this.pending) {
+      if (!this.inDsml) {
+        this.#emitText(this.pending, () => this.textIndex || 1);
+      }
+      this.pending = "";
+    }
+    if (this.textOpen) {
+      this.onTextBlockEnd?.(this.textIndex, this.cleanText);
+      this.textOpen = false;
+    }
+  }
+
+  flush(getNextIndex) {
+    this.closeText();
+    if (this.inDsml && this.dsmlBuffer) {
+      const calls = parseDsmlCalls(this.dsmlBuffer);
+      if (calls && calls.length > 0) {
+        return { toolCalls: calls };
+      }
+      const fallbackIndex = getNextIndex();
+      this.onTextBlockStart?.(fallbackIndex);
+      this.onTextDelta?.(fallbackIndex, this.dsmlBuffer);
+      this.onTextBlockEnd?.(fallbackIndex, this.dsmlBuffer);
+    }
+    return null;
+  }
+}
+
